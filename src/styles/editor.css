@@ -8,6 +8,21 @@
   background: var(--surface-messages);
 }
 
+.app.editor-active .content {
+  height: 100%;
+}
+
+.app.editor-active .main {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.editor-sidebar {
+  height: 100%;
+  padding-top: var(--main-topbar-height);
+  background: var(--surface-right-panel);
+  border-right: 1px solid var(--border-subtle);
+}
+
 .editor-placeholder {
   margin: auto;
   max-width: 420px;

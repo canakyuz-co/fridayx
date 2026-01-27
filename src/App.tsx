@@ -1464,7 +1464,7 @@ function MainApp() {
     reduceTransparency ? " reduced-transparency" : ""
   }${!isCompact && sidebarCollapsed ? " sidebar-collapsed" : ""}${
     !isCompact && rightPanelCollapsed ? " right-panel-collapsed" : ""
-  }`;
+  }${activeTab === "editor" ? " editor-active" : ""}`;
   const {
     sidebarNode,
     messagesNode,
@@ -1912,7 +1912,11 @@ function MainApp() {
       onSavePath={editorState.saveFile}
     />
   );
-  const editorSidebarNode = activeWorkspace ? gitDiffPanelNode : sidebarNode;
+  const editorSidebarNode = activeWorkspace ? (
+    <div className="editor-sidebar">{gitDiffPanelNode}</div>
+  ) : (
+    sidebarNode
+  );
   const sidebarNodeForLayout =
     activeTab === "editor" ? editorSidebarNode : sidebarNode;
 
