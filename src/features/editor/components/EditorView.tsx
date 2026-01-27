@@ -62,17 +62,20 @@ function configureMonaco(monaco: Monaco) {
     inherit: true,
     rules: [],
     colors: {
-      "editor.background": "#0d121b",
+      "editor.background": "#0c1119",
       "editor.foreground": "#e6e7ea",
-      "editorLineNumber.foreground": "#5d6472",
-      "editorLineNumber.activeForeground": "#c4c8d2",
-      "editorCursor.foreground": "#9fd2ff",
-      "editor.selectionBackground": "#275a8f",
-      "editor.inactiveSelectionBackground": "#1b2b3f",
-      "editorIndentGuide.background": "#1f2835",
-      "editorIndentGuide.activeBackground": "#2e3a4b",
-      "editor.lineHighlightBackground": "#111826",
-      "editorLineHighlightBorder": "#1b2433",
+      "editorLineNumber.foreground": "#4f586a",
+      "editorLineNumber.activeForeground": "#c5cad6",
+      "editorCursor.foreground": "#9bd1ff",
+      "editor.selectionBackground": "#234c74",
+      "editor.inactiveSelectionBackground": "#1a2a3f",
+      "editorIndentGuide.background": "#1c2533",
+      "editorIndentGuide.activeBackground": "#2a3546",
+      "editor.lineHighlightBackground": "#0c1119",
+      "editorLineHighlightBorder": "#0c1119",
+      "editorGutter.background": "#0c1119",
+      "editorWhitespace.foreground": "#2a3546",
+      "editorRuler.foreground": "#1f2a3a",
     },
   });
 }
@@ -199,11 +202,14 @@ export function EditorView({
                 onMount={handleMount}
                 options={{
                   minimap: { enabled: false },
+                  fontFamily: "var(--code-font-family)",
                   fontSize: 13,
+                  lineHeight: 20,
                   scrollBeyondLastLine: false,
                   wordWrap: "on",
                   readOnly: activeBuffer.isTruncated,
                   renderWhitespace: "selection",
+                  renderLineHighlight: "none",
                 }}
               />
             </>

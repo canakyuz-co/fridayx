@@ -35,9 +35,10 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 14px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--border-muted);
-  background: var(--surface-topbar);
+  background: color-mix(in srgb, var(--surface-topbar) 70%, transparent);
+  backdrop-filter: blur(10px);
 }
 
 .editor-tabs-empty {
@@ -51,7 +52,7 @@
   gap: 8px;
   padding: 6px 10px;
   border-radius: 10px;
-  background: var(--surface-card);
+  background: color-mix(in srgb, var(--surface-card) 90%, transparent);
   color: var(--text-muted);
   border: 1px solid transparent;
 }
@@ -59,7 +60,7 @@
 .editor-tab.is-active {
   color: var(--text-strong);
   border-color: var(--border-stronger);
-  background: var(--surface-card-strong);
+  background: color-mix(in srgb, var(--surface-card-strong) 90%, transparent);
 }
 
 .editor-tab-title {
@@ -117,7 +118,7 @@
 .monaco-editor,
 .monaco-editor .margin,
 .monaco-editor-background {
-  background-color: #0d121b !important;
+  background-color: #0c1119 !important;
 }
 
 .editor-toggle {
