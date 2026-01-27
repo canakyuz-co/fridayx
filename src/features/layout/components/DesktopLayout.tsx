@@ -109,7 +109,11 @@ export function DesktopLayout({
             <MainTopbar leftNode={topbarLeftNode} />
             {approvalToastsNode}
             {showEditor ? (
-              <div className="content">{editorNode}</div>
+              <div className="content">
+                <div className="content-layer is-active editor-layer" aria-hidden={false}>
+                  {editorNode}
+                </div>
+              </div>
             ) : (
               <>
                 <div className="content">
