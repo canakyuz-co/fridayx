@@ -9,7 +9,10 @@ use uuid::Uuid;
 
 #[cfg(target_os = "macos")]
 use super::macos::get_open_app_icon_inner;
-use super::files::{list_workspace_files_inner, read_workspace_file_inner, WorkspaceFileResponse};
+use super::files::{
+    list_workspace_files_inner, read_workspace_file_inner, write_workspace_file_inner,
+    WorkspaceFileResponse,
+};
 use super::git::{
     git_branch_exists, git_find_remote_for_branch, git_get_origin_url, git_remote_branch_exists,
     git_remote_exists, is_missing_worktree_error, run_git_command, run_git_command_bytes,
@@ -78,6 +81,33 @@ pub(crate) async fn read_workspace_file(
         .ok_or("workspace not found")?;
     let root = PathBuf::from(&entry.path);
     read_workspace_file_inner(&root, &path)
+}
+
+#[tauri::command]
+pub(crate) async fn write_workspace_file(
+    workspace_id: String,
+    path: String,
+    content: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        remote_backend::call_remote(
+            &*state,
+            app,
+            "write_workspace_file",
+            json!({ "workspaceId": workspace_id, "path": path, "content": content }),
+        )
+        .await?;
+        return Ok(());
+    }
+
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?;
+    let root = PathBuf::from(&entry.path);
+    write_workspace_file_inner(&root, &path, &content)
 }
 
 

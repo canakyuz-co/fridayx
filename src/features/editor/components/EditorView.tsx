@@ -1,7 +1,7 @@
 import Editor from "@monaco-editor/react";
 import type { Monaco } from "@monaco-editor/react";
 import Close from "lucide-react/dist/esm/icons/x";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { EditorPlaceholder } from "./EditorPlaceholder";
 
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
@@ -15,6 +15,7 @@ type EditorBuffer = {
   content: string;
   language: string | null;
   isDirty: boolean;
+  isSaving: boolean;
   isLoading: boolean;
   error: string | null;
   isTruncated: boolean;
@@ -28,18 +29,16 @@ type EditorViewProps = {
   onSelectPath: (path: string) => void;
   onClosePath: (path: string) => void;
   onContentChange: (path: string, value: string) => void;
+  onSavePath: (path: string) => void;
 };
 
-let monacoConfigured = false;
-
 function configureMonaco(monaco: Monaco) {
-  if (monacoConfigured) {
-    return;
-  }
-  monacoConfigured = true;
   const globalScope = globalThis as typeof globalThis & {
     MonacoEnvironment?: { getWorker: (workerId: string, label: string) => Worker };
   };
+  if (globalScope.MonacoEnvironment?.getWorker) {
+    return;
+  }
   globalScope.MonacoEnvironment = {
     getWorker: (_workerId, label) => {
       if (label === "json") {
@@ -86,8 +85,14 @@ export function EditorView({
   onSelectPath,
   onClosePath,
   onContentChange,
+  onSavePath,
 }: EditorViewProps) {
   const activeBuffer = activePath ? buffersByPath[activePath] : null;
+  const activePathRef = useRef(activePath);
+
+  useEffect(() => {
+    activePathRef.current = activePath;
+  }, [activePath]);
 
   const tabs = useMemo(
     () =>
@@ -104,6 +109,21 @@ export function EditorView({
     configureMonaco(monaco);
     monaco.editor.setTheme("friday-dark");
   }, []);
+
+  const handleMount = useCallback(
+    (editorInstance: Monaco.editor.IStandaloneCodeEditor, monaco: Monaco) => {
+      editorInstance.addCommand(
+        monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
+        () => {
+          const path = activePathRef.current;
+          if (path) {
+            onSavePath(path);
+          }
+        },
+      );
+    },
+    [onSavePath],
+  );
 
   if (!workspaceId) {
     return <EditorPlaceholder hasWorkspace={false} />;
@@ -175,6 +195,7 @@ export function EditorView({
                   onContentChange(activeBuffer.path, value ?? "");
                 }}
                 beforeMount={handleBeforeMount}
+                onMount={handleMount}
                 options={{
                   minimap: { enabled: false },
                   fontSize: 13,

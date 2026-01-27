@@ -1,5 +1,5 @@
-use std::fs::File;
-use std::io::Read;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use ignore::WalkBuilder;
@@ -101,4 +101,46 @@ pub(crate) fn read_workspace_file_inner(
     let content =
         String::from_utf8(buffer).map_err(|_| "File is not valid UTF-8".to_string())?;
     Ok(WorkspaceFileResponse { content, truncated })
+}
+
+pub(crate) fn write_workspace_file_inner(
+    root: &PathBuf,
+    relative_path: &str,
+    content: &str,
+) -> Result<(), String> {
+    let canonical_root = root
+        .canonicalize()
+        .map_err(|err| format!("Failed to resolve workspace root: {err}"))?;
+    let candidate = canonical_root.join(relative_path);
+    let parent = candidate
+        .parent()
+        .ok_or_else(|| "Invalid file path".to_string())?;
+    let canonical_parent = parent
+        .canonicalize()
+        .map_err(|err| format!("Failed to resolve parent directory: {err}"))?;
+    if !canonical_parent.starts_with(&canonical_root) {
+        return Err("Invalid file path".to_string());
+    }
+    if candidate.exists() {
+        let canonical_path = candidate
+            .canonicalize()
+            .map_err(|err| format!("Failed to resolve file path: {err}"))?;
+        if !canonical_path.starts_with(&canonical_root) {
+            return Err("Invalid file path".to_string());
+        }
+        let metadata = std::fs::metadata(&canonical_path)
+            .map_err(|err| format!("Failed to read file metadata: {err}"))?;
+        if !metadata.is_file() {
+            return Err("Path is not a file".to_string());
+        }
+    }
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&candidate)
+        .map_err(|err| format!("Failed to open file: {err}"))?;
+    file.write_all(content.as_bytes())
+        .map_err(|err| format!("Failed to write file: {err}"))?;
+    Ok(())
 }

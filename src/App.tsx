@@ -1909,6 +1909,7 @@ function MainApp() {
       onSelectPath={editorState.setActivePath}
       onClosePath={editorState.closeFile}
       onContentChange={editorState.updateContent}
+      onSavePath={editorState.saveFile}
     />
   );
   const handleEditorPanelChange = useCallback(() => {}, []);

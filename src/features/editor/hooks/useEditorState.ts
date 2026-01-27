@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { readWorkspaceFile } from "../../../services/tauri";
+import { readWorkspaceFile, writeWorkspaceFile } from "../../../services/tauri";
 import { languageFromPath } from "../../../utils/syntax";
 
 type EditorBuffer = {
@@ -7,6 +7,7 @@ type EditorBuffer = {
   content: string;
   language: string | null;
   isDirty: boolean;
+  isSaving: boolean;
   isLoading: boolean;
   error: string | null;
   isTruncated: boolean;
@@ -24,6 +25,7 @@ type UseEditorStateResult = {
   closeFile: (path: string) => void;
   setActivePath: (path: string) => void;
   updateContent: (path: string, value: string) => void;
+  saveFile: (path: string) => void;
 };
 
 function toMonacoLanguage(path: string): string | null {
@@ -71,6 +73,7 @@ export function useEditorState({
             content: "",
             language: toMonacoLanguage(path),
             isDirty: false,
+            isSaving: false,
             isLoading: true,
             error: null,
             isTruncated: false,
@@ -82,20 +85,20 @@ export function useEditorState({
           const response = await readWorkspaceFile(workspaceId, path);
           setBuffersByPath((prev) => {
             const current = prev[path];
-            if (!current) {
-              return prev;
-            }
-            return {
-              ...prev,
-              [path]: {
-                ...current,
-                content: response.content,
-                isLoading: false,
-                error: null,
-                isTruncated: response.truncated,
-              },
-            };
-          });
+          if (!current) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [path]: {
+              ...current,
+              content: response.content,
+              isLoading: false,
+              error: null,
+              isTruncated: response.truncated,
+            },
+          };
+        });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           setBuffersByPath((prev) => {
@@ -153,6 +156,69 @@ export function useEditorState({
     });
   }, []);
 
+  const saveFile = useCallback(
+    (path: string) => {
+      if (!workspaceId) {
+        return;
+      }
+      const buffer = buffersByPath[path];
+      if (!buffer || buffer.isLoading || buffer.isSaving || buffer.isTruncated) {
+        return;
+      }
+      setBuffersByPath((prev) => {
+        const current = prev[path];
+        if (!current) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [path]: {
+            ...current,
+            isSaving: true,
+            error: null,
+          },
+        };
+      });
+      void (async () => {
+        try {
+          await writeWorkspaceFile(workspaceId, path, buffer.content);
+          setBuffersByPath((prev) => {
+            const current = prev[path];
+            if (!current) {
+              return prev;
+            }
+            return {
+              ...prev,
+              [path]: {
+                ...current,
+                isDirty: false,
+                isSaving: false,
+                error: null,
+              },
+            };
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          setBuffersByPath((prev) => {
+            const current = prev[path];
+            if (!current) {
+              return prev;
+            }
+            return {
+              ...prev,
+              [path]: {
+                ...current,
+                isSaving: false,
+                error: message,
+              },
+            };
+          });
+        }
+      })();
+    },
+    [workspaceId, buffersByPath],
+  );
+
   return {
     openPaths,
     activePath,
@@ -161,5 +227,6 @@ export function useEditorState({
     closeFile,
     setActivePath,
     updateContent,
+    saveFile,
   };
 }

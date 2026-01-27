@@ -19,8 +19,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::env;
-use std::fs::File;
-use std::io::Read;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -1078,6 +1078,24 @@ impl DaemonState {
         read_workspace_file_inner(&root, &path)
     }
 
+    async fn write_workspace_file(
+        &self,
+        workspace_id: String,
+        path: String,
+        content: String,
+    ) -> Result<(), String> {
+        let entry = {
+            let workspaces = self.workspaces.lock().await;
+            workspaces
+                .get(&workspace_id)
+                .cloned()
+                .ok_or("workspace not found")?
+        };
+
+        let root = PathBuf::from(entry.path);
+        write_workspace_file_inner(&root, &path, &content)
+    }
+
     async fn start_thread(&self, workspace_id: String) -> Result<Value, String> {
         let session = self.get_session(&workspace_id).await?;
         let params = json!({
@@ -1408,6 +1426,48 @@ fn read_workspace_file_inner(
     let content =
         String::from_utf8(buffer).map_err(|_| "File is not valid UTF-8".to_string())?;
     Ok(WorkspaceFileResponse { content, truncated })
+}
+
+fn write_workspace_file_inner(
+    root: &PathBuf,
+    relative_path: &str,
+    content: &str,
+) -> Result<(), String> {
+    let canonical_root = root
+        .canonicalize()
+        .map_err(|err| format!("Failed to resolve workspace root: {err}"))?;
+    let candidate = canonical_root.join(relative_path);
+    let parent = candidate
+        .parent()
+        .ok_or_else(|| "Invalid file path".to_string())?;
+    let canonical_parent = parent
+        .canonicalize()
+        .map_err(|err| format!("Failed to resolve parent directory: {err}"))?;
+    if !canonical_parent.starts_with(&canonical_root) {
+        return Err("Invalid file path".to_string());
+    }
+    if candidate.exists() {
+        let canonical_path = candidate
+            .canonicalize()
+            .map_err(|err| format!("Failed to resolve file path: {err}"))?;
+        if !canonical_path.starts_with(&canonical_root) {
+            return Err("Invalid file path".to_string());
+        }
+        let metadata = std::fs::metadata(&canonical_path)
+            .map_err(|err| format!("Failed to read file metadata: {err}"))?;
+        if !metadata.is_file() {
+            return Err("Path is not a file".to_string());
+        }
+    }
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&candidate)
+        .map_err(|err| format!("Failed to open file: {err}"))?;
+    file.write_all(content.as_bytes())
+        .map_err(|err| format!("Failed to write file: {err}"))?;
+    Ok(())
 }
 
 async fn run_git_command(repo_path: &PathBuf, args: &[&str]) -> Result<String, String> {
@@ -1929,6 +1989,15 @@ async fn handle_rpc_request(
             let path = parse_string(&params, "path")?;
             let response = state.read_workspace_file(workspace_id, path).await?;
             serde_json::to_value(response).map_err(|err| err.to_string())
+        }
+        "write_workspace_file" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let path = parse_string(&params, "path")?;
+            let content = parse_string(&params, "content")?;
+            state
+                .write_workspace_file(workspace_id, path, content)
+                .await?;
+            Ok(json!({ "ok": true }))
         }
         "get_app_settings" => {
             let mut settings = state.app_settings.lock().await.clone();

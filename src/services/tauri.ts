@@ -531,6 +531,14 @@ export async function readWorkspaceFile(
   });
 }
 
+export async function writeWorkspaceFile(
+  workspaceId: string,
+  path: string,
+  content: string,
+): Promise<void> {
+  return invoke("write_workspace_file", { workspaceId, path, content });
+}
+
 export async function listGitBranches(workspaceId: string) {
   return invoke<any>("list_git_branches", { workspaceId });
 }
