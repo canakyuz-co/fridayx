@@ -24,6 +24,7 @@ import "./styles/tabbar.css";
 import "./styles/worktree-modal.css";
 import "./styles/clone-modal.css";
 import "./styles/settings.css";
+import "./styles/editor.css";
 import "./styles/compact-base.css";
 import "./styles/compact-phone.css";
 import "./styles/compact-tablet.css";
@@ -32,6 +33,7 @@ import errorSoundUrl from "./assets/error-notification.mp3";
 import { AppLayout } from "./features/app/components/AppLayout";
 import { AppModals } from "./features/app/components/AppModals";
 import { MainHeaderActions } from "./features/app/components/MainHeaderActions";
+import { EditorPlaceholder } from "./features/editor/components/EditorPlaceholder";
 import { useLayoutNodes } from "./features/layout/hooks/useLayoutNodes";
 import { useWorkspaceDropZone } from "./features/workspaces/hooks/useWorkspaceDropZone";
 import { useThreads } from "./features/threads/hooks/useThreads";
@@ -167,7 +169,7 @@ function MainApp() {
   useLiquidGlassEffect({ reduceTransparency, onDebug: addDebugEntry });
   const [accessMode, setAccessMode] = useState<AccessMode>("current");
   const [activeTab, setActiveTab] = useState<
-    "projects" | "codex" | "git" | "log"
+    "projects" | "codex" | "git" | "log" | "editor"
   >("codex");
   const tabletTab = activeTab === "projects" ? "codex" : activeTab;
   const {
@@ -1648,6 +1650,8 @@ function MainApp() {
         centerMode={centerMode}
         gitDiffViewStyle={gitDiffViewStyle}
         onSelectDiffViewStyle={setGitDiffViewStyle}
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
         isCompact={isCompact}
         rightPanelCollapsed={rightPanelCollapsed}
         sidebarToggleProps={sidebarToggleProps}
@@ -1893,6 +1897,9 @@ function MainApp() {
   ) : null;
 
   const mainMessagesNode = showWorkspaceHome ? workspaceHomeNode : messagesNode;
+  const editorNode = (
+    <EditorPlaceholder hasWorkspace={Boolean(activeWorkspace)} />
+  );
 
   const desktopTopbarLeftNodeWithToggle = !isCompact ? (
     <div className="topbar-leading">
@@ -1952,6 +1959,7 @@ function MainApp() {
         activeWorkspace={Boolean(activeWorkspace)}
         sidebarNode={sidebarNode}
         messagesNode={mainMessagesNode}
+        editorNode={editorNode}
         composerNode={composerNode}
         approvalToastsNode={approvalToastsNode}
         updateToastNode={updateToastNode}

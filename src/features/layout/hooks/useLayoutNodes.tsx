@@ -224,9 +224,9 @@ type LayoutNodesOptions = {
   mainHeaderActionsNode?: ReactNode;
   centerMode: "chat" | "diff";
   onExitDiff: () => void;
-  activeTab: "projects" | "codex" | "git" | "log";
-  onSelectTab: (tab: "projects" | "codex" | "git" | "log") => void;
-  tabletNavTab: "codex" | "git" | "log";
+  activeTab: "projects" | "codex" | "git" | "log" | "editor";
+  onSelectTab: (tab: "projects" | "codex" | "git" | "log" | "editor") => void;
+  tabletNavTab: "codex" | "git" | "log" | "editor";
   gitPanelMode: "diff" | "log" | "issues" | "prs";
   onGitPanelModeChange: (mode: "diff" | "log" | "issues" | "prs") => void;
   gitDiffViewStyle: "split" | "unified";

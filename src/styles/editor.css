@@ -1,0 +1,41 @@
+.editor-shell {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-messages);
+}
+
+.editor-placeholder {
+  max-width: 420px;
+  padding: 24px 28px;
+  border-radius: 16px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-muted);
+  text-align: center;
+}
+
+.editor-placeholder-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: var(--text-strong);
+}
+
+.editor-placeholder-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.editor-toggle {
+  background: var(--surface-control);
+  border: 1px solid var(--border-muted);
+  color: var(--text-muted);
+}
+
+.editor-toggle.is-active {
+  background: var(--surface-active);
+  color: var(--text-strong);
+  border-color: var(--border-accent-soft);
+}

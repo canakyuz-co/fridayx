@@ -19,9 +19,9 @@ export function useGitPanelController({
   activeWorkspace: WorkspaceInfo | null;
   isCompact: boolean;
   isTablet: boolean;
-  activeTab: "projects" | "codex" | "git" | "log";
-  tabletTab: "codex" | "git" | "log";
-  setActiveTab: (tab: "projects" | "codex" | "git" | "log") => void;
+  activeTab: "projects" | "codex" | "git" | "log" | "editor";
+  tabletTab: "codex" | "git" | "log" | "editor";
+  setActiveTab: (tab: "projects" | "codex" | "git" | "log" | "editor") => void;
   prDiffs: GitHubPullRequestDiff[];
   prDiffsLoading: boolean;
   prDiffsError: string | null;

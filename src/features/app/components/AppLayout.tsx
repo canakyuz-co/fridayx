@@ -8,13 +8,14 @@ type AppLayoutProps = {
   isTablet: boolean;
   showHome: boolean;
   showGitDetail: boolean;
-  activeTab: "projects" | "codex" | "git" | "log";
-  tabletTab: "codex" | "git" | "log";
+  activeTab: "projects" | "codex" | "git" | "log" | "editor";
+  tabletTab: "codex" | "git" | "log" | "editor";
   centerMode: "chat" | "diff";
   hasActivePlan: boolean;
   activeWorkspace: boolean;
   sidebarNode: ReactNode;
   messagesNode: ReactNode;
+  editorNode: ReactNode;
   composerNode: ReactNode;
   approvalToastsNode: ReactNode;
   updateToastNode: ReactNode;
@@ -50,6 +51,7 @@ export const AppLayout = memo(function AppLayout({
   activeWorkspace,
   sidebarNode,
   messagesNode,
+  editorNode,
   composerNode,
   approvalToastsNode,
   updateToastNode,
@@ -88,6 +90,7 @@ export const AppLayout = memo(function AppLayout({
         compactGitBackNode={compactGitBackNode}
         topbarLeftNode={mainHeaderNode}
         messagesNode={messagesNode}
+        editorNode={editorNode}
         composerNode={composerNode}
         gitDiffPanelNode={gitDiffPanelNode}
         gitDiffViewerNode={gitDiffViewerNode}
@@ -111,6 +114,7 @@ export const AppLayout = memo(function AppLayout({
         onSidebarResizeStart={onSidebarResizeStart}
         topbarLeftNode={mainHeaderNode}
         messagesNode={messagesNode}
+        editorNode={editorNode}
         composerNode={composerNode}
         gitDiffPanelNode={gitDiffPanelNode}
         gitDiffViewerNode={gitDiffViewerNode}
@@ -129,8 +133,10 @@ export const AppLayout = memo(function AppLayout({
       showHome={showHome}
       showWorkspace={activeWorkspace && !showHome}
       topbarLeftNode={desktopTopbarLeftNode}
+      activeTab={activeTab}
       centerMode={centerMode}
       messagesNode={messagesNode}
+      editorNode={editorNode}
       gitDiffViewerNode={gitDiffViewerNode}
       gitDiffPanelNode={gitDiffPanelNode}
       planPanelNode={planPanelNode}

@@ -1,6 +1,7 @@
 import { memo } from "react";
 import AlignLeft from "lucide-react/dist/esm/icons/align-left";
 import Columns2 from "lucide-react/dist/esm/icons/columns-2";
+import Code from "lucide-react/dist/esm/icons/code";
 import type { SidebarToggleProps } from "../../layout/components/SidebarToggleControls";
 import { RightPanelCollapseButton } from "../../layout/components/SidebarToggleControls";
 
@@ -8,6 +9,8 @@ type MainHeaderActionsProps = {
   centerMode: "chat" | "diff";
   gitDiffViewStyle: "split" | "unified";
   onSelectDiffViewStyle: (style: "split" | "unified") => void;
+  activeTab: "projects" | "codex" | "git" | "log" | "editor";
+  onSelectTab: (tab: "projects" | "codex" | "git" | "log" | "editor") => void;
   isCompact: boolean;
   rightPanelCollapsed: boolean;
   sidebarToggleProps: SidebarToggleProps;
@@ -17,12 +20,25 @@ export const MainHeaderActions = memo(function MainHeaderActions({
   centerMode,
   gitDiffViewStyle,
   onSelectDiffViewStyle,
+  activeTab,
+  onSelectTab,
   isCompact,
   rightPanelCollapsed,
   sidebarToggleProps,
 }: MainHeaderActionsProps) {
+  const editorActive = activeTab === "editor";
   return (
     <>
+      <button
+        type="button"
+        className={`icon-button editor-toggle${editorActive ? " is-active" : ""}`}
+        onClick={() => onSelectTab(editorActive ? "codex" : "editor")}
+        aria-pressed={editorActive}
+        title="Editor"
+        data-tauri-drag-region="false"
+      >
+        <Code size={14} aria-hidden />
+      </button>
       {centerMode === "diff" && (
         <div className="diff-view-toggle" role="group" aria-label="Diff view">
           <button
