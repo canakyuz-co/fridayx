@@ -693,6 +693,34 @@
   gap: 12px;
 }
 
+.home-tasks-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.home-tasks-expand:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-stronger);
+}
+
+.home-tasks-expand svg {
+  transition: transform 0.2s ease;
+}
+
+.home-tasks-expand.is-expanded svg {
+  transform: rotate(180deg);
+}
+
 .home-tasks-board {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -733,9 +761,17 @@
   gap: 6px;
 }
 
+.home-tasks-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .home-tasks-card-title {
   font-size: 13px;
   font-weight: 600;
+  flex: 1;
 }
 
 .home-tasks-card-content {

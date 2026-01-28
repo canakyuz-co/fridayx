@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import { Markdown } from "../../messages/components/Markdown";
 import type {
   LocalUsageSnapshot,
@@ -99,6 +100,7 @@ export function Home({
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const canCreateTask = taskTitle.trim().length > 0;
   const canSaveEdit = editTitle.trim().length > 0;
 
@@ -139,6 +141,18 @@ export function Home({
     setEditingTaskId(null);
     setEditTitle("");
     setEditContent("");
+  };
+
+  const toggleTaskExpanded = (taskId: string) => {
+    setExpandedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
   };
 
   const handleEditTaskSave = async () => {
@@ -526,13 +540,23 @@ export function Home({
                         >
                           Remove
                         </button>
+                        {task.content && (
+                          <button
+                            type="button"
+                            className={`home-tasks-expand${expandedTasks.has(task.id) ? " is-expanded" : ""}`}
+                            onClick={() => toggleTaskExpanded(task.id)}
+                            aria-label={expandedTasks.has(task.id) ? "Collapse" : "Expand"}
+                          >
+                            <ChevronDown size={14} />
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="home-tasks-meta">
                       {task.status === "doing" && (
                         <span className="home-tasks-status">Doing</span>
                       )}
-                      {task.content && (
+                      {task.content && expandedTasks.has(task.id) && (
                         <Markdown
                           value={task.content}
                           className="home-tasks-content"
@@ -591,8 +615,20 @@ export function Home({
                     <div className="home-tasks-column-list">
                       {tasksByStatus[status].map((task) => (
                         <div className="home-tasks-card" key={task.id}>
-                          <div className="home-tasks-card-title">{task.title}</div>
-                          {task.content && (
+                          <div className="home-tasks-card-header">
+                            <div className="home-tasks-card-title">{task.title}</div>
+                            {task.content && (
+                              <button
+                                type="button"
+                                className={`home-tasks-expand${expandedTasks.has(task.id) ? " is-expanded" : ""}`}
+                                onClick={() => toggleTaskExpanded(task.id)}
+                                aria-label={expandedTasks.has(task.id) ? "Collapse" : "Expand"}
+                              >
+                                <ChevronDown size={14} />
+                              </button>
+                            )}
+                          </div>
+                          {task.content && expandedTasks.has(task.id) && (
                             <Markdown
                               value={task.content}
                               className="home-tasks-card-content"
