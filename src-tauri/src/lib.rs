@@ -7,6 +7,10 @@ mod codex;
 mod codex_args;
 mod codex_config;
 mod codex_home;
+mod file_io;
+mod file_ops;
+mod file_policy;
+mod files;
 #[cfg(not(target_os = "windows"))]
 #[path = "dictation.rs"]
 mod dictation;
@@ -110,7 +114,9 @@ pub fn run() {
             settings::get_app_settings,
             settings::update_app_settings,
             settings::get_codex_config_path,
-            other_ai::list_other_ai_models,
+other_ai::list_other_ai_models,
+            files::file_read,
+            files::file_write,
             codex::get_config_model,
             menu::menu_set_accelerators,
             codex::codex_doctor,

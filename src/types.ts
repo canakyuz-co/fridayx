@@ -137,6 +137,7 @@ export type AppSettings = {
   newAgentShortcut: string | null;
   newWorktreeAgentShortcut: string | null;
   newCloneAgentShortcut: string | null;
+  archiveThreadShortcut: string | null;
   toggleProjectsSidebarShortcut: string | null;
   toggleGitSidebarShortcut: string | null;
   toggleDebugPanelShortcut: string | null;

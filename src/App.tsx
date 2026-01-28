@@ -89,6 +89,7 @@ import { useWorkspaceActions } from "./features/app/hooks/useWorkspaceActions";
 import { useWorkspaceCycling } from "./features/app/hooks/useWorkspaceCycling";
 import { useThreadRows } from "./features/app/hooks/useThreadRows";
 import { useInterruptShortcut } from "./features/app/hooks/useInterruptShortcut";
+import { useArchiveShortcut } from "./features/app/hooks/useArchiveShortcut";
 import { useLiquidGlassEffect } from "./features/app/hooks/useLiquidGlassEffect";
 import { useCopyThread } from "./features/threads/hooks/useCopyThread";
 import { useTerminalController } from "./features/terminal/hooks/useTerminalController";
@@ -98,6 +99,7 @@ import { useGitCommitController } from "./features/app/hooks/useGitCommitControl
 import { useTasks } from "./features/tasks/hooks/useTasks";
 import { WorkspaceHome } from "./features/workspaces/components/WorkspaceHome";
 import { useWorkspaceHome } from "./features/workspaces/hooks/useWorkspaceHome";
+import { useWorkspaceAgentMd } from "./features/workspaces/hooks/useWorkspaceAgentMd";
 import { pickWorkspacePath } from "./services/tauri";
 import type {
   AccessMode,
@@ -1124,6 +1126,49 @@ function MainApp() {
     startThreadForWorkspace,
     sendUserMessageToThread,
   });
+  const RECENT_THREAD_LIMIT = 8;
+  const { recentThreadInstances, recentThreadsUpdatedAt } = useMemo(() => {
+    if (!activeWorkspaceId) {
+      return { recentThreadInstances: [], recentThreadsUpdatedAt: null };
+    }
+    const threads = threadsByWorkspace[activeWorkspaceId] ?? [];
+    if (threads.length === 0) {
+      return { recentThreadInstances: [], recentThreadsUpdatedAt: null };
+    }
+    const sorted = [...threads].sort((a, b) => b.updatedAt - a.updatedAt);
+    const slice = sorted.slice(0, RECENT_THREAD_LIMIT);
+    const updatedAt = slice.reduce(
+      (max, thread) => (thread.updatedAt > max ? thread.updatedAt : max),
+      0,
+    );
+    const instances = slice.map((thread, index) => ({
+      id: `recent-${thread.id}`,
+      workspaceId: activeWorkspaceId,
+      threadId: thread.id,
+      modelId: null,
+      modelLabel: thread.name?.trim() || "Untitled thread",
+      sequence: index + 1,
+    }));
+    return {
+      recentThreadInstances: instances,
+      recentThreadsUpdatedAt: updatedAt > 0 ? updatedAt : null,
+    };
+  }, [activeWorkspaceId, threadsByWorkspace]);
+  const {
+    content: agentMdContent,
+    exists: agentMdExists,
+    truncated: agentMdTruncated,
+    isLoading: agentMdLoading,
+    isSaving: agentMdSaving,
+    error: agentMdError,
+    isDirty: agentMdDirty,
+    setContent: setAgentMdContent,
+    refresh: refreshAgentMd,
+    save: saveAgentMd,
+  } = useWorkspaceAgentMd({
+    activeWorkspace,
+    onDebug: addDebugEntry,
+  });
 
   const {
     commitMessage,
@@ -1373,6 +1418,21 @@ function MainApp() {
     onDropPaths: handleDropWorkspacePaths,
   });
 
+  const handleArchiveActiveThread = useCallback(() => {
+    if (!activeWorkspaceId || !activeThreadId) {
+      return;
+    }
+    removeThread(activeWorkspaceId, activeThreadId);
+    clearDraftForThread(activeThreadId);
+    removeImagesForThread(activeThreadId);
+  }, [
+    activeThreadId,
+    activeWorkspaceId,
+    clearDraftForThread,
+    removeImagesForThread,
+    removeThread,
+  ]);
+
   useInterruptShortcut({
     isEnabled: canInterrupt,
     shortcut: appSettings.interruptShortcut,
@@ -1483,7 +1543,7 @@ function MainApp() {
     ? centerMode === "chat" || centerMode === "diff"
     : (isTablet ? tabletTab : activeTab) === "codex") && !showWorkspaceHome;
   const showGitDetail = Boolean(selectedDiffPath) && isPhone;
-  const {
+const {
     terminalTabs,
     activeTerminalId,
     onSelectTerminal,
@@ -1520,6 +1580,14 @@ function MainApp() {
     restartTerminalSession,
     openTerminal,
     onDebug: addDebugEntry,
+  });
+
+  const isThreadOpen = Boolean(activeThreadId && showComposer);
+
+  useArchiveShortcut({
+    isEnabled: isThreadOpen,
+    shortcut: appSettings.archiveThreadShortcut,
+    onTrigger: handleArchiveActiveThread,
   });
 
   const { handleCycleAgent, handleCycleWorkspace } = useWorkspaceCycling({
@@ -1976,6 +2044,8 @@ function MainApp() {
     <WorkspaceHome
       workspace={activeWorkspace}
       runs={workspaceRuns}
+      recentThreadInstances={recentThreadInstances}
+      recentThreadsUpdatedAt={recentThreadsUpdatedAt}
       prompt={workspacePrompt}
       onPromptChange={setWorkspacePrompt}
       onStartRun={startWorkspaceRun}
@@ -2007,6 +2077,20 @@ function MainApp() {
       onDismissDictationHint={clearDictationHint}
       dictationTranscript={dictationTranscript}
       onDictationTranscriptHandled={clearDictationTranscript}
+      agentMdContent={agentMdContent}
+      agentMdExists={agentMdExists}
+      agentMdTruncated={agentMdTruncated}
+      agentMdLoading={agentMdLoading}
+      agentMdSaving={agentMdSaving}
+      agentMdError={agentMdError}
+      agentMdDirty={agentMdDirty}
+      onAgentMdChange={setAgentMdContent}
+      onAgentMdRefresh={() => {
+        void refreshAgentMd();
+      }}
+      onAgentMdSave={() => {
+        void saveAgentMd();
+      }}
     />
   ) : null;
 

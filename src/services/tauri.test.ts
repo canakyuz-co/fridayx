@@ -6,13 +6,19 @@ import {
   getGitLog,
   getGitStatus,
   getOpenAppIcon,
+  readGlobalAgentsMd,
+  readGlobalCodexConfigToml,
   listWorkspaces,
   openWorkspaceIn,
+  readAgentMd,
   stageGitAll,
   respondToServerRequest,
   respondToUserInputRequest,
   sendUserMessage,
   startReview,
+  writeGlobalAgentsMd,
+  writeGlobalCodexConfigToml,
+  writeAgentMd,
 } from "./tauri";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -131,6 +137,87 @@ describe("tauri invoke wrappers", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("get_open_app_icon", {
       appName: "Xcode",
+    });
+  });
+
+  it("reads agent.md for a workspace", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ exists: true, content: "# Agent", truncated: false });
+
+    await readAgentMd("ws-agent");
+
+    expect(invokeMock).toHaveBeenCalledWith("file_read", {
+      scope: "workspace",
+      kind: "agents",
+      workspaceId: "ws-agent",
+    });
+  });
+
+  it("writes agent.md for a workspace", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await writeAgentMd("ws-agent", "# Agent");
+
+    expect(invokeMock).toHaveBeenCalledWith("file_write", {
+      scope: "workspace",
+      kind: "agents",
+      workspaceId: "ws-agent",
+      content: "# Agent",
+    });
+  });
+
+  it("reads global AGENTS.md", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ exists: true, content: "# Global", truncated: false });
+
+    await readGlobalAgentsMd();
+
+    expect(invokeMock).toHaveBeenCalledWith("file_read", {
+      scope: "global",
+      kind: "agents",
+      workspaceId: undefined,
+    });
+  });
+
+  it("writes global AGENTS.md", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await writeGlobalAgentsMd("# Global");
+
+    expect(invokeMock).toHaveBeenCalledWith("file_write", {
+      scope: "global",
+      kind: "agents",
+      workspaceId: undefined,
+      content: "# Global",
+    });
+  });
+
+  it("reads global config.toml", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ exists: true, content: "model = \"gpt-5\"", truncated: false });
+
+    await readGlobalCodexConfigToml();
+
+    expect(invokeMock).toHaveBeenCalledWith("file_read", {
+      scope: "global",
+      kind: "config",
+      workspaceId: undefined,
+    });
+  });
+
+  it("writes global config.toml", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await writeGlobalCodexConfigToml("model = \"gpt-5\"");
+
+    expect(invokeMock).toHaveBeenCalledWith("file_write", {
+      scope: "global",
+      kind: "config",
+      workspaceId: undefined,
+      content: "model = \"gpt-5\"",
     });
   });
 

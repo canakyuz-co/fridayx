@@ -1,7 +1,7 @@
 {
   "name": "friday",
   "private": true,
-  "version": "0.7.27",
+  "version": "0.7.30",
   "type": "module",
   "scripts": {
     "dev": "vite",

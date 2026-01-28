@@ -72,6 +72,52 @@ export async function getCodexConfigPath(): Promise<string> {
   return invoke<string>("get_codex_config_path");
 }
 
+export type TextFileResponse = {
+  exists: boolean;
+  content: string;
+  truncated: boolean;
+};
+
+export type GlobalAgentsResponse = TextFileResponse;
+export type GlobalCodexConfigResponse = TextFileResponse;
+export type AgentMdResponse = TextFileResponse;
+
+type FileScope = "workspace" | "global";
+type FileKind = "agents" | "config";
+
+async function fileRead(
+  scope: FileScope,
+  kind: FileKind,
+  workspaceId?: string,
+): Promise<TextFileResponse> {
+  return invoke<TextFileResponse>("file_read", { scope, kind, workspaceId });
+}
+
+async function fileWrite(
+  scope: FileScope,
+  kind: FileKind,
+  content: string,
+  workspaceId?: string,
+): Promise<void> {
+  return invoke("file_write", { scope, kind, workspaceId, content });
+}
+
+export async function readGlobalAgentsMd(): Promise<GlobalAgentsResponse> {
+  return fileRead("global", "agents");
+}
+
+export async function writeGlobalAgentsMd(content: string): Promise<void> {
+  return fileWrite("global", "agents", content);
+}
+
+export async function readGlobalCodexConfigToml(): Promise<GlobalCodexConfigResponse> {
+  return fileRead("global", "config");
+}
+
+export async function writeGlobalCodexConfigToml(content: string): Promise<void> {
+  return fileWrite("global", "config", content);
+}
+
 export async function getConfigModel(workspaceId: string): Promise<string | null> {
   const response = await invoke<{ model?: string | null }>("get_config_model", {
     workspaceId,
@@ -573,6 +619,14 @@ export async function lspNotify(
   params: Record<string, unknown>,
 ): Promise<void> {
   return invoke("lsp_notify", { workspaceId, languageId, method, params });
+}
+
+export async function readAgentMd(workspaceId: string): Promise<AgentMdResponse> {
+  return fileRead("workspace", "agents", workspaceId);
+}
+
+export async function writeAgentMd(workspaceId: string, content: string): Promise<void> {
+  return fileWrite("workspace", "agents", content, workspaceId);
 }
 
 export async function listGitBranches(workspaceId: string) {
