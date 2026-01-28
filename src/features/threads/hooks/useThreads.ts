@@ -1,6 +1,7 @@
 import { useCallback, useReducer, useRef } from "react";
 import * as Sentry from "@sentry/react";
-import type { CustomPromptOption, DebugEntry, WorkspaceInfo } from "../../../types";
+import type { CustomPromptOption, DebugEntry, OtherAiProvider, WorkspaceInfo } from "../../../types";
+import type { ClaudeRateLimits, ClaudeUsage } from "../../../services/tauri";
 import { useAppServerEvents } from "../../app/hooks/useAppServerEvents";
 import { initialState, threadReducer } from "./useThreadsReducer";
 import { useThreadStorage } from "./useThreadStorage";
@@ -25,7 +26,10 @@ type UseThreadsOptions = {
   accessMode?: "read-only" | "current" | "full-access";
   steerEnabled?: boolean;
   customPrompts?: CustomPromptOption[];
+  otherAiProviders?: OtherAiProvider[];
   onMessageActivity?: () => void;
+  onClaudeRateLimits?: (limits: ClaudeRateLimits) => void;
+  onClaudeUsage?: (usage: ClaudeUsage) => void;
 };
 
 export function useThreads({
@@ -38,7 +42,10 @@ export function useThreads({
   accessMode,
   steerEnabled = false,
   customPrompts = [],
+  otherAiProviders = [],
   onMessageActivity,
+  onClaudeRateLimits,
+  onClaudeUsage,
 }: UseThreadsOptions) {
   const [state, dispatch] = useReducer(threadReducer, initialState);
   const loadedThreadsRef = useRef<Record<string, boolean>>({});
@@ -192,6 +199,7 @@ export function useThreads({
     collaborationMode,
     steerEnabled,
     customPrompts,
+    otherAiProviders,
     threadStatusById: state.threadStatusById,
     activeTurnIdByThread: state.activeTurnIdByThread,
     pendingInterruptsRef,
@@ -203,6 +211,8 @@ export function useThreads({
     recordThreadActivity,
     safeMessageActivity,
     onDebug,
+    onClaudeRateLimits,
+    onClaudeUsage,
     pushThreadErrorMessage,
     ensureThreadForActiveWorkspace,
   });

@@ -1100,7 +1100,7 @@ impl DaemonState {
         let session = self.get_session(&workspace_id).await?;
         let params = json!({
             "cwd": session.entry.path,
-            "approvalPolicy": "on-request"
+            "approvalPolicy": "onRequest"
         });
         session.send_request("thread/start", params).await
     }
@@ -1163,7 +1163,7 @@ impl DaemonState {
         let approval_policy = if access_mode == "full-access" {
             "never"
         } else {
-            "on-request"
+            "onRequest"
         };
 
         let trimmed_text = text.trim();

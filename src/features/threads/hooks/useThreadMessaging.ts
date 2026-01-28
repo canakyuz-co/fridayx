@@ -5,12 +5,18 @@ import type {
   AccessMode,
   CustomPromptOption,
   DebugEntry,
+  OtherAiProvider,
   WorkspaceInfo,
 } from "../../../types";
 import {
   sendUserMessage as sendUserMessageService,
   startReview as startReviewService,
   interruptTurn as interruptTurnService,
+  sendClaudeMessage,
+  sendClaudeCliMessage,
+  type ClaudeMessage,
+  type ClaudeRateLimits,
+  type ClaudeUsage,
 } from "../../../services/tauri";
 import { expandCustomPromptText } from "../../../utils/customPrompts";
 import {
@@ -37,6 +43,7 @@ type UseThreadMessagingOptions = {
   collaborationMode?: Record<string, unknown> | null;
   steerEnabled: boolean;
   customPrompts: CustomPromptOption[];
+  otherAiProviders: OtherAiProvider[];
   threadStatusById: ThreadState["threadStatusById"];
   activeTurnIdByThread: ThreadState["activeTurnIdByThread"];
   pendingInterruptsRef: MutableRefObject<Set<string>>;
@@ -52,6 +59,8 @@ type UseThreadMessagingOptions = {
   ) => void;
   safeMessageActivity: () => void;
   onDebug?: (entry: DebugEntry) => void;
+  onClaudeRateLimits?: (limits: ClaudeRateLimits) => void;
+  onClaudeUsage?: (usage: ClaudeUsage) => void;
   pushThreadErrorMessage: (threadId: string, message: string) => void;
   ensureThreadForActiveWorkspace: () => Promise<string | null>;
 };
@@ -65,6 +74,7 @@ export function useThreadMessaging({
   collaborationMode,
   steerEnabled,
   customPrompts,
+  otherAiProviders,
   threadStatusById,
   activeTurnIdByThread,
   pendingInterruptsRef,
@@ -76,6 +86,8 @@ export function useThreadMessaging({
   recordThreadActivity,
   safeMessageActivity,
   onDebug,
+  onClaudeRateLimits,
+  onClaudeUsage,
   pushThreadErrorMessage,
   ensureThreadForActiveWorkspace,
 }: UseThreadMessagingOptions) {
@@ -176,6 +188,150 @@ export function useThreadMessaging({
         },
       });
       try {
+        // Check if this is a Claude model (format: "providerId:model-name")
+        const isOtherAiModel = resolvedModel?.includes(":") ?? false;
+        const colonIndex = resolvedModel?.indexOf(":") ?? -1;
+        const providerId = isOtherAiModel ? resolvedModel!.slice(0, colonIndex) : null;
+        const provider = providerId ? otherAiProviders.find((p) => p.id === providerId) : null;
+
+        if (provider && provider.provider === "claude") {
+          // Claude provider - use CLI or API
+          const useCli = Boolean(provider.command);
+          const useApi = Boolean(provider.apiKey) && !useCli;
+
+          if (!useCli && !useApi) {
+            markProcessing(threadId, false);
+            pushThreadErrorMessage(
+              threadId,
+              "Claude not configured. Set CLI command or API key in Settings > Other AI."
+            );
+            safeMessageActivity();
+            return;
+          }
+
+          // Add user message to thread immediately
+          dispatch({
+            type: "upsertItem",
+            workspaceId: workspace.id,
+            threadId,
+            item: {
+              id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              kind: "message",
+              role: "user",
+              text: finalText,
+            },
+            hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+          });
+
+          const assistantMessageId = `assistant-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2, 8)}`;
+
+          if (useCli) {
+            // Use Claude CLI
+            await sendClaudeCliMessage(
+              provider.command!,
+              provider.args,
+              finalText,
+              workspace.path,
+              {
+                onInit: (sessionId, model) => {
+                  onDebug?.({
+                    id: `${Date.now()}-claude-cli-init`,
+                    timestamp: Date.now(),
+                    source: "client",
+                    label: "claude-cli/init",
+                    payload: { sessionId, model },
+                  });
+                },
+                onContent: (text) => {
+                  dispatch({
+                    type: "upsertItem",
+                    workspaceId: workspace.id,
+                    threadId,
+                    item: {
+                      id: assistantMessageId,
+                      kind: "message",
+                      role: "assistant",
+                      text,
+                    },
+                    hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+                  });
+                  safeMessageActivity();
+                },
+                onComplete: (_text, usage) => {
+                  if (usage) {
+                    onClaudeUsage?.({
+                      inputTokens: usage.inputTokens,
+                      outputTokens: usage.outputTokens,
+                    });
+                  }
+                  markProcessing(threadId, false);
+                  safeMessageActivity();
+                },
+                onError: (error) => {
+                  markProcessing(threadId, false);
+                  pushThreadErrorMessage(threadId, error);
+                  safeMessageActivity();
+                },
+              }
+            );
+          } else {
+            // Use Claude API
+            const modelName = resolvedModel!.slice(colonIndex + 1);
+            const claudeMessages: ClaudeMessage[] = [
+              { role: "user", content: finalText },
+            ];
+
+            let accumulatedText = "";
+
+            await sendClaudeMessage(provider.apiKey!, modelName, claudeMessages, {
+              onContent: (text) => {
+                accumulatedText += text;
+                dispatch({
+                  type: "upsertItem",
+                  workspaceId: workspace.id,
+                  threadId,
+                  item: {
+                    id: assistantMessageId,
+                    kind: "message",
+                    role: "assistant",
+                    text: accumulatedText,
+                  },
+                  hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+                });
+                safeMessageActivity();
+              },
+              onComplete: (_fullText, usage) => {
+                if (usage) {
+                  onClaudeUsage?.(usage);
+                }
+                markProcessing(threadId, false);
+                safeMessageActivity();
+              },
+              onRateLimits: (limits) => {
+                onClaudeRateLimits?.(limits);
+              },
+              onError: (error) => {
+                markProcessing(threadId, false);
+                pushThreadErrorMessage(threadId, error);
+                safeMessageActivity();
+              },
+            });
+          }
+
+          onDebug?.({
+            id: `${Date.now()}-claude-message-sent`,
+            timestamp: Date.now(),
+            source: "client",
+            label: "claude/message",
+            payload: { model: resolvedModel, textLength: finalText.length },
+          });
+
+          return;
+        }
+
+        // Existing Codex flow
         const response =
           (await sendUserMessageService(
             workspace.id,
@@ -243,7 +399,10 @@ export function useThreadMessaging({
       getCustomName,
       markProcessing,
       model,
+      onClaudeRateLimits,
+      onClaudeUsage,
       onDebug,
+      otherAiProviders,
       pushThreadErrorMessage,
       recordThreadActivity,
       safeMessageActivity,

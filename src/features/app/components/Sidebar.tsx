@@ -1,4 +1,4 @@
-import type { RateLimitSnapshot, ThreadSummary, WorkspaceInfo } from "../../../types";
+import type { ClaudeUsageSnapshot, RateLimitSnapshot, ThreadSummary, WorkspaceInfo } from "../../../types";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
@@ -46,6 +46,8 @@ type SidebarProps = {
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   accountRateLimits: RateLimitSnapshot | null;
+  claudeUsage?: ClaudeUsageSnapshot | null;
+  isOtherAiModel?: boolean;
   onOpenSettings: () => void;
   onOpenDebug: () => void;
   showDebugButton: boolean;
@@ -92,6 +94,8 @@ export function Sidebar({
   activeWorkspaceId,
   activeThreadId,
   accountRateLimits,
+  claudeUsage,
+  isOtherAiModel,
   onOpenSettings,
   onOpenDebug,
   showDebugButton,
@@ -496,6 +500,8 @@ export function Sidebar({
         weeklyResetLabel={weeklyResetLabel}
         creditsLabel={creditsLabel}
         showWeekly={showWeekly}
+        claudeUsage={claudeUsage}
+        isOtherAiModel={isOtherAiModel}
       />
       <SidebarCornerActions
         onOpenSettings={onOpenSettings}

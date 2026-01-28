@@ -763,3 +763,169 @@ export async function streamAIGeneration(
     onEvent: channel,
   });
 }
+
+// Claude API types
+export type ClaudeMessage = {
+  role: string;
+  content: string;
+};
+
+export type ClaudeUsage = {
+  inputTokens: number;
+  outputTokens: number;
+};
+
+export type ClaudeRateLimits = {
+  requestsLimit: number | null;
+  requestsRemaining: number | null;
+  requestsReset: string | null;
+  tokensLimit: number | null;
+  tokensRemaining: number | null;
+  tokensReset: string | null;
+};
+
+export type ClaudeStreamEvent = {
+  eventType: string;
+  content: string | null;
+  usage: ClaudeUsage | null;
+  rateLimits: ClaudeRateLimits | null;
+  error: string | null;
+};
+
+export type ClaudeEventHandler = {
+  onContent?: (text: string) => void;
+  onComplete?: (fullText: string, usage: ClaudeUsage | null) => void;
+  onRateLimits?: (limits: ClaudeRateLimits) => void;
+  onError?: (error: string) => void;
+};
+
+export async function sendClaudeMessage(
+  apiKey: string,
+  model: string,
+  messages: ClaudeMessage[],
+  handlers: ClaudeEventHandler,
+  maxTokens?: number,
+): Promise<void> {
+  const channel = new Channel<ClaudeStreamEvent>();
+
+  channel.onmessage = (event) => {
+    switch (event.eventType) {
+      case "content_delta":
+        if (event.content && handlers.onContent) {
+          handlers.onContent(event.content);
+        }
+        break;
+      case "message_complete":
+        if (handlers.onComplete) {
+          handlers.onComplete(event.content ?? "", event.usage);
+        }
+        break;
+      case "rate_limits":
+        if (event.rateLimits && handlers.onRateLimits) {
+          handlers.onRateLimits(event.rateLimits);
+        }
+        break;
+      case "error":
+        if (event.error && handlers.onError) {
+          handlers.onError(event.error);
+        }
+        break;
+    }
+  };
+
+  return invoke("send_claude_message", {
+    apiKey,
+    model,
+    messages,
+    maxTokens,
+    onEvent: channel,
+  });
+}
+
+export type ClaudeNonStreamResponse = {
+  content: string;
+  usage: ClaudeUsage;
+  rateLimits: ClaudeRateLimits;
+};
+
+export async function sendClaudeMessageSync(
+  apiKey: string,
+  model: string,
+  messages: ClaudeMessage[],
+  maxTokens?: number,
+): Promise<ClaudeNonStreamResponse> {
+  return invoke<ClaudeNonStreamResponse>("send_claude_message_sync", {
+    apiKey,
+    model,
+    messages,
+    maxTokens,
+  });
+}
+
+// Claude CLI types
+export type ClaudeCliUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  totalCostUsd: number;
+};
+
+export type ClaudeCliEvent = {
+  eventType: string;
+  content: string | null;
+  usage: ClaudeCliUsage | null;
+  error: string | null;
+  sessionId: string | null;
+  model: string | null;
+};
+
+export type ClaudeCliEventHandler = {
+  onInit?: (sessionId: string | null, model: string | null) => void;
+  onContent?: (text: string) => void;
+  onComplete?: (text: string, usage: ClaudeCliUsage | null) => void;
+  onError?: (error: string) => void;
+};
+
+export async function sendClaudeCliMessage(
+  command: string,
+  args: string | null,
+  prompt: string,
+  cwd: string | null,
+  handlers: ClaudeCliEventHandler,
+): Promise<void> {
+  const channel = new Channel<ClaudeCliEvent>();
+
+  channel.onmessage = (event) => {
+    switch (event.eventType) {
+      case "init":
+        if (handlers.onInit) {
+          handlers.onInit(event.sessionId, event.model);
+        }
+        break;
+      case "content":
+        if (event.content && handlers.onContent) {
+          handlers.onContent(event.content);
+        }
+        break;
+      case "complete":
+        if (handlers.onComplete) {
+          handlers.onComplete(event.content ?? "", event.usage);
+        }
+        break;
+      case "error":
+        if (event.error && handlers.onError) {
+          handlers.onError(event.error);
+        }
+        break;
+    }
+  };
+
+  return invoke("send_claude_cli_message", {
+    command,
+    args,
+    prompt,
+    cwd,
+    onEvent: channel,
+  });
+}

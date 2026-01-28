@@ -1,3 +1,15 @@
+import type { ClaudeUsageSnapshot } from "../../../types";
+
+function formatTokenCount(tokens: number): string {
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(1)}M`;
+  }
+  if (tokens >= 1_000) {
+    return `${(tokens / 1_000).toFixed(1)}K`;
+  }
+  return tokens.toString();
+}
+
 type SidebarFooterProps = {
   sessionPercent: number | null;
   weeklyPercent: number | null;
@@ -5,6 +17,8 @@ type SidebarFooterProps = {
   weeklyResetLabel: string | null;
   creditsLabel: string | null;
   showWeekly: boolean;
+  claudeUsage?: ClaudeUsageSnapshot | null;
+  isOtherAiModel?: boolean;
 };
 
 export function SidebarFooter({
@@ -14,7 +28,56 @@ export function SidebarFooter({
   weeklyResetLabel,
   creditsLabel,
   showWeekly,
+  claudeUsage,
+  isOtherAiModel,
 }: SidebarFooterProps) {
+  if (isOtherAiModel && claudeUsage) {
+    const totalTokens = claudeUsage.sessionInputTokens + claudeUsage.sessionOutputTokens;
+    const cacheTokens = claudeUsage.sessionCacheReadTokens + claudeUsage.sessionCacheCreationTokens;
+
+    return (
+      <div className="sidebar-footer">
+        <div className="usage-bars claude-usage">
+          <div className="usage-block">
+            <div className="usage-label">
+              <span className="usage-title">
+                <span>Input</span>
+              </span>
+              <span className="usage-value">
+                {formatTokenCount(claudeUsage.sessionInputTokens)}
+              </span>
+            </div>
+          </div>
+          <div className="usage-block">
+            <div className="usage-label">
+              <span className="usage-title">
+                <span>Output</span>
+              </span>
+              <span className="usage-value">
+                {formatTokenCount(claudeUsage.sessionOutputTokens)}
+              </span>
+            </div>
+          </div>
+          {cacheTokens > 0 && (
+            <div className="usage-block">
+              <div className="usage-label">
+                <span className="usage-title">
+                  <span>Cache</span>
+                </span>
+                <span className="usage-value">
+                  {formatTokenCount(cacheTokens)}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="usage-meta">
+          Total: {formatTokenCount(totalTokens)} · ${claudeUsage.sessionCostUsd.toFixed(4)}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="sidebar-footer">
       <div className="usage-bars">

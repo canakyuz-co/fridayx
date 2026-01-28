@@ -101,6 +101,7 @@ import { useWorkspaceHome } from "./features/workspaces/hooks/useWorkspaceHome";
 import { pickWorkspacePath } from "./services/tauri";
 import type {
   AccessMode,
+  ClaudeUsageSnapshot,
   ComposerEditorSettings,
   ModelOption,
   OtherAiProvider,
@@ -108,6 +109,7 @@ import type {
   TaskView,
   WorkspaceInfo,
 } from "./types";
+import type { ClaudeUsage } from "./services/tauri";
 import { OPEN_APP_STORAGE_KEY } from "./features/app/constants";
 import { useOpenAppIcons } from "./features/app/hooks/useOpenAppIcons";
 import { DEFAULT_RATE_LIMIT_KEY } from "./features/threads/hooks/useThreadsReducer";
@@ -562,6 +564,32 @@ function MainApp() {
 
   const resolvedModel = selectedModel?.model ?? null;
   const resolvedEffort = reasoningSupported ? selectedEffort : null;
+
+  const isOtherAiModel = useMemo(() => {
+    if (!selectedModelId) return false;
+    return otherAiModels.some((m) => m.id === selectedModelId);
+  }, [selectedModelId, otherAiModels]);
+
+  const [claudeUsage, setClaudeUsage] = useState<ClaudeUsageSnapshot>({
+    sessionInputTokens: 0,
+    sessionOutputTokens: 0,
+    sessionCacheReadTokens: 0,
+    sessionCacheCreationTokens: 0,
+    sessionCostUsd: 0,
+    lastUpdated: 0,
+  });
+
+  const handleClaudeUsage = useCallback((usage: ClaudeUsage) => {
+    setClaudeUsage((prev) => ({
+      sessionInputTokens: prev.sessionInputTokens + usage.inputTokens,
+      sessionOutputTokens: prev.sessionOutputTokens + usage.outputTokens,
+      sessionCacheReadTokens: prev.sessionCacheReadTokens,
+      sessionCacheCreationTokens: prev.sessionCacheCreationTokens,
+      sessionCostUsd: prev.sessionCostUsd,
+      lastUpdated: Date.now(),
+    }));
+  }, []);
+
   const activeGitRoot = activeWorkspace?.settings.gitRoot ?? null;
   const normalizePath = useCallback((value: string) => {
     return value.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -709,7 +737,9 @@ function MainApp() {
     accessMode,
     steerEnabled: appSettings.experimentalSteerEnabled,
     customPrompts: prompts,
-    onMessageActivity: queueGitStatusRefresh
+    otherAiProviders: appSettings.otherAiProviders,
+    onMessageActivity: queueGitStatusRefresh,
+    onClaudeUsage: handleClaudeUsage,
   });
   const activeThreadIdRef = useRef<string | null>(activeThreadId ?? null);
   const { getThreadRows } = useThreadRows(threadParentById);
@@ -1580,6 +1610,8 @@ function MainApp() {
     activeThreadId,
     activeItems,
     activeRateLimits,
+    claudeUsage: isOtherAiModel ? claudeUsage : null,
+    isOtherAiModel,
     codeBlockCopyUseModifier: appSettings.composerCodeBlockCopyUseModifier,
     openAppTargets: appSettings.openAppTargets,
     openAppIconById,

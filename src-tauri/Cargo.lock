@@ -1294,6 +1294,7 @@ dependencies = [
  "cpal",
  "fix-path-env",
  "flate2",
+ "futures-util",
  "git2",
  "ignore",
  "libc",

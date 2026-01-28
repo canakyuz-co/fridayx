@@ -413,6 +413,15 @@ export type RateLimitSnapshot = {
   planType: string | null;
 };
 
+export type ClaudeUsageSnapshot = {
+  sessionInputTokens: number;
+  sessionOutputTokens: number;
+  sessionCacheReadTokens: number;
+  sessionCacheCreationTokens: number;
+  sessionCostUsd: number;
+  lastUpdated: number;
+};
+
 export type QueuedMessage = {
   id: string;
   text: string;

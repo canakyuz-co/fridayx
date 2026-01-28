@@ -163,7 +163,7 @@ pub(crate) async fn start_thread(
         .ok_or("workspace not connected")?;
     let params = json!({
         "cwd": session.entry.path,
-        "approvalPolicy": "on-request"
+        "approvalPolicy": "onRequest"
     });
     session.send_request("thread/start", params).await
 }
@@ -315,7 +315,7 @@ pub(crate) async fn send_user_message(
     let approval_policy = if access_mode == "full-access" {
         "never"
     } else {
-        "on-request"
+        "onRequest"
     };
 
     let trimmed_text = text.trim();
