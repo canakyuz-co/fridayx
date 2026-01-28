@@ -152,8 +152,8 @@ const DEFAULT_OTHER_AI_MODEL: Record<
   AppSettings["otherAiProviders"][number]["provider"],
   string
 > = {
-  claude: "claude4.5",
-  gemini: "gemini3",
+  claude: "claude-4-5",
+  gemini: "gemini-3",
   custom: "",
 };
 

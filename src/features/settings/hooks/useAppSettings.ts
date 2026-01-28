@@ -34,7 +34,7 @@ const defaultSettings: AppSettings = {
       command: "claude",
       args: null,
       models: [],
-      defaultModel: "claude4.5",
+      defaultModel: "claude-4-5",
     },
     {
       id: "gemini",
@@ -44,7 +44,7 @@ const defaultSettings: AppSettings = {
       command: "gemini",
       args: null,
       models: [],
-      defaultModel: "gemini3",
+      defaultModel: "gemini-3",
     },
   ],
   defaultAccessMode: "current",
