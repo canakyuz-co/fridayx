@@ -30,7 +30,8 @@ import {
   getDefaultInterruptShortcut,
 } from "../../../utils/shortcuts";
 import { clampUiScale } from "../../../utils/uiScale";
-import { getCodexConfigPath } from "../../../services/tauri";
+import { getCodexConfigPath, listOtherAiModels } from "../../../services/tauri";
+import { pushErrorToast } from "../../../services/toasts";
 import {
   DEFAULT_CODE_FONT_FAMILY,
   DEFAULT_UI_FONT_FAMILY,
@@ -130,7 +131,6 @@ type OtherAiDraft = {
   command: string;
   args: string;
   modelsText: string;
-  defaultModel: string;
 };
 
 const normalizeTextValue = (value: string) => {
@@ -147,15 +147,6 @@ const parseModelList = (value: string) =>
         .filter((entry) => entry.length > 0),
     ),
   );
-
-const DEFAULT_OTHER_AI_MODEL: Record<
-  AppSettings["otherAiProviders"][number]["provider"],
-  string
-> = {
-  claude: "claude-4-5",
-  gemini: "gemini-3",
-  custom: "",
-};
 
 const normalizeProviderType = (
   value: string,
@@ -178,7 +169,6 @@ const buildOtherAiDrafts = (providers: AppSettings["otherAiProviders"]) =>
       command: provider.command ?? "",
       args: provider.args ?? "",
       modelsText: (provider.models ?? []).join("\n"),
-      defaultModel: provider.defaultModel ?? "",
     };
     return acc;
   }, {});
@@ -365,6 +355,9 @@ export function SettingsView({
   const [otherAiDrafts, setOtherAiDrafts] = useState<
     Record<string, OtherAiDraft>
   >(() => buildOtherAiDrafts(appSettings.otherAiProviders));
+  const [otherAiFetchState, setOtherAiFetchState] = useState<
+    Record<string, { loading: boolean }>
+  >({});
   const [doctorState, setDoctorState] = useState<{
     status: "idle" | "running" | "done";
     result: CodexDoctorResult | null;
@@ -803,7 +796,6 @@ export function SettingsView({
       const nextCommand = draft?.command ?? provider.command ?? "";
       const nextArgs = draft?.args ?? provider.args ?? "";
       const nextModelsText = draft?.modelsText ?? (provider.models ?? []).join("\n");
-      const nextDefaultModel = draft?.defaultModel ?? provider.defaultModel ?? "";
       return {
         id: provider.id,
         label: (nextLabel ?? provider.id).trim() || provider.id,
@@ -815,7 +807,7 @@ export function SettingsView({
         command: normalizeTextValue(nextCommand) ?? null,
         args: normalizeTextValue(nextArgs) ?? null,
         models: parseModelList(nextModelsText),
-        defaultModel: normalizeTextValue(nextDefaultModel) ?? null,
+        defaultModel: null,
       };
     },
     [],
@@ -849,27 +841,42 @@ export function SettingsView({
     }));
   };
 
-  const applyOtherAiEnableDefaults = (
+  const handleOtherAiFetchModels = async (
     provider: AppSettings["otherAiProviders"][number],
     draft: OtherAiDraft,
-    enabled: boolean,
   ) => {
-    if (!enabled) {
-      return draft;
-    }
     const providerType = normalizeProviderType(draft.provider, provider.provider);
-    if (draft.defaultModel.trim()) {
-      return draft;
+    if (providerType === "custom") {
+      return;
     }
-    const fallback = DEFAULT_OTHER_AI_MODEL[providerType];
-    if (!fallback) {
-      return draft;
+    setOtherAiFetchState((prev) => ({
+      ...prev,
+      [provider.id]: { loading: true },
+    }));
+    try {
+      const models = await listOtherAiModels(providerType);
+      const normalized = Array.from(
+        new Set(
+          models
+            .map((model) => model.trim())
+            .filter((model) => model.length > 0),
+        ),
+      );
+      handleOtherAiDraftChange(provider.id, {
+        provider: providerType,
+        modelsText: normalized.join("\n"),
+      });
+    } catch (error) {
+      pushErrorToast({
+        title: "Couldn’t fetch models",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setOtherAiFetchState((prev) => ({
+        ...prev,
+        [provider.id]: { loading: false },
+      }));
     }
-    return {
-      ...draft,
-      provider: providerType,
-      defaultModel: fallback,
-    };
   };
 
   const handleSaveOtherAiProviders = async () => {
@@ -3119,8 +3126,8 @@ export function SettingsView({
                     command: provider.command ?? "",
                     args: provider.args ?? "",
                     modelsText: (provider.models ?? []).join("\n"),
-                    defaultModel: provider.defaultModel ?? "",
                   };
+                  const fetchState = otherAiFetchState[provider.id];
                   return (
                     <div key={provider.id} className="settings-field">
                       <div className="settings-toggle-row">
@@ -3137,14 +3144,9 @@ export function SettingsView({
                           className={`settings-toggle ${draft.enabled ? "on" : ""}`}
                           onClick={() => {
                             const nextEnabled = !draft.enabled;
-                            const nextDraft = applyOtherAiEnableDefaults(
-                              provider,
-                              draft,
-                              nextEnabled,
-                            );
                             setOtherAiDrafts((prev) => ({
                               ...prev,
-                              [provider.id]: { ...nextDraft, enabled: nextEnabled },
+                              [provider.id]: { ...draft, enabled: nextEnabled },
                             }));
                           }}
                         >
@@ -3211,7 +3213,17 @@ export function SettingsView({
                       <div className="settings-help">
                         CLI args are passed before the prompt. Keep output set to stream JSON.
                       </div>
-                      <label className="settings-field-label">Models</label>
+                      <div className="settings-field-row">
+                        <label className="settings-field-label">Models</label>
+                        <button
+                          type="button"
+                          className="ghost"
+                          disabled={draft.provider === "custom" || fetchState?.loading}
+                          onClick={() => void handleOtherAiFetchModels(provider, draft)}
+                        >
+                          {fetchState?.loading ? "Fetching..." : "Fetch models"}
+                        </button>
+                      </div>
                       <textarea
                         className="settings-input"
                         rows={4}
@@ -3225,18 +3237,9 @@ export function SettingsView({
                       />
                       <div className="settings-help">
                         One model per line or comma-separated. These appear in the model picker.
+                        Uses API discovery for Claude/Gemini when you fetch.
+                        Requires ANTHROPIC_API_KEY or GEMINI_API_KEY/GOOGLE_API_KEY in the environment.
                       </div>
-                      <label className="settings-field-label">Default model</label>
-                      <input
-                        className="settings-input"
-                        value={draft.defaultModel}
-                        placeholder="optional"
-                        onChange={(event) =>
-                          handleOtherAiDraftChange(provider.id, {
-                            defaultModel: event.target.value,
-                          })
-                        }
-                      />
                     </div>
                   );
                 })}

@@ -499,6 +499,10 @@ export async function updateAppSettings(settings: AppSettings): Promise<AppSetti
   return invoke<AppSettings>("update_app_settings", { settings });
 }
 
+export async function listOtherAiModels(provider: string): Promise<string[]> {
+  return invoke<string[]>("list_other_ai_models", { provider });
+}
+
 type MenuAcceleratorUpdate = {
   id: string;
   accelerator: string | null;

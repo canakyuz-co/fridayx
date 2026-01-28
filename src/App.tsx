@@ -138,10 +138,7 @@ function buildOtherAiModels(providers: OtherAiProvider[]): ModelOption[] {
       return;
     }
     const providerModels = provider.models ?? [];
-    const modelList = provider.defaultModel
-      ? Array.from(new Set([provider.defaultModel, ...providerModels]))
-      : providerModels;
-    modelList.forEach((model) => {
+    providerModels.forEach((model) => {
       const trimmed = model.trim();
       if (!trimmed) {
         return;

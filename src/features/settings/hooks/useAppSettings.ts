@@ -18,10 +18,6 @@ import { normalizeOpenAppTargets } from "../../app/utils/openApp";
 import { getDefaultInterruptShortcut } from "../../../utils/shortcuts";
 
 const allowedThemes = new Set(["system", "light", "dark"]);
-const OTHER_AI_DEFAULT_MODEL_BY_PROVIDER: Record<string, string> = {
-  claude: "claude-4-5",
-  gemini: "gemini-3",
-};
 
 const defaultSettings: AppSettings = {
   codexBin: null,
@@ -38,7 +34,7 @@ const defaultSettings: AppSettings = {
       command: "claude",
       args: null,
       models: [],
-      defaultModel: "claude-4-5",
+      defaultModel: null,
     },
     {
       id: "gemini",
@@ -48,7 +44,7 @@ const defaultSettings: AppSettings = {
       command: "gemini",
       args: null,
       models: [],
-      defaultModel: "gemini-3",
+      defaultModel: null,
     },
   ],
   defaultAccessMode: "current",
@@ -120,27 +116,18 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
       ? storedOpenAppId
       : normalizedTargets[0]?.id ?? DEFAULT_OPEN_APP_ID;
   const normalizedOtherAiProviders = (settings.otherAiProviders ?? []).map(
-    (provider) => {
-      const normalized = {
-        ...provider,
-        label: provider.label?.trim() ? provider.label.trim() : provider.id,
-        command: provider.command?.trim() ? provider.command.trim() : null,
-        args: provider.args?.trim() ? provider.args.trim() : null,
-        models: Array.isArray(provider.models)
-          ? provider.models
-              .map((model) => model.trim())
-              .filter((model) => model.length > 0)
-          : [],
-        defaultModel: provider.defaultModel?.trim() ? provider.defaultModel.trim() : null,
-      };
-      if (!normalized.defaultModel) {
-        const fallback = OTHER_AI_DEFAULT_MODEL_BY_PROVIDER[normalized.provider];
-        if (fallback) {
-          normalized.defaultModel = fallback;
-        }
-      }
-      return normalized;
-    },
+    (provider) => ({
+      ...provider,
+      label: provider.label?.trim() ? provider.label.trim() : provider.id,
+      command: provider.command?.trim() ? provider.command.trim() : null,
+      args: provider.args?.trim() ? provider.args.trim() : null,
+      models: Array.isArray(provider.models)
+        ? provider.models
+            .map((model) => model.trim())
+            .filter((model) => model.length > 0)
+        : [],
+      defaultModel: provider.defaultModel?.trim() ? provider.defaultModel.trim() : null,
+    }),
   );
   return {
     ...settings,
