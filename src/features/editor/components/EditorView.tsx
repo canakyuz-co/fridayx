@@ -89,9 +89,31 @@ export function EditorView({
 
   const applyTheme = useCallback((monaco: Monaco) => {
     const styles = getComputedStyle(document.documentElement);
+    const normalizeColor = (value: string, fallback: string) => {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return fallback;
+      }
+      if (trimmed.startsWith("#")) {
+        return trimmed;
+      }
+      const rgbMatch = trimmed.match(
+        /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i,
+      );
+      if (rgbMatch) {
+        const toHex = (input: string) => {
+          const num = Number(input);
+          return Number.isFinite(num)
+            ? num.toString(16).padStart(2, "0")
+            : "00";
+        };
+        return `#${toHex(rgbMatch[1])}${toHex(rgbMatch[2])}${toHex(rgbMatch[3])}`;
+      }
+      return fallback;
+    };
     const readVar = (name: string, fallback: string) => {
-      const value = styles.getPropertyValue(name).trim();
-      return value || fallback;
+      const value = styles.getPropertyValue(name);
+      return normalizeColor(value, fallback);
     };
     monaco.editor.defineTheme("friday-app", {
       base: "vs-dark",
