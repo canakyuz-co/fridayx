@@ -7,6 +7,7 @@ type UseModelsOptions = {
   onDebug?: (entry: DebugEntry) => void;
   preferredModelId?: string | null;
   preferredEffort?: string | null;
+  extraModels?: ModelOption[];
 };
 
 const CONFIG_MODEL_DESCRIPTION = "Configured in CODEX_HOME/config.toml";
@@ -39,11 +40,28 @@ const pickDefaultModel = (models: ModelOption[], configModel: string | null) =>
   models[0] ??
   null;
 
+const mergeModels = (base: ModelOption[], extras: ModelOption[]) => {
+  if (!extras.length) {
+    return base;
+  }
+  const seen = new Set(base.map((model) => model.id));
+  const merged = [...base];
+  extras.forEach((model) => {
+    if (seen.has(model.id)) {
+      return;
+    }
+    seen.add(model.id);
+    merged.push(model);
+  });
+  return merged;
+};
+
 export function useModels({
   activeWorkspace,
   onDebug,
   preferredModelId = null,
   preferredEffort = null,
+  extraModels = [],
 }: UseModelsOptions) {
   const [models, setModels] = useState<ModelOption[]>([]);
   const [configModel, setConfigModel] = useState<string | null>(null);
@@ -54,6 +72,7 @@ export function useModels({
   const hasUserSelectedModel = useRef(false);
   const hasUserSelectedEffort = useRef(false);
   const lastWorkspaceId = useRef<string | null>(null);
+  const baseModelsRef = useRef<ModelOption[]>([]);
 
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
@@ -215,7 +234,7 @@ export function useModels({
         ),
         isDefault: Boolean(item.isDefault ?? item.is_default ?? false),
       }));
-      const data = (() => {
+      const baseModels = (() => {
         if (!configModelFromConfig) {
           return dataFromServer;
         }
@@ -236,14 +255,16 @@ export function useModels({
         };
         return [configOption, ...dataFromServer];
       })();
-      setModels(data);
+      baseModelsRef.current = baseModels;
+      setModels(mergeModels(baseModels, extraModels));
       lastFetchedWorkspaceId.current = workspaceId;
-      const defaultModel = pickDefaultModel(data, configModelFromConfig);
-      const existingSelection = findModelByIdOrModel(data, selectedModelId);
+      const mergedModels = mergeModels(baseModels, extraModels);
+      const defaultModel = pickDefaultModel(mergedModels, configModelFromConfig);
+      const existingSelection = findModelByIdOrModel(mergedModels, selectedModelId);
       if (selectedModelId && !existingSelection) {
         hasUserSelectedModel.current = false;
       }
-      const preferredSelection = findModelByIdOrModel(data, preferredModelId);
+      const preferredSelection = findModelByIdOrModel(mergedModels, preferredModelId);
       const shouldKeepExisting =
         hasUserSelectedModel.current && existingSelection !== null;
       const nextSelection =
@@ -270,11 +291,20 @@ export function useModels({
     isConnected,
     onDebug,
     preferredModelId,
+    extraModels,
     selectedEffort,
     selectedModelId,
     resolveEffort,
     workspaceId,
   ]);
+
+  useEffect(() => {
+    if (!baseModelsRef.current.length && !extraModels.length) {
+      return;
+    }
+    const merged = mergeModels(baseModelsRef.current, extraModels);
+    setModels(merged);
+  }, [extraModels]);
 
   useEffect(() => {
     if (!workspaceId || !isConnected) {

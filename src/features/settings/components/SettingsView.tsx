@@ -122,6 +122,58 @@ const buildWorkspaceOverrideDrafts = (
   return next;
 };
 
+type OtherAiDraft = {
+  id: string;
+  label: string;
+  provider: string;
+  enabled: boolean;
+  command: string;
+  args: string;
+  modelsText: string;
+  defaultModel: string;
+};
+
+const normalizeTextValue = (value: string) => {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+const parseModelList = (value: string) =>
+  Array.from(
+    new Set(
+      value
+        .split(/[\n,]+/g)
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
+    ),
+  );
+
+const normalizeProviderType = (
+  value: string,
+  fallback: AppSettings["otherAiProviders"][number]["provider"],
+) => {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "claude" || normalized === "gemini" || normalized === "custom") {
+    return normalized;
+  }
+  return fallback;
+};
+
+const buildOtherAiDrafts = (providers: AppSettings["otherAiProviders"]) =>
+  providers.reduce<Record<string, OtherAiDraft>>((acc, provider) => {
+    acc[provider.id] = {
+      id: provider.id,
+      label: provider.label ?? provider.id,
+      provider: provider.provider,
+      enabled: provider.enabled,
+      command: provider.command ?? "",
+      args: provider.args ?? "",
+      modelsText: (provider.models ?? []).join("\n"),
+      defaultModel: provider.defaultModel ?? "",
+    };
+    return acc;
+  }, {});
+
 export type SettingsViewProps = {
   workspaceGroups: WorkspaceGroup[];
   groupedWorkspaces: Array<{
@@ -171,7 +223,8 @@ type SettingsSection =
   | "composer"
   | "dictation"
   | "shortcuts"
-  | "open-apps";
+  | "open-apps"
+  | "other-ai";
 type CodexSection = SettingsSection | "codex" | "experimental";
 type ShortcutSettingKey =
   | "composerModelShortcut"
@@ -300,6 +353,9 @@ export function SettingsView({
   const [openAppSelectedId, setOpenAppSelectedId] = useState(
     appSettings.selectedOpenAppId,
   );
+  const [otherAiDrafts, setOtherAiDrafts] = useState<
+    Record<string, OtherAiDraft>
+  >(() => buildOtherAiDrafts(appSettings.otherAiProviders));
   const [doctorState, setDoctorState] = useState<{
     status: "idle" | "running" | "done";
     result: CodexDoctorResult | null;
@@ -406,6 +462,10 @@ export function SettingsView({
     setOpenAppDrafts(buildOpenAppDrafts(appSettings.openAppTargets));
     setOpenAppSelectedId(appSettings.selectedOpenAppId);
   }, [appSettings.openAppTargets, appSettings.selectedOpenAppId]);
+
+  useEffect(() => {
+    setOtherAiDrafts(buildOtherAiDrafts(appSettings.otherAiProviders));
+  }, [appSettings.otherAiProviders]);
 
   useEffect(() => {
     setShortcutDrafts({
@@ -724,6 +784,122 @@ export function SettingsView({
     void handleCommitOpenApps(next, newTarget.id);
   };
 
+  const normalizeOtherAiProvider = useCallback(
+    (
+      provider: AppSettings["otherAiProviders"][number],
+      draft?: OtherAiDraft,
+    ) => {
+      const nextLabel = draft?.label ?? provider.label;
+      const nextProvider = draft?.provider ?? provider.provider;
+      const nextCommand = draft?.command ?? provider.command ?? "";
+      const nextArgs = draft?.args ?? provider.args ?? "";
+      const nextModelsText = draft?.modelsText ?? (provider.models ?? []).join("\n");
+      const nextDefaultModel = draft?.defaultModel ?? provider.defaultModel ?? "";
+      return {
+        id: provider.id,
+        label: (nextLabel ?? provider.id).trim() || provider.id,
+        provider: normalizeProviderType(
+          nextProvider ?? provider.provider,
+          provider.provider,
+        ),
+        enabled: draft?.enabled ?? provider.enabled,
+        command: normalizeTextValue(nextCommand) ?? null,
+        args: normalizeTextValue(nextArgs) ?? null,
+        models: parseModelList(nextModelsText),
+        defaultModel: normalizeTextValue(nextDefaultModel) ?? null,
+      };
+    },
+    [],
+  );
+
+  const normalizedOtherAiProviders = useMemo(
+    () =>
+      appSettings.otherAiProviders.map((provider) =>
+        normalizeOtherAiProvider(provider),
+      ),
+    [appSettings.otherAiProviders, normalizeOtherAiProvider],
+  );
+
+  const normalizedOtherAiDrafts = useMemo(
+    () =>
+      appSettings.otherAiProviders.map((provider) =>
+        normalizeOtherAiProvider(provider, otherAiDrafts[provider.id]),
+      ),
+    [appSettings.otherAiProviders, normalizeOtherAiProvider, otherAiDrafts],
+  );
+
+  const otherAiDirty = useMemo(
+    () => JSON.stringify(normalizedOtherAiDrafts) !== JSON.stringify(normalizedOtherAiProviders),
+    [normalizedOtherAiDrafts, normalizedOtherAiProviders],
+  );
+
+  const handleOtherAiDraftChange = (id: string, updates: Partial<OtherAiDraft>) => {
+    setOtherAiDrafts((prev) => ({
+      ...prev,
+      [id]: { ...(prev[id] ?? buildOtherAiDrafts(appSettings.otherAiProviders)[id]), ...updates },
+    }));
+  };
+
+  const handleSaveOtherAiProviders = async () => {
+    if (!otherAiDirty) {
+      return;
+    }
+    const nextProviders = appSettings.otherAiProviders.map((provider) =>
+      normalizeOtherAiProvider(provider, otherAiDrafts[provider.id]),
+    );
+    await onUpdateAppSettings({
+      ...appSettings,
+      otherAiProviders: nextProviders,
+    });
+  };
+
+  const handleAddOtherAiProvider = async () => {
+    const id = `custom-${Date.now()}`;
+    const newProvider: AppSettings["otherAiProviders"][number] = {
+      id,
+      label: "Custom",
+      provider: "custom",
+      enabled: false,
+      command: null,
+      args: null,
+      models: [],
+      defaultModel: null,
+    };
+    const nextProviders = [
+      ...appSettings.otherAiProviders,
+      newProvider,
+    ];
+    setOtherAiDrafts(buildOtherAiDrafts(nextProviders));
+    await onUpdateAppSettings({
+      ...appSettings,
+      otherAiProviders: nextProviders,
+    });
+  };
+
+  const handleRemoveOtherAiProvider = async (providerId: string) => {
+    const target = appSettings.otherAiProviders.find(
+      (provider) => provider.id === providerId,
+    );
+    if (!target || target.provider !== "custom") {
+      return;
+    }
+    const confirmed = await ask(`Remove ${target.label}?`, {
+      title: "Remove provider",
+      kind: "warning",
+    });
+    if (!confirmed) {
+      return;
+    }
+    const nextProviders = appSettings.otherAiProviders.filter(
+      (provider) => provider.id !== providerId,
+    );
+    setOtherAiDrafts(buildOtherAiDrafts(nextProviders));
+    await onUpdateAppSettings({
+      ...appSettings,
+      otherAiProviders: nextProviders,
+    });
+  };
+
   const handleSelectOpenAppDefault = (id: string) => {
     setOpenAppSelectedId(id);
     if (typeof window !== "undefined") {
@@ -974,6 +1150,14 @@ export function SettingsView({
             >
               <TerminalSquare aria-hidden />
               Codex
+            </button>
+            <button
+              type="button"
+              className={`settings-nav ${activeSection === "other-ai" ? "active" : ""}`}
+              onClick={() => setActiveSection("other-ai")}
+            >
+              <LayoutGrid aria-hidden />
+              Other AI
             </button>
             <button
               type="button"
@@ -2884,6 +3068,155 @@ export function SettingsView({
                     aria-pressed={appSettings.experimentalSteerEnabled}
                   >
                     <span className="settings-toggle-knob" />
+                  </button>
+                </div>
+              </section>
+            )}
+            {activeSection === "other-ai" && (
+              <section className="settings-section">
+                <div className="settings-section-title">Other AI</div>
+                <div className="settings-section-subtitle">
+                  Configure external providers and expose their models in the composer.
+                </div>
+                {appSettings.otherAiProviders.map((provider) => {
+                  const draft = otherAiDrafts[provider.id] ?? {
+                    id: provider.id,
+                    label: provider.label ?? provider.id,
+                    provider: provider.provider,
+                    enabled: provider.enabled,
+                    command: provider.command ?? "",
+                    args: provider.args ?? "",
+                    modelsText: (provider.models ?? []).join("\n"),
+                    defaultModel: provider.defaultModel ?? "",
+                  };
+                  return (
+                    <div key={provider.id} className="settings-field">
+                      <div className="settings-toggle-row">
+                        <div>
+                          <div className="settings-toggle-title">
+                            {draft.label || provider.id}
+                          </div>
+                          <div className="settings-toggle-subtitle">
+                            Provider ID: {provider.id}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className={`settings-toggle ${draft.enabled ? "on" : ""}`}
+                          onClick={() =>
+                            handleOtherAiDraftChange(provider.id, {
+                              enabled: !draft.enabled,
+                            })
+                          }
+                        >
+                          <span className="settings-toggle-knob" />
+                        </button>
+                      </div>
+                      <div className="settings-field-row">
+                        <input
+                          className="settings-input"
+                          value={draft.label}
+                          placeholder="Provider label"
+                          onChange={(event) =>
+                            handleOtherAiDraftChange(provider.id, {
+                              label: event.target.value,
+                            })
+                          }
+                        />
+                        <select
+                          className="settings-select settings-input--compact"
+                          value={draft.provider}
+                          onChange={(event) =>
+                            handleOtherAiDraftChange(provider.id, {
+                              provider: event.target.value,
+                            })
+                          }
+                        >
+                          <option value="claude">Claude</option>
+                          <option value="gemini">Gemini</option>
+                          <option value="custom">Custom</option>
+                        </select>
+                        {provider.provider === "custom" && (
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={() => void handleRemoveOtherAiProvider(provider.id)}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <label className="settings-field-label">CLI command</label>
+                      <div className="settings-field-row">
+                        <input
+                          className="settings-input"
+                          value={draft.command}
+                          placeholder="claude"
+                          onChange={(event) =>
+                            handleOtherAiDraftChange(provider.id, {
+                              command: event.target.value,
+                            })
+                          }
+                        />
+                        <input
+                          className="settings-input"
+                          value={draft.args}
+                          placeholder="--output-format stream-json"
+                          onChange={(event) =>
+                            handleOtherAiDraftChange(provider.id, {
+                              args: event.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="settings-help">
+                        CLI args are passed before the prompt. Keep output set to stream JSON.
+                      </div>
+                      <label className="settings-field-label">Models</label>
+                      <textarea
+                        className="settings-input"
+                        rows={4}
+                        value={draft.modelsText}
+                        placeholder="model-1&#10;model-2"
+                        onChange={(event) =>
+                          handleOtherAiDraftChange(provider.id, {
+                            modelsText: event.target.value,
+                          })
+                        }
+                      />
+                      <div className="settings-help">
+                        One model per line or comma-separated. These appear in the model picker.
+                      </div>
+                      <label className="settings-field-label">Default model</label>
+                      <input
+                        className="settings-input"
+                        value={draft.defaultModel}
+                        placeholder="optional"
+                        onChange={(event) =>
+                          handleOtherAiDraftChange(provider.id, {
+                            defaultModel: event.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  );
+                })}
+                <div className="settings-field-actions">
+                  {otherAiDirty && (
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => void handleSaveOtherAiProviders()}
+                    >
+                      Save
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => void handleAddOtherAiProvider()}
+                  >
+                    Add provider
                   </button>
                 </div>
               </section>

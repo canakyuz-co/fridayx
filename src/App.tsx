@@ -102,11 +102,15 @@ import { pickWorkspacePath } from "./services/tauri";
 import type {
   AccessMode,
   ComposerEditorSettings,
+  ModelOption,
+  OtherAiProvider,
+  RateLimitSnapshot,
   TaskView,
   WorkspaceInfo,
 } from "./types";
 import { OPEN_APP_STORAGE_KEY } from "./features/app/constants";
 import { useOpenAppIcons } from "./features/app/hooks/useOpenAppIcons";
+import { DEFAULT_RATE_LIMIT_KEY } from "./features/threads/hooks/useThreadsReducer";
 
 const AboutView = lazy(() =>
   import("./features/about/components/AboutView").then((module) => ({
@@ -125,6 +129,60 @@ const GitHubPanelData = lazy(() =>
     default: module.GitHubPanelData,
   })),
 );
+
+function buildOtherAiModels(providers: OtherAiProvider[]): ModelOption[] {
+  const models: ModelOption[] = [];
+  const seen = new Set<string>();
+  providers.forEach((provider) => {
+    if (!provider.enabled) {
+      return;
+    }
+    const providerModels = provider.models ?? [];
+    const modelList = provider.defaultModel
+      ? Array.from(new Set([provider.defaultModel, ...providerModels]))
+      : providerModels;
+    modelList.forEach((model) => {
+      const trimmed = model.trim();
+      if (!trimmed) {
+        return;
+      }
+      const id = `${provider.id}:${trimmed}`;
+      if (seen.has(id)) {
+        return;
+      }
+      seen.add(id);
+      models.push({
+        id,
+        model: id,
+        displayName: `${provider.label} · ${trimmed}`,
+        description: provider.provider,
+        supportedReasoningEfforts: [],
+        defaultReasoningEffort: null,
+        isDefault: false,
+      });
+    });
+  });
+  return models;
+}
+
+function resolveRateLimitsByModel(
+  rateLimitsByWorkspace: Record<string, RateLimitSnapshot | null>,
+  rateLimitsByWorkspaceModel: Record<string, Record<string, RateLimitSnapshot | null>>,
+  workspaceId: string | null,
+  modelId: string | null,
+) {
+  if (!workspaceId) {
+    return null;
+  }
+  const modelMap = rateLimitsByWorkspaceModel[workspaceId];
+  if (modelId && modelMap?.[modelId]) {
+    return modelMap[modelId] ?? null;
+  }
+  if (modelMap?.[DEFAULT_RATE_LIMIT_KEY]) {
+    return modelMap[DEFAULT_RATE_LIMIT_KEY] ?? null;
+  }
+  return rateLimitsByWorkspace[workspaceId] ?? null;
+}
 
 
 function MainApp() {
@@ -376,6 +434,10 @@ function MainApp() {
     setDepth: setGitRootScanDepth,
     clear: clearGitRootCandidates,
   } = useGitRepoScan(activeWorkspace);
+  const otherAiModels = useMemo(
+    () => buildOtherAiModels(appSettings.otherAiProviders),
+    [appSettings.otherAiProviders],
+  );
   const {
     models,
     selectedModel,
@@ -390,6 +452,7 @@ function MainApp() {
     onDebug: addDebugEntry,
     preferredModelId: appSettings.lastComposerModelId,
     preferredEffort: appSettings.lastComposerReasoningEffort,
+    extraModels: otherAiModels,
   });
 
   const {
@@ -618,6 +681,7 @@ function MainApp() {
     threadListCursorByWorkspace,
     tokenUsageByThread,
     rateLimitsByWorkspace,
+    rateLimitsByWorkspaceModel,
     planByThread,
     lastAgentMessageByThread,
     interruptTurn,
@@ -876,9 +940,13 @@ function MainApp() {
     [hasLoaded, threadListLoadingByWorkspace, workspaces]
   );
 
-  const activeRateLimits = activeWorkspaceId
-    ? rateLimitsByWorkspace[activeWorkspaceId] ?? null
-    : null;
+  const selectedRateLimitModelId = selectedModel?.model ?? selectedModelId ?? null;
+  const activeRateLimits = resolveRateLimitsByModel(
+    rateLimitsByWorkspace,
+    rateLimitsByWorkspaceModel,
+    activeWorkspaceId,
+    selectedRateLimitModelId,
+  );
   const activeTokenUsage = activeThreadId
     ? tokenUsageByThread[activeThreadId] ?? null
     : null;

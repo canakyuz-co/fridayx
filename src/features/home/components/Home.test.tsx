@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { Home } from "./Home";
 
@@ -53,9 +53,14 @@ describe("Home", () => {
       />,
     );
 
-    expect(screen.getByText("Latest agents")).toBeTruthy();
-    expect(screen.getByText("Friday")).toBeTruthy();
-    expect(screen.getByText("Frontend")).toBeTruthy();
+    const latestSection = screen.getByText("Latest agents").closest(".home-latest");
+    expect(latestSection).toBeTruthy();
+    if (!latestSection) {
+      throw new Error("Expected latest agents section");
+    }
+    const latestScope = within(latestSection as HTMLElement);
+    expect(latestScope.getByText("Friday")).toBeTruthy();
+    expect(latestScope.getByText("Frontend")).toBeTruthy();
     const message = screen.getByText("Ship the dashboard refresh");
     const card = message.closest("button");
     expect(card).toBeTruthy();
@@ -77,7 +82,7 @@ describe("Home", () => {
   });
 
   it("renders usage cards in time mode", () => {
-    render(
+    const { container } = render(
       <Home
         {...baseProps}
         usageMetric="time"
@@ -107,8 +112,10 @@ describe("Home", () => {
       />,
     );
 
-    expect(screen.getAllByText("agent time").length).toBeGreaterThan(0);
-    expect(screen.getByText("Runs")).toBeTruthy();
-    expect(screen.getByText("Peak day")).toBeTruthy();
+    const scoped = within(container);
+    fireEvent.click(scoped.getByRole("tab", { name: "Usage" }));
+    expect(scoped.getAllByText("agent time").length).toBeGreaterThan(0);
+    expect(scoped.getByText("Runs")).toBeTruthy();
+    expect(scoped.getByText("Peak day")).toBeTruthy();
   });
 });

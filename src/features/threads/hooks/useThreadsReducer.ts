@@ -115,6 +115,8 @@ type ThreadActivityStatus = {
   lastDurationMs: number | null;
 };
 
+export const DEFAULT_RATE_LIMIT_KEY = "__default__";
+
 export type ThreadState = {
   activeThreadIdByWorkspace: Record<string, string | null>;
   itemsByThread: Record<string, ConversationItem[]>;
@@ -129,6 +131,7 @@ export type ThreadState = {
   userInputRequests: RequestUserInputRequest[];
   tokenUsageByThread: Record<string, ThreadTokenUsage>;
   rateLimitsByWorkspace: Record<string, RateLimitSnapshot | null>;
+  rateLimitsByWorkspaceModel: Record<string, Record<string, RateLimitSnapshot | null>>;
   planByThread: Record<string, TurnPlan | null>;
   lastAgentMessageByThread: Record<string, { text: string; timestamp: number }>;
 };
@@ -215,6 +218,7 @@ export type ThreadAction =
       type: "setRateLimits";
       workspaceId: string;
       rateLimits: RateLimitSnapshot | null;
+      modelId?: string | null;
     }
   | { type: "setActiveTurnId"; threadId: string; turnId: string | null }
   | { type: "setThreadPlan"; threadId: string; plan: TurnPlan | null }
@@ -242,6 +246,7 @@ export const initialState: ThreadState = {
   userInputRequests: [],
   tokenUsageByThread: {},
   rateLimitsByWorkspace: {},
+  rateLimitsByWorkspaceModel: {},
   planByThread: {},
   lastAgentMessageByThread: {},
 };
@@ -904,6 +909,13 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         rateLimitsByWorkspace: {
           ...state.rateLimitsByWorkspace,
           [action.workspaceId]: action.rateLimits,
+        },
+        rateLimitsByWorkspaceModel: {
+          ...state.rateLimitsByWorkspaceModel,
+          [action.workspaceId]: {
+            ...(state.rateLimitsByWorkspaceModel[action.workspaceId] ?? {}),
+            [action.modelId ?? DEFAULT_RATE_LIMIT_KEY]: action.rateLimits,
+          },
         },
       };
     case "setThreadPlan":

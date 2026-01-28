@@ -62,6 +62,7 @@ type AppServerEventHandlers = {
   onAccountRateLimitsUpdated?: (
     workspaceId: string,
     rateLimits: Record<string, unknown>,
+    modelId?: string | null,
   ) => void;
 };
 
@@ -231,7 +232,13 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
           (params.rateLimits as Record<string, unknown> | undefined) ??
           (params.rate_limits as Record<string, unknown> | undefined);
         if (rateLimits) {
-          handlers.onAccountRateLimitsUpdated?.(workspace_id, rateLimits);
+          const modelIdRaw =
+            params.modelId ?? params.model_id ?? params.model ?? params.model_name;
+          const modelId =
+            typeof modelIdRaw === "string" && modelIdRaw.trim()
+              ? modelIdRaw.trim()
+              : null;
+          handlers.onAccountRateLimitsUpdated?.(workspace_id, rateLimits, modelId);
         }
         return;
       }

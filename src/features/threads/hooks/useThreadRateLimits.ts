@@ -44,11 +44,23 @@ export function useThreadRateLimits({
           (response?.result?.rate_limits as Record<string, unknown> | undefined) ??
           (response?.rateLimits as Record<string, unknown> | undefined) ??
           (response?.rate_limits as Record<string, unknown> | undefined);
+        const modelIdRaw =
+          response?.result?.modelId ??
+          response?.result?.model_id ??
+          response?.result?.model ??
+          response?.modelId ??
+          response?.model_id ??
+          response?.model;
+        const modelId =
+          typeof modelIdRaw === "string" && modelIdRaw.trim()
+            ? modelIdRaw.trim()
+            : null;
         if (rateLimits) {
           dispatch({
             type: "setRateLimits",
             workspaceId: targetId,
             rateLimits: normalizeRateLimits(rateLimits),
+            modelId,
           });
         }
       } catch (error) {

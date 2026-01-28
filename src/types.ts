@@ -127,6 +127,7 @@ export type AppSettings = {
   backendMode: BackendMode;
   remoteBackendHost: string;
   remoteBackendToken: string | null;
+  otherAiProviders: OtherAiProvider[];
   defaultAccessMode: AccessMode;
   composerModelShortcut: string | null;
   composerAccessShortcut: string | null;
@@ -172,6 +173,17 @@ export type AppSettings = {
   workspaceGroups: WorkspaceGroup[];
   openAppTargets: OpenAppTarget[];
   selectedOpenAppId: string;
+};
+
+export type OtherAiProvider = {
+  id: string;
+  label: string;
+  provider: "claude" | "gemini" | "custom";
+  enabled: boolean;
+  command: string | null;
+  args: string | null;
+  models: string[];
+  defaultModel: string | null;
 };
 
 export type CodexDoctorResult = {

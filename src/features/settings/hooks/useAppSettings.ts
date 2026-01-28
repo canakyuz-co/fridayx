@@ -25,6 +25,28 @@ const defaultSettings: AppSettings = {
   backendMode: "local",
   remoteBackendHost: "127.0.0.1:4732",
   remoteBackendToken: null,
+  otherAiProviders: [
+    {
+      id: "claude",
+      label: "Claude",
+      provider: "claude",
+      enabled: false,
+      command: "claude",
+      args: null,
+      models: [],
+      defaultModel: null,
+    },
+    {
+      id: "gemini",
+      label: "Gemini",
+      provider: "gemini",
+      enabled: false,
+      command: "gemini",
+      args: null,
+      models: [],
+      defaultModel: null,
+    },
+  ],
   defaultAccessMode: "current",
   composerModelShortcut: "cmd+shift+m",
   composerAccessShortcut: "cmd+shift+a",
@@ -93,6 +115,20 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
     : hasStoredSelection
       ? storedOpenAppId
       : normalizedTargets[0]?.id ?? DEFAULT_OPEN_APP_ID;
+  const normalizedOtherAiProviders = (settings.otherAiProviders ?? []).map(
+    (provider) => ({
+      ...provider,
+      label: provider.label?.trim() ? provider.label.trim() : provider.id,
+      command: provider.command?.trim() ? provider.command.trim() : null,
+      args: provider.args?.trim() ? provider.args.trim() : null,
+      models: Array.isArray(provider.models)
+        ? provider.models
+            .map((model) => model.trim())
+            .filter((model) => model.length > 0)
+        : [],
+      defaultModel: provider.defaultModel?.trim() ? provider.defaultModel.trim() : null,
+    }),
+  );
   return {
     ...settings,
     codexBin: settings.codexBin?.trim() ? settings.codexBin.trim() : null,
@@ -108,6 +144,7 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
       DEFAULT_CODE_FONT_FAMILY,
     ),
     codeFontSize: clampCodeFontSize(settings.codeFontSize),
+    otherAiProviders: normalizedOtherAiProviders,
     openAppTargets: normalizedTargets,
     selectedOpenAppId,
   };

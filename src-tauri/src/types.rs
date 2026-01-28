@@ -313,6 +313,22 @@ pub(crate) struct OpenAppTarget {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct OtherAiProvider {
+    pub(crate) id: String,
+    pub(crate) label: String,
+    pub(crate) provider: String,
+    pub(crate) enabled: bool,
+    #[serde(default)]
+    pub(crate) command: Option<String>,
+    #[serde(default)]
+    pub(crate) args: Option<String>,
+    #[serde(default)]
+    pub(crate) models: Vec<String>,
+    #[serde(default, rename = "defaultModel")]
+    pub(crate) default_model: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct AppSettings {
     #[serde(default, rename = "codexBin")]
     pub(crate) codex_bin: Option<String>,
@@ -324,6 +340,8 @@ pub(crate) struct AppSettings {
     pub(crate) remote_backend_host: String,
     #[serde(default, rename = "remoteBackendToken")]
     pub(crate) remote_backend_token: Option<String>,
+    #[serde(default = "default_other_ai_providers", rename = "otherAiProviders")]
+    pub(crate) other_ai_providers: Vec<OtherAiProvider>,
     #[serde(default = "default_access_mode", rename = "defaultAccessMode")]
     pub(crate) default_access_mode: String,
     #[serde(
@@ -722,6 +740,31 @@ fn default_selected_open_app_id() -> String {
     "vscode".to_string()
 }
 
+fn default_other_ai_providers() -> Vec<OtherAiProvider> {
+    vec![
+        OtherAiProvider {
+            id: "claude".to_string(),
+            label: "Claude".to_string(),
+            provider: "claude".to_string(),
+            enabled: false,
+            command: Some("claude".to_string()),
+            args: None,
+            models: Vec::new(),
+            default_model: None,
+        },
+        OtherAiProvider {
+            id: "gemini".to_string(),
+            label: "Gemini".to_string(),
+            provider: "gemini".to_string(),
+            enabled: false,
+            command: Some("gemini".to_string()),
+            args: None,
+            models: Vec::new(),
+            default_model: None,
+        },
+    ]
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -730,6 +773,7 @@ impl Default for AppSettings {
             backend_mode: BackendMode::Local,
             remote_backend_host: default_remote_backend_host(),
             remote_backend_token: None,
+            other_ai_providers: default_other_ai_providers(),
             default_access_mode: "current".to_string(),
             composer_model_shortcut: default_composer_model_shortcut(),
             composer_access_shortcut: default_composer_access_shortcut(),
@@ -792,6 +836,9 @@ mod tests {
         assert!(matches!(settings.backend_mode, BackendMode::Local));
         assert_eq!(settings.remote_backend_host, "127.0.0.1:4732");
         assert!(settings.remote_backend_token.is_none());
+        assert_eq!(settings.other_ai_providers.len(), 2);
+        assert_eq!(settings.other_ai_providers[0].id, "claude");
+        assert_eq!(settings.other_ai_providers[1].id, "gemini");
         assert_eq!(settings.default_access_mode, "current");
         assert_eq!(
             settings.composer_model_shortcut.as_deref(),

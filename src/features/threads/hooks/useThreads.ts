@@ -265,6 +265,7 @@ export function useThreads({
     activeTurnIdByThread: state.activeTurnIdByThread,
     tokenUsageByThread: state.tokenUsageByThread,
     rateLimitsByWorkspace: state.rateLimitsByWorkspace,
+    rateLimitsByWorkspaceModel: state.rateLimitsByWorkspaceModel,
     planByThread: state.planByThread,
     lastAgentMessageByThread: state.lastAgentMessageByThread,
     refreshAccountRateLimits,

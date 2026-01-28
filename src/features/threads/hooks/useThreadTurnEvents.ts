@@ -89,11 +89,16 @@ export function useThreadTurnEvents({
   );
 
   const onAccountRateLimitsUpdated = useCallback(
-    (workspaceId: string, rateLimits: Record<string, unknown>) => {
+    (
+      workspaceId: string,
+      rateLimits: Record<string, unknown>,
+      modelId?: string | null,
+    ) => {
       dispatch({
         type: "setRateLimits",
         workspaceId,
         rateLimits: normalizeRateLimits(rateLimits),
+        modelId,
       });
     },
     [dispatch],
