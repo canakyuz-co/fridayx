@@ -38,7 +38,7 @@ export function useGitPanelController({
   >("split");
   const [filePanelMode, setFilePanelMode] = useState<
     "git" | "files" | "prompts"
-  >("git");
+  >("files");
   const [selectedPullRequest, setSelectedPullRequest] =
     useState<GitHubPullRequest | null>(null);
   const [selectedCommitSha, setSelectedCommitSha] = useState<string | null>(
@@ -62,6 +62,12 @@ export function useGitPanelController({
   useEffect(() => {
     activeWorkspaceRef.current = activeWorkspace;
   }, [activeWorkspace]);
+
+  useEffect(() => {
+    if (activeTab === "editor") {
+      setFilePanelMode("files");
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     return () => {
