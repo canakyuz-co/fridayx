@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode, type MouseEvent } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import rehypeHighlight from "rehype-highlight";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import "katex/dist/katex.min.css";
+import "highlight.js/styles/github-dark.css";
 import {
   decodeFileLink,
   isFileLinkUrl,
@@ -365,7 +370,8 @@ export function Markdown({
   return (
     <div className={className}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkFileLinks]}
+        remarkPlugins={[remarkGfm, remarkMath, remarkFileLinks]}
+        rehypePlugins={[rehypeKatex, rehypeHighlight]}
         urlTransform={(url) => {
           const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url);
           if (

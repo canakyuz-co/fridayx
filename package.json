@@ -33,6 +33,7 @@
     "@tauri-apps/plugin-updater": "^2.9.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
+    "highlight.js": "^11.11.1",
     "lucide-react": "^0.562.0",
     "monaco-editor": "^0.55.1",
     "prismjs": "^1.30.0",
@@ -40,7 +41,10 @@
     "react-dom": "^19.1.0",
     "react-files-icons": "^0.7.0",
     "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "tauri-plugin-liquid-glass-api": "^0.1.6"
   },
   "devDependencies": {

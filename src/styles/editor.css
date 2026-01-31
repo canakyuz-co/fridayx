@@ -171,6 +171,24 @@
 
 .editor-markdown-preview .markdown {
   font-size: 13px;
+  line-height: 1.6;
+}
+
+.editor-markdown-preview .markdown pre {
+  background: #0d1117;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 12px 14px;
+  overflow: auto;
+}
+
+.editor-markdown-preview .markdown code {
+  font-family: var(--code-font-family);
+}
+
+.editor-markdown-preview .markdown :where(h1, h2, h3, h4) {
+  letter-spacing: -0.01em;
+}
 }
 
 .editor-state {
