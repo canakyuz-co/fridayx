@@ -96,6 +96,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 6px;
+  padding-right: 28px;
   border-radius: 8px;
   cursor: pointer;
   border: 1px solid transparent;
@@ -179,12 +180,33 @@
   box-shadow: none;
 }
 
+.file-tree-row-actions {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.file-tree-row-action {
+  padding: 2px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
 .file-tree-action:hover:not(:disabled) {
   transform: translateY(-50%);
   box-shadow: none;
 }
 
 .file-tree-row-wrap:hover .file-tree-action,
+.file-tree-row-wrap:hover .file-tree-row-actions,
+.file-tree-row-actions:focus-within,
 .file-tree-action:hover,
 .file-tree-action:focus-visible {
   opacity: 1;
@@ -265,6 +287,10 @@
 }
 
 .file-preview-body--image {
+  gap: 12px;
+}
+
+.file-preview-body--markdown {
   gap: 12px;
 }
 
@@ -357,6 +383,18 @@
   line-height: var(--code-line-height, 1.28);
   color: var(--text-quiet);
   white-space: pre;
+}
+
+.file-preview-markdown {
+  overflow: auto;
+  border-radius: 8px;
+  background: var(--surface-command);
+  padding: 12px 14px;
+  color: var(--text-emphasis);
+}
+
+.file-preview-markdown .markdown {
+  font-size: 13px;
 }
 
 .file-preview-line {

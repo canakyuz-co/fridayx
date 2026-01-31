@@ -3,6 +3,7 @@ import type { CSSProperties, MouseEvent } from "react";
 import X from "lucide-react/dist/esm/icons/x";
 import { highlightLine, languageFromPath } from "../../../utils/syntax";
 import { OpenAppMenu } from "../../app/components/OpenAppMenu";
+import { Markdown } from "../../messages/components/Markdown";
 import type { OpenAppTarget } from "../../../types";
 
 type FilePreviewPopoverProps = {
@@ -10,7 +11,7 @@ type FilePreviewPopoverProps = {
   absolutePath: string;
   content: string;
   truncated: boolean;
-  previewKind?: "text" | "image";
+  previewKind?: "text" | "image" | "markdown";
   imageSrc?: string | null;
   openTargets: OpenAppTarget[];
   openAppIconById: Record<string, string>;
@@ -55,25 +56,28 @@ export function FilePreviewPopover({
   error = null,
 }: FilePreviewPopoverProps) {
   const isImagePreview = previewKind === "image";
+  const isMarkdownPreview = previewKind === "markdown";
   const lines = useMemo(
-    () => (isImagePreview ? [] : content.split("\n")),
-    [content, isImagePreview],
+    () => (isImagePreview || isMarkdownPreview ? [] : content.split("\n")),
+    [content, isImagePreview, isMarkdownPreview],
   );
   const language = useMemo(() => languageFromPath(path), [path]);
   const selectionLabel = selection
     ? `Lines ${selection.start + 1}-${selection.end + 1}`
     : isImagePreview
       ? "Image preview"
-      : "No selection";
+      : isMarkdownPreview
+        ? "Markdown preview"
+        : "No selection";
   const highlightedLines = useMemo(
     () =>
-      isImagePreview
+      isImagePreview || isMarkdownPreview
         ? []
         : lines.map((line) => {
             const html = highlightLine(line, language);
             return html || "&nbsp;";
           }),
-    [lines, language, isImagePreview],
+    [lines, language, isImagePreview, isMarkdownPreview],
   );
 
   return (
@@ -122,6 +126,24 @@ export function FilePreviewPopover({
               Image preview unavailable.
             </div>
           )}
+        </div>
+      ) : isMarkdownPreview ? (
+        <div className="file-preview-body file-preview-body--markdown">
+          <div className="file-preview-toolbar">
+            <span className="file-preview-selection">{selectionLabel}</span>
+            <div className="file-preview-actions">
+              <OpenAppMenu
+                path={absolutePath}
+                openTargets={openTargets}
+                selectedOpenAppId={selectedOpenAppId}
+                onSelectOpenAppId={onSelectOpenAppId}
+                iconById={openAppIconById}
+              />
+            </div>
+          </div>
+          <div className="file-preview-markdown">
+            <Markdown className="markdown" content={content} />
+          </div>
         </div>
       ) : (
         <div className="file-preview-body">
