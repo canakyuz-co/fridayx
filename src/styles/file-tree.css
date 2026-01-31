@@ -96,7 +96,6 @@
   align-items: center;
   gap: 6px;
   padding: 4px 6px;
-  padding-right: 28px;
   border-radius: 8px;
   cursor: pointer;
   border: 1px solid transparent;
@@ -180,24 +179,6 @@
   box-shadow: none;
 }
 
-.file-tree-row-actions {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.file-tree-row-action {
-  padding: 2px;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-}
 
 .file-tree-action:hover:not(:disabled) {
   transform: translateY(-50%);
@@ -205,8 +186,6 @@
 }
 
 .file-tree-row-wrap:hover .file-tree-action,
-.file-tree-row-wrap:hover .file-tree-row-actions,
-.file-tree-row-actions:focus-within,
 .file-tree-action:hover,
 .file-tree-action:focus-visible {
   opacity: 1;

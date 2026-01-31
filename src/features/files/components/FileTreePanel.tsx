@@ -15,7 +15,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import ChevronsUpDown from "lucide-react/dist/esm/icons/chevrons-up-down";
-import Eye from "lucide-react/dist/esm/icons/eye";
 import { FileIcon, FolderIcon, OpenFolderIcon } from "react-files-icons";
 import Search from "lucide-react/dist/esm/icons/search";
 import { PanelTabs, type PanelTabId } from "../../layout/components/PanelTabs";
@@ -141,12 +140,6 @@ function isImagePath(path: string) {
   return imageExtensions.has(ext);
 }
 
-const markdownExtensions = new Set(["md", "mdx"]);
-
-function isMarkdownPath(path: string) {
-  const ext = path.split(".").pop()?.toLowerCase() ?? "";
-  return markdownExtensions.has(ext);
-}
 
 export function FileTreePanel({
   workspaceId,
@@ -177,9 +170,6 @@ export function FileTreePanel({
   const [previewTruncated, setPreviewTruncated] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [previewKind, setPreviewKind] = useState<"text" | "image" | "markdown">(
-    "text",
-  );
   const [previewSelection, setPreviewSelection] = useState<{
     start: number;
     end: number;
@@ -191,6 +181,11 @@ export function FileTreePanel({
   const showLoading = isLoading && files.length === 0;
   const deferredQuery = useDeferredValue(query);
   const normalizedQuery = deferredQuery.trim().toLowerCase();
+  const previewKind = useMemo(
+    () => (previewPath && isImagePath(previewPath) ? "image" : "text"),
+    [previewPath],
+  );
+
   const filteredFiles = useMemo(() => {
     if (!normalizedQuery) {
       return files;
@@ -238,7 +233,6 @@ export function FileTreePanel({
     setPreviewTruncated(false);
     setPreviewError(null);
     setPreviewLoading(false);
-    setPreviewKind("text");
     setIsDragSelecting(false);
     dragAnchorLineRef.current = null;
     dragMovedRef.current = false;
@@ -252,7 +246,6 @@ export function FileTreePanel({
     setPreviewTruncated(false);
     setPreviewError(null);
     setPreviewLoading(false);
-    setPreviewKind("text");
     setIsDragSelecting(false);
     dragAnchorLineRef.current = null;
     dragMovedRef.current = false;
@@ -321,8 +314,7 @@ export function FileTreePanel({
     }
   }, [previewPath, previewKind, resolvePath]);
 
-  const openPreview = useCallback(
-    (path: string, target: HTMLElement, mode: "text" | "markdown" = "text") => {
+  const openPreview = useCallback((path: string, target: HTMLElement) => {
     const rect = target.getBoundingClientRect();
     const estimatedWidth = 640;
     const estimatedHeight = 520;
@@ -340,13 +332,7 @@ export function FileTreePanel({
       Math.max(16, rect.top + rect.height / 2 - top),
       Math.max(16, maxHeight - 16),
     );
-    const nextKind = isImagePath(path)
-      ? "image"
-      : mode === "markdown" && isMarkdownPath(path)
-        ? "markdown"
-        : "text";
     setPreviewPath(path);
-    setPreviewKind(nextKind);
     setPreviewAnchor({ top, left, arrowTop, height: maxHeight });
     setPreviewSelection(null);
     setIsDragSelecting(false);
@@ -524,7 +510,6 @@ export function FileTreePanel({
   const renderNode = (node: FileTreeNode, depth: number) => {
     const isFolder = node.type === "folder";
     const isExpanded = isFolder && expandedFolders.has(node.path);
-    const isMarkdown = !isFolder && isMarkdownPath(node.name);
     return (
       <div key={node.path}>
         <div className="file-tree-row-wrap">
@@ -569,22 +554,6 @@ export function FileTreePanel({
             </span>
             <span className="file-tree-name">{node.name}</span>
           </button>
-          <div className="file-tree-row-actions">
-            {isMarkdown && (
-              <button
-                type="button"
-                className="ghost icon-button file-tree-row-action"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openPreview(node.path, event.currentTarget, "markdown");
-                }}
-                aria-label={`Preview ${node.name}`}
-                title="Preview markdown"
-              >
-                <Eye size={12} aria-hidden />
-              </button>
-            )}
-          </div>
           {!isFolder && showMentionActions && onInsertText && (
             <button
               type="button"

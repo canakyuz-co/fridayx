@@ -2,8 +2,12 @@ import Editor from "@monaco-editor/react";
 import type { Monaco } from "@monaco-editor/react";
 import type { editor as MonacoEditor } from "monaco-editor";
 import Close from "lucide-react/dist/esm/icons/x";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import Code from "lucide-react/dist/esm/icons/code";
+import Columns2 from "lucide-react/dist/esm/icons/columns-2";
+import Eye from "lucide-react/dist/esm/icons/eye";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorPlaceholder } from "./EditorPlaceholder";
+import { Markdown } from "../../messages/components/Markdown";
 
 import "monaco-editor/esm/vs/language/css/monaco.contribution";
 import "monaco-editor/esm/vs/language/html/monaco.contribution";
@@ -45,6 +49,13 @@ type EditorViewProps = {
   ) => void;
 };
 
+function isMarkdownPath(path: string | null) {
+  if (!path) {
+    return false;
+  }
+  return path.endsWith(".md") || path.endsWith(".mdx");
+}
+
 function configureMonaco(_monaco: Monaco) {
   const globalScope = globalThis as typeof globalThis & {
     MonacoEnvironment?: { getWorker: (workerId: string, label: string) => Worker };
@@ -83,6 +94,12 @@ export function EditorView({
   onMonacoReady,
 }: EditorViewProps) {
   const activeBuffer = activePath ? buffersByPath[activePath] : null;
+  const isMarkdown =
+    Boolean(activeBuffer) &&
+    (activeBuffer.language === "markdown" || isMarkdownPath(activeBuffer.path));
+  const [markdownView, setMarkdownView] = useState<"code" | "preview" | "split">(
+    "code",
+  );
   const activePathRef = useRef(activePath);
   const monacoRef = useRef<Monaco | null>(null);
 
@@ -226,6 +243,13 @@ export function EditorView({
     return () => observer.disconnect();
   }, [applyTheme]);
 
+  useEffect(() => {
+    if (!activeBuffer) {
+      return;
+    }
+    setMarkdownView(isMarkdown ? "split" : "code");
+  }, [activeBuffer?.path, isMarkdown]);
+
   if (!workspaceId) {
     return <EditorPlaceholder hasWorkspace={false} />;
   }
@@ -271,6 +295,46 @@ export function EditorView({
             </button>
           ))
         )}
+        {isMarkdown ? (
+          <div className="editor-tabs-actions" role="group" aria-label="Markdown view">
+            <button
+              type="button"
+              className={`icon-button editor-view-toggle${
+                markdownView === "code" ? " is-active" : ""
+              }`}
+              onClick={() => setMarkdownView("code")}
+              aria-pressed={markdownView === "code"}
+              aria-label="Code view"
+              title="Code view"
+            >
+              <Code size={14} aria-hidden />
+            </button>
+            <button
+              type="button"
+              className={`icon-button editor-view-toggle${
+                markdownView === "split" ? " is-active" : ""
+              }`}
+              onClick={() => setMarkdownView("split")}
+              aria-pressed={markdownView === "split"}
+              aria-label="Split view"
+              title="Split view"
+            >
+              <Columns2 size={14} aria-hidden />
+            </button>
+            <button
+              type="button"
+              className={`icon-button editor-view-toggle${
+                markdownView === "preview" ? " is-active" : ""
+              }`}
+              onClick={() => setMarkdownView("preview")}
+              aria-pressed={markdownView === "preview"}
+              aria-label="Preview"
+              title="Preview"
+            >
+              <Eye size={14} aria-hidden />
+            </button>
+          </div>
+        ) : null}
       </div>
       {activeBuffer ? (
         <div className="editor-canvas">
@@ -285,31 +349,72 @@ export function EditorView({
                   Buyuk dosya kesildi. Duzenleme devre disi.
                 </div>
               ) : null}
-              <Editor
-                path={activeBuffer.path}
-                language={activeBuffer.language ?? undefined}
-                value={activeBuffer.content}
-                theme="friday-dark"
-                height="100%"
-                width="100%"
-                onChange={(value) => {
-                  onContentChange(activeBuffer.path, value ?? "");
-                }}
-                beforeMount={handleBeforeMount}
-                onMount={handleMount}
-                options={{
-                  minimap: { enabled: false },
-                  fontFamily: "var(--code-font-family)",
-                  fontSize: 13,
-                  lineHeight: 20,
-                  scrollBeyondLastLine: false,
-                  wordWrap: "on",
-                  readOnly: activeBuffer.isTruncated,
-                  renderWhitespace: "selection",
-                  renderLineHighlight: "none",
-                  "semanticHighlighting.enabled": false,
-                }}
-              />
+              {isMarkdown ? (
+                <div className={`editor-split editor-split--${markdownView}`}>
+                  {markdownView !== "preview" ? (
+                    <div className="editor-pane editor-pane--code">
+                      <Editor
+                        path={activeBuffer.path}
+                        language={activeBuffer.language ?? undefined}
+                        value={activeBuffer.content}
+                        theme="friday-dark"
+                        height="100%"
+                        width="100%"
+                        onChange={(value) => {
+                          onContentChange(activeBuffer.path, value ?? "");
+                        }}
+                        beforeMount={handleBeforeMount}
+                        onMount={handleMount}
+                        options={{
+                          minimap: { enabled: false },
+                          fontFamily: "var(--code-font-family)",
+                          fontSize: 13,
+                          lineHeight: 20,
+                          scrollBeyondLastLine: false,
+                          wordWrap: "on",
+                          readOnly: activeBuffer.isTruncated,
+                          renderWhitespace: "selection",
+                          renderLineHighlight: "none",
+                          "semanticHighlighting.enabled": false,
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                  {markdownView !== "code" ? (
+                    <div className="editor-pane editor-pane--preview">
+                      <div className="editor-markdown-preview">
+                        <Markdown className="markdown" content={activeBuffer.content} />
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <Editor
+                  path={activeBuffer.path}
+                  language={activeBuffer.language ?? undefined}
+                  value={activeBuffer.content}
+                  theme="friday-dark"
+                  height="100%"
+                  width="100%"
+                  onChange={(value) => {
+                    onContentChange(activeBuffer.path, value ?? "");
+                  }}
+                  beforeMount={handleBeforeMount}
+                  onMount={handleMount}
+                  options={{
+                    minimap: { enabled: false },
+                    fontFamily: "var(--code-font-family)",
+                    fontSize: 13,
+                    lineHeight: 20,
+                    scrollBeyondLastLine: false,
+                    wordWrap: "on",
+                    readOnly: activeBuffer.isTruncated,
+                    renderWhitespace: "selection",
+                    renderLineHighlight: "none",
+                    "semanticHighlighting.enabled": false,
+                  }}
+                />
+              )}
             </>
           )}
         </div>
