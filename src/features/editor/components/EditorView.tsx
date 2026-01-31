@@ -383,7 +383,7 @@ export function EditorView({
                   {markdownView !== "code" ? (
                     <div className="editor-pane editor-pane--preview">
                       <div className="editor-markdown-preview">
-                        <Markdown className="markdown" content={activeBuffer.content} />
+                        <Markdown className="markdown" value={activeBuffer.content} />
                       </div>
                     </div>
                   ) : null}

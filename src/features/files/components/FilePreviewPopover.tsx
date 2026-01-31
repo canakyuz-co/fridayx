@@ -142,7 +142,7 @@ export function FilePreviewPopover({
             </div>
           </div>
           <div className="file-preview-markdown">
-            <Markdown className="markdown" content={content} />
+            <Markdown className="markdown" value={content} />
           </div>
         </div>
       ) : (
