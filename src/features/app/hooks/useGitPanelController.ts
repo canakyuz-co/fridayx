@@ -98,7 +98,10 @@ export function useGitPanelController({
   );
   const shouldLoadDiffs =
     Boolean(activeWorkspace) && (diffUiVisible || shouldPreloadDiffs);
-  const shouldLoadGitLog = gitPanelMode === "log" && Boolean(activeWorkspace);
+  const gitPanelVisible = Boolean(
+    activeWorkspace && (!isCompact ? activeTab !== "editor" : compactTab === "git"),
+  );
+  const shouldLoadGitLog = gitPanelVisible && (gitPanelMode === "log" || gitPanelMode === "diff");
 
   const {
     diffs: gitDiffs,
