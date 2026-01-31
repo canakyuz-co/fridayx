@@ -153,6 +153,12 @@
   justify-content: center;
 }
 
+.file-tree-icon-svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
 .file-tree-name {
   min-width: 0;
   overflow: hidden;
