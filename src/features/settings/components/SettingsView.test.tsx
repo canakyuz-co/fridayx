@@ -71,9 +71,9 @@ const baseSettings: AppSettings = {
   theme: "system",
   usageShowRemaining: false,
   uiFontFamily:
-    "\"SF Pro Text\", \"SF Pro Display\", -apple-system, \"Helvetica Neue\", sans-serif",
+    "\"InterVariable\", \"Inter\", -apple-system, \"Helvetica Neue\", sans-serif",
   codeFontFamily:
-    "\"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace",
+    "\"Geist Mono\", \"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace",
   codeFontSize: 11,
   notificationSoundsEnabled: true,
   preloadGitDiffs: true,
@@ -291,12 +291,12 @@ describe("SettingsView Display", () => {
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({
-          uiFontFamily: expect.stringContaining("SF Pro Text"),
+          uiFontFamily: expect.stringContaining("Inter"),
         }),
       );
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({
-          codeFontFamily: expect.stringContaining("SF Mono"),
+          codeFontFamily: expect.stringContaining("Geist Mono"),
         }),
       );
     });

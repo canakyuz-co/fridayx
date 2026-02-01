@@ -61,7 +61,8 @@ function getTerminalAppearance(container: HTMLElement | null): TerminalAppearanc
         foreground: "#d9dee7",
         cursor: "#d9dee7",
       },
-      fontFamily: "Menlo, Monaco, \"Courier New\", monospace",
+      fontFamily:
+        "\"Geist Mono\", \"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace",
     };
   }
 
@@ -82,7 +83,7 @@ function getTerminalAppearance(container: HTMLElement | null): TerminalAppearanc
   const fontFamily =
     styles.getPropertyValue("--terminal-font-family").trim() ||
     styles.getPropertyValue("--code-font-family").trim() ||
-    "Menlo, Monaco, \"Courier New\", monospace";
+    "\"Geist Mono\", \"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace";
 
   return {
     theme: {
