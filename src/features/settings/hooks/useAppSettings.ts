@@ -7,7 +7,6 @@ import {
   DEFAULT_UI_FONT_FAMILY,
   CODE_FONT_SIZE_DEFAULT,
   clampCodeFontSize,
-  normalizeFontFamily,
 } from "../../../utils/fonts";
 import {
   DEFAULT_OPEN_APP_ID,
@@ -18,6 +17,10 @@ import { normalizeOpenAppTargets } from "../../app/utils/openApp";
 import { getDefaultInterruptShortcut } from "../../../utils/shortcuts";
 
 const allowedThemes = new Set(["system", "light", "dark", "dim"]);
+const LEGACY_UI_FONT_FAMILY =
+  "\"SF Pro Text\", \"SF Pro Display\", -apple-system, \"Helvetica Neue\", sans-serif";
+const LEGACY_CODE_FONT_FAMILY =
+  "\"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace";
 
 const defaultSettings: AppSettings = {
   codexBin: null,
@@ -134,19 +137,32 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
       defaultModel: provider.defaultModel?.trim() ? provider.defaultModel.trim() : null,
     }),
   );
+  const normalizeFontWithLegacy = (
+    value: string | null | undefined,
+    fallback: string,
+    legacy: string[],
+  ) => {
+    const trimmed = value?.trim();
+    if (!trimmed) {
+      return fallback;
+    }
+    return legacy.includes(trimmed) ? fallback : trimmed;
+  };
   return {
     ...settings,
     codexBin: settings.codexBin?.trim() ? settings.codexBin.trim() : null,
     codexArgs: settings.codexArgs?.trim() ? settings.codexArgs.trim() : null,
     uiScale: clampUiScale(settings.uiScale),
     theme: allowedThemes.has(settings.theme) ? settings.theme : "system",
-    uiFontFamily: normalizeFontFamily(
+    uiFontFamily: normalizeFontWithLegacy(
       settings.uiFontFamily,
       DEFAULT_UI_FONT_FAMILY,
+      [LEGACY_UI_FONT_FAMILY],
     ),
-    codeFontFamily: normalizeFontFamily(
+    codeFontFamily: normalizeFontWithLegacy(
       settings.codeFontFamily,
       DEFAULT_CODE_FONT_FAMILY,
+      [LEGACY_CODE_FONT_FAMILY],
     ),
     codeFontSize: clampCodeFontSize(settings.codeFontSize),
     otherAiProviders: normalizedOtherAiProviders,
