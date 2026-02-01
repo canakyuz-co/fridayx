@@ -16,6 +16,8 @@ import {
   interruptTurn as interruptTurnService,
   sendClaudeMessage,
   sendClaudeCliMessage,
+  sendClaudeMessageSync,
+  sendGeminiMessageSync,
   type ClaudeMessage,
   type ClaudeRateLimits,
   type ClaudeUsage,
@@ -25,6 +27,7 @@ import { expandCustomPromptText } from "../../../utils/customPrompts";
 import {
   asString,
   extractRpcErrorMessage,
+  normalizePlanUpdate,
   parseReviewTarget,
 } from "../utils/threadNormalize";
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
@@ -74,6 +77,92 @@ type UseThreadMessagingOptions = {
   forkThreadForWorkspace: (workspaceId: string, threadId: string) => Promise<string | null>;
   updateThreadParent: (parentId: string, childIds: string[]) => void;
 };
+
+type PlanJsonStep = {
+  step?: unknown;
+  status?: unknown;
+};
+
+type PlanJsonPayload = {
+  explanation?: unknown;
+  steps?: unknown;
+  plan?: unknown;
+};
+
+const PLAN_MODE_ID = "plan";
+
+function extractPlanJson(text: string): PlanJsonPayload | null {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end < 0 || end <= start) {
+    return null;
+  }
+  try {
+    return JSON.parse(text.slice(start, end + 1)) as PlanJsonPayload;
+  } catch {
+    return null;
+  }
+}
+
+function normalizePlanPayload(payload: PlanJsonPayload | null) {
+  if (!payload) {
+    return null;
+  }
+  const explanation =
+    typeof payload.explanation === "string" ? payload.explanation : "";
+  const rawSteps = Array.isArray(payload.steps)
+    ? payload.steps
+    : Array.isArray(payload.plan)
+      ? payload.plan
+      : [];
+  const steps = rawSteps
+    .map((step): PlanJsonStep | null => {
+      if (!step) {
+        return null;
+      }
+      if (typeof step === "string") {
+        return { step, status: "pending" };
+      }
+      if (typeof step === "object") {
+        return step as PlanJsonStep;
+      }
+      return null;
+    })
+    .filter(Boolean);
+  return normalizePlanUpdate(explanation, steps);
+}
+
+function formatPlanAsMessage(plan: ReturnType<typeof normalizePlanUpdate>) {
+  if (!plan) {
+    return "";
+  }
+  const header = plan.explanation ? `Plan: ${plan.explanation}` : "Plan:";
+  const lines = plan.steps.map((step, index) => {
+    const status =
+      step.status === "inProgress"
+        ? "in_progress"
+        : step.status ?? "pending";
+    return `${index + 1}. [${status}] ${step.step}`;
+  });
+  return [header, ...lines].join("\n");
+}
+
+function buildPlanPrompt(userText: string, attempt: number) {
+  const baseInstruction = [
+    "You are in PLAN mode.",
+    "Return ONLY valid JSON with this shape:",
+    "{ \"explanation\": \"...\", \"steps\": [{ \"step\": \"...\", \"status\": \"pending|in_progress|completed\" }] }",
+    "No markdown, no prose, no code fences.",
+  ];
+  const retry =
+    attempt > 0
+      ? [
+          "Your previous response was invalid.",
+          "Return STRICT JSON only. Do not include any extra text.",
+        ]
+      : [];
+  return [...baseInstruction, ...retry, "", "User request:", userText].join("\n");
+}
 
 export function useThreadMessaging({
   activeWorkspace,
@@ -136,6 +225,15 @@ export function useThreadMessaging({
         options?.collaborationMode !== undefined
           ? options.collaborationMode
           : collaborationMode;
+      const collaborationModeId =
+        resolvedCollaborationMode &&
+        typeof resolvedCollaborationMode === "object" &&
+        "mode" in resolvedCollaborationMode
+          ? String(
+              (resolvedCollaborationMode as Record<string, unknown>).mode ?? "",
+            )
+          : "";
+      const isPlanMode = collaborationModeId === PLAN_MODE_ID;
       const sanitizedCollaborationMode =
         resolvedCollaborationMode &&
         typeof resolvedCollaborationMode === "object" &&
@@ -245,10 +343,14 @@ export function useThreadMessaging({
 
           if (useCli) {
             // Use Claude CLI
+            let accumulatedText = "";
+            const promptText = isPlanMode
+              ? buildPlanPrompt(finalText, 0)
+              : finalText;
             await sendClaudeCliMessage(
               provider.command!,
               provider.args,
-              finalText,
+              promptText,
               workspace.path,
               {
                 onInit: (sessionId, model) => {
@@ -261,25 +363,59 @@ export function useThreadMessaging({
                   });
                 },
                 onContent: (text) => {
-                  dispatch({
-                    type: "upsertItem",
-                    workspaceId: workspace.id,
-                    threadId,
-                    item: {
-                      id: assistantMessageId,
-                      kind: "message",
-                      role: "assistant",
-                      text,
-                    },
-                    hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
-                  });
-                  safeMessageActivity();
+                  accumulatedText += text;
+                  if (!isPlanMode) {
+                    dispatch({
+                      type: "upsertItem",
+                      workspaceId: workspace.id,
+                      threadId,
+                      item: {
+                        id: assistantMessageId,
+                        kind: "message",
+                        role: "assistant",
+                        text: accumulatedText,
+                      },
+                      hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+                    });
+                    safeMessageActivity();
+                  }
                 },
                 onComplete: (_text, usage) => {
                   if (usage) {
                     onClaudeUsage?.({
                       inputTokens: usage.inputTokens,
                       outputTokens: usage.outputTokens,
+                    });
+                  }
+                  if (isPlanMode) {
+                    const parsed = normalizePlanPayload(
+                      extractPlanJson(accumulatedText),
+                    );
+                    if (!parsed) {
+                      markProcessing(threadId, false);
+                      pushThreadErrorMessage(
+                        threadId,
+                        "Plan mode failed: invalid response from Claude CLI. Try again."
+                      );
+                      safeMessageActivity();
+                      return;
+                    }
+                    dispatch({
+                      type: "setThreadPlan",
+                      threadId,
+                      plan: parsed,
+                    });
+                    dispatch({
+                      type: "upsertItem",
+                      workspaceId: workspace.id,
+                      threadId,
+                      item: {
+                        id: assistantMessageId,
+                        kind: "message",
+                        role: "assistant",
+                        text: formatPlanAsMessage(parsed),
+                      },
+                      hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
                     });
                   }
                   markProcessing(threadId, false);
@@ -295,45 +431,94 @@ export function useThreadMessaging({
           } else {
             // Use Claude API
             const modelName = resolvedModel!.slice(colonIndex + 1);
-            const claudeMessages: ClaudeMessage[] = [
-              { role: "user", content: finalText },
-            ];
-
-            let accumulatedText = "";
-
-            await sendClaudeMessage(provider.apiKey!, modelName, claudeMessages, {
-              onContent: (text) => {
-                accumulatedText += text;
-                dispatch({
-                  type: "upsertItem",
-                  workspaceId: workspace.id,
-                  threadId,
-                  item: {
-                    id: assistantMessageId,
-                    kind: "message",
-                    role: "assistant",
-                    text: accumulatedText,
-                  },
-                  hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
-                });
-                safeMessageActivity();
-              },
-              onComplete: (_fullText, usage) => {
-                if (usage) {
-                  onClaudeUsage?.(usage);
+            if (isPlanMode) {
+              let attempt = 0;
+              let plan = null;
+              while (attempt < 2 && !plan) {
+                const promptText = buildPlanPrompt(finalText, attempt);
+                const claudeMessages: ClaudeMessage[] = [
+                  { role: "user", content: promptText },
+                ];
+                const response = await sendClaudeMessageSync(
+                  provider.apiKey!,
+                  modelName,
+                  claudeMessages,
+                );
+                plan = normalizePlanPayload(extractPlanJson(response.content));
+                if (response.usage) {
+                  onClaudeUsage?.(response.usage);
                 }
+                attempt += 1;
+              }
+              if (!plan) {
                 markProcessing(threadId, false);
+                pushThreadErrorMessage(
+                  threadId,
+                  "Plan mode failed: invalid response from Claude. Try again."
+                );
                 safeMessageActivity();
-              },
-              onRateLimits: (limits) => {
-                onClaudeRateLimits?.(limits);
-              },
-              onError: (error) => {
-                markProcessing(threadId, false);
-                pushThreadErrorMessage(threadId, error);
-                safeMessageActivity();
-              },
-            });
+                return;
+              }
+              dispatch({
+                type: "setThreadPlan",
+                threadId,
+                plan,
+              });
+              dispatch({
+                type: "upsertItem",
+                workspaceId: workspace.id,
+                threadId,
+                item: {
+                  id: assistantMessageId,
+                  kind: "message",
+                  role: "assistant",
+                  text: formatPlanAsMessage(plan),
+                },
+                hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+              });
+              markProcessing(threadId, false);
+              safeMessageActivity();
+            } else {
+              const claudeMessages: ClaudeMessage[] = [
+                { role: "user", content: finalText },
+              ];
+
+              let accumulatedText = "";
+
+              await sendClaudeMessage(provider.apiKey!, modelName, claudeMessages, {
+                onContent: (text) => {
+                  accumulatedText += text;
+                  dispatch({
+                    type: "upsertItem",
+                    workspaceId: workspace.id,
+                    threadId,
+                    item: {
+                      id: assistantMessageId,
+                      kind: "message",
+                      role: "assistant",
+                      text: accumulatedText,
+                    },
+                    hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+                  });
+                  safeMessageActivity();
+                },
+                onComplete: (_fullText, usage) => {
+                  if (usage) {
+                    onClaudeUsage?.(usage);
+                  }
+                  markProcessing(threadId, false);
+                  safeMessageActivity();
+                },
+                onRateLimits: (limits) => {
+                  onClaudeRateLimits?.(limits);
+                },
+                onError: (error) => {
+                  markProcessing(threadId, false);
+                  pushThreadErrorMessage(threadId, error);
+                  safeMessageActivity();
+                },
+              });
+            }
           }
 
           onDebug?.({
@@ -344,6 +529,101 @@ export function useThreadMessaging({
             payload: { model: resolvedModel, textLength: finalText.length },
           });
 
+          return;
+        }
+
+        if (provider && provider.provider === "gemini") {
+          if (!provider.apiKey) {
+            markProcessing(threadId, false);
+            pushThreadErrorMessage(
+              threadId,
+              "Gemini not configured. Set API key in Settings > Other AI."
+            );
+            safeMessageActivity();
+            return;
+          }
+
+          dispatch({
+            type: "upsertItem",
+            workspaceId: workspace.id,
+            threadId,
+            item: {
+              id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              kind: "message",
+              role: "user",
+              text: finalText,
+            },
+            hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+          });
+
+          const assistantMessageId = `assistant-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2, 8)}`;
+          const modelName = resolvedModel!.slice(colonIndex + 1);
+
+          if (isPlanMode) {
+            let attempt = 0;
+            let plan = null;
+            while (attempt < 2 && !plan) {
+              const promptText = buildPlanPrompt(finalText, attempt);
+              const response = await sendGeminiMessageSync(
+                provider.apiKey!,
+                modelName,
+                promptText,
+              );
+              plan = normalizePlanPayload(extractPlanJson(response.content));
+              attempt += 1;
+            }
+            if (!plan) {
+              markProcessing(threadId, false);
+              pushThreadErrorMessage(
+                threadId,
+                "Plan mode failed: invalid response from Gemini. Try again."
+              );
+              safeMessageActivity();
+              return;
+            }
+            dispatch({
+              type: "setThreadPlan",
+              threadId,
+              plan,
+            });
+            dispatch({
+              type: "upsertItem",
+              workspaceId: workspace.id,
+              threadId,
+              item: {
+                id: assistantMessageId,
+                kind: "message",
+                role: "assistant",
+                text: formatPlanAsMessage(plan),
+              },
+              hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+            });
+            markProcessing(threadId, false);
+            safeMessageActivity();
+            return;
+          }
+
+          const response = await sendGeminiMessageSync(
+            provider.apiKey!,
+            modelName,
+            finalText,
+          );
+          dispatch({
+            type: "upsertItem",
+            workspaceId: workspace.id,
+            threadId,
+            item: {
+              id: assistantMessageId,
+              kind: "message",
+              role: "assistant",
+              text: response.content,
+            },
+            hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+          });
+          markProcessing(threadId, false);
+          safeMessageActivity();
           return;
         }
 

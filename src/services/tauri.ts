@@ -940,6 +940,22 @@ export async function sendClaudeMessageSync(
   });
 }
 
+export type GeminiNonStreamResponse = {
+  content: string;
+};
+
+export async function sendGeminiMessageSync(
+  apiKey: string,
+  model: string,
+  prompt: string,
+): Promise<GeminiNonStreamResponse> {
+  return invoke<GeminiNonStreamResponse>("send_gemini_message_sync", {
+    apiKey,
+    model,
+    prompt,
+  });
+}
+
 // Claude CLI types
 export type ClaudeCliUsage = {
   inputTokens: number;

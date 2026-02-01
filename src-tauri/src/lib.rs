@@ -28,6 +28,7 @@ mod workspaces;
 mod ai_core;
 mod claude_api;
 mod claude_cli;
+mod gemini_api;
 mod other_ai;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -101,6 +102,7 @@ pub fn run() {
             claude_api::send_claude_message,
             claude_api::send_claude_message_sync,
             claude_cli::send_claude_cli_message,
+            gemini_api::send_gemini_message_sync,
             settings::get_app_settings,
             settings::update_app_settings,
             settings::get_codex_config_path,
