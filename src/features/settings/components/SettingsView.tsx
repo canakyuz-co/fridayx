@@ -37,11 +37,13 @@ import {
   CODE_FONT_FAMILY_OPTIONS,
   DEFAULT_CODE_FONT_FAMILY,
   DEFAULT_UI_FONT_FAMILY,
+  INTER_FONT_FEATURES,
   UI_FONT_FAMILY_OPTIONS,
   CODE_FONT_SIZE_DEFAULT,
   CODE_FONT_SIZE_MAX,
   CODE_FONT_SIZE_MIN,
   clampCodeFontSize,
+  isInterFontFamily,
   normalizeFontFamily,
 } from "../../../utils/fonts";
 import { DEFAULT_OPEN_APP_ID, OPEN_APP_STORAGE_KEY } from "../../app/constants";
@@ -711,9 +713,9 @@ export function SettingsView({
     });
   };
 
-  const handleCommitUiFont = async () => {
+  const commitUiFont = async (nextValue: string) => {
     const nextFont = normalizeFontFamily(
-      uiFontDraft,
+      nextValue,
       DEFAULT_UI_FONT_FAMILY,
     );
     setUiFontDraft(nextFont);
@@ -726,9 +728,13 @@ export function SettingsView({
     });
   };
 
-  const handleCommitCodeFont = async () => {
+  const handleCommitUiFont = async () => {
+    await commitUiFont(uiFontDraft);
+  };
+
+  const commitCodeFont = async (nextValue: string) => {
     const nextFont = normalizeFontFamily(
-      codeFontDraft,
+      nextValue,
       DEFAULT_CODE_FONT_FAMILY,
     );
     setCodeFontDraft(nextFont);
@@ -739,6 +745,10 @@ export function SettingsView({
       ...appSettings,
       codeFontFamily: nextFont,
     });
+  };
+
+  const handleCommitCodeFont = async () => {
+    await commitCodeFont(codeFontDraft);
   };
 
   const handleCommitCodeFontSize = async (nextSize: number) => {
@@ -1203,6 +1213,24 @@ export function SettingsView({
     }
   };
 
+  const uiFontDraftTrimmed = uiFontDraft.trim();
+  const codeFontDraftTrimmed = codeFontDraft.trim();
+  const uiFontIsCustom =
+    uiFontDraftTrimmed.length > 0 &&
+    !UI_FONT_FAMILY_OPTIONS.includes(uiFontDraftTrimmed);
+  const codeFontIsCustom =
+    codeFontDraftTrimmed.length > 0 &&
+    !CODE_FONT_FAMILY_OPTIONS.includes(codeFontDraftTrimmed);
+  const uiFontSelectValue = UI_FONT_FAMILY_OPTIONS.includes(uiFontDraftTrimmed)
+    ? uiFontDraftTrimmed
+    : "custom";
+  const codeFontSelectValue = CODE_FONT_FAMILY_OPTIONS.includes(codeFontDraftTrimmed)
+    ? codeFontDraftTrimmed
+    : "custom";
+  const isInterFontSelected = isInterFontFamily(
+    uiFontSelectValue === "custom" ? uiFontDraftTrimmed : uiFontSelectValue,
+  );
+
   return (
     <div className="settings-overlay" role="dialog" aria-modal="true">
       <div className="settings-backdrop" onClick={onClose} />
@@ -1633,23 +1661,28 @@ export function SettingsView({
                     UI font family
                   </label>
                   <div className="settings-field-row">
-                    <input
+                    <select
                       id="ui-font-family"
-                      type="text"
-                      className="settings-input"
-                      list="ui-font-family-options"
-                      value={uiFontDraft}
-                      onChange={(event) => setUiFontDraft(event.target.value)}
-                      onBlur={() => {
-                        void handleCommitUiFont();
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void handleCommitUiFont();
+                      className="settings-select"
+                      value={uiFontSelectValue}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        if (nextValue === "custom") {
+                          if (!uiFontIsCustom) {
+                            setUiFontDraft("");
+                          }
+                          return;
                         }
+                        void commitUiFont(nextValue);
                       }}
-                    />
+                    >
+                      {UI_FONT_FAMILY_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                      <option value="custom">Custom…</option>
+                    </select>
                     <button
                       type="button"
                       className="ghost settings-button-compact"
@@ -1664,11 +1697,25 @@ export function SettingsView({
                       Reset
                     </button>
                   </div>
-                  <datalist id="ui-font-family-options">
-                    {UI_FONT_FAMILY_OPTIONS.map((option) => (
-                      <option key={option} value={option} />
-                    ))}
-                  </datalist>
+                  {uiFontSelectValue === "custom" ? (
+                    <input
+                      aria-label="Custom UI font family"
+                      type="text"
+                      className="settings-input"
+                      value={uiFontDraft}
+                      placeholder="Custom UI font family"
+                      onChange={(event) => setUiFontDraft(event.target.value)}
+                      onBlur={() => {
+                        void handleCommitUiFont();
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void handleCommitUiFont();
+                        }
+                      }}
+                    />
+                  ) : null}
                   <div className="settings-help">
                     Applies to all UI text. Leave empty to use the default system font stack.
                   </div>
@@ -1678,23 +1725,28 @@ export function SettingsView({
                     Code font family
                   </label>
                   <div className="settings-field-row">
-                    <input
+                    <select
                       id="code-font-family"
-                      type="text"
-                      className="settings-input"
-                      list="code-font-family-options"
-                      value={codeFontDraft}
-                      onChange={(event) => setCodeFontDraft(event.target.value)}
-                      onBlur={() => {
-                        void handleCommitCodeFont();
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void handleCommitCodeFont();
+                      className="settings-select"
+                      value={codeFontSelectValue}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        if (nextValue === "custom") {
+                          if (!codeFontIsCustom) {
+                            setCodeFontDraft("");
+                          }
+                          return;
                         }
+                        void commitCodeFont(nextValue);
                       }}
-                    />
+                    >
+                      {CODE_FONT_FAMILY_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                      <option value="custom">Custom…</option>
+                    </select>
                     <button
                       type="button"
                       className="ghost settings-button-compact"
@@ -1709,15 +1761,85 @@ export function SettingsView({
                       Reset
                     </button>
                   </div>
-                  <datalist id="code-font-family-options">
-                    {CODE_FONT_FAMILY_OPTIONS.map((option) => (
-                      <option key={option} value={option} />
-                    ))}
-                  </datalist>
+                  {codeFontSelectValue === "custom" ? (
+                    <input
+                      aria-label="Custom code font family"
+                      type="text"
+                      className="settings-input"
+                      value={codeFontDraft}
+                      placeholder="Custom code font family"
+                      onChange={(event) => setCodeFontDraft(event.target.value)}
+                      onBlur={() => {
+                        void handleCommitCodeFont();
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void handleCommitCodeFont();
+                        }
+                      }}
+                    />
+                  ) : null}
                   <div className="settings-help">
                     Applies to git diffs and other mono-spaced readouts.
                   </div>
                 </div>
+                {isInterFontSelected ? (
+                  <div className="settings-field">
+                    <div className="settings-field-label">Inter font features</div>
+                    <div className="settings-help">
+                      Applies only when Inter is selected for UI text.
+                    </div>
+                    {INTER_FONT_FEATURES.map((feature) => {
+                      const isEnabled =
+                        appSettings.interFontFeatures?.[feature.tag] ?? feature.enabledByDefault;
+                      return (
+                        <div key={feature.tag} className="settings-toggle-row">
+                          <div>
+                            <div className="settings-toggle-title">
+                              {feature.tag} {feature.label}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className={`settings-toggle ${isEnabled ? "on" : ""}`}
+                            onClick={() => {
+                              void onUpdateAppSettings({
+                                ...appSettings,
+                                interFontFeatures: {
+                                  ...appSettings.interFontFeatures,
+                                  [feature.tag]: !isEnabled,
+                                },
+                              });
+                            }}
+                          >
+                            <span className="settings-toggle-knob" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    <div className="settings-field-row">
+                      <button
+                        type="button"
+                        className="ghost settings-button-compact"
+                        onClick={() => {
+                          void onUpdateAppSettings({
+                            ...appSettings,
+                            interFontFeatures: INTER_FONT_FEATURES.reduce(
+                              (acc, feature) => {
+                                acc[feature.tag] = feature.enabledByDefault;
+                                return acc;
+                              },
+                              {} as Record<string, boolean>,
+                            ),
+                          });
+                        }}
+                      >
+                        Reset features
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="settings-field">
                   <label className="settings-field-label" htmlFor="code-font-size">
                     Code font size

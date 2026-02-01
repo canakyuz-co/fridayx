@@ -158,6 +158,7 @@ export type AppSettings = {
   theme: ThemePreference;
   usageShowRemaining: boolean;
   uiFontFamily: string;
+  interFontFeatures: Record<string, boolean>;
   codeFontFamily: string;
   codeFontSize: number;
   notificationSoundsEnabled: boolean;

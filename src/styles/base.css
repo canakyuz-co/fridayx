@@ -61,6 +61,7 @@ body {
   --main-topbar-height: 44px;
   transition: grid-template-columns 220ms ease;
   font-family: var(--ui-font-family);
+  font-feature-settings: var(--ui-font-features, normal);
 }
 
 .drag-strip {

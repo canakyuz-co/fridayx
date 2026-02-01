@@ -72,6 +72,7 @@ const baseSettings: AppSettings = {
   usageShowRemaining: false,
   uiFontFamily:
     "\"InterVariable\", \"Inter\", -apple-system, \"Helvetica Neue\", sans-serif",
+  interFontFeatures: {},
   codeFontFamily:
     "\"Geist Mono\", \"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace",
   codeFontSize: 11,
@@ -257,7 +258,9 @@ describe("SettingsView Display", () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderDisplaySection({ onUpdateAppSettings });
 
-    const uiFontInput = screen.getByLabelText("UI font family");
+    const uiFontSelect = screen.getByLabelText("UI font family");
+    fireEvent.change(uiFontSelect, { target: { value: "custom" } });
+    const uiFontInput = screen.getByLabelText("Custom UI font family");
     fireEvent.change(uiFontInput, { target: { value: "Avenir, sans-serif" } });
     fireEvent.blur(uiFontInput);
 
@@ -267,7 +270,9 @@ describe("SettingsView Display", () => {
       );
     });
 
-    const codeFontInput = screen.getByLabelText("Code font family");
+    const codeFontSelect = screen.getByLabelText("Code font family");
+    fireEvent.change(codeFontSelect, { target: { value: "custom" } });
+    const codeFontInput = screen.getByLabelText("Custom code font family");
     fireEvent.change(codeFontInput, {
       target: { value: "JetBrains Mono, monospace" },
     });

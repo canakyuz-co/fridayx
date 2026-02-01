@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
@@ -437,6 +438,8 @@ pub(crate) struct AppSettings {
     pub(crate) usage_show_remaining: bool,
     #[serde(default = "default_ui_font_family", rename = "uiFontFamily")]
     pub(crate) ui_font_family: String,
+    #[serde(default = "default_inter_font_features", rename = "interFontFeatures")]
+    pub(crate) inter_font_features: HashMap<String, bool>,
     #[serde(default = "default_code_font_family", rename = "codeFontFamily")]
     pub(crate) code_font_family: String,
     #[serde(default = "default_code_font_size", rename = "codeFontSize")]
@@ -545,12 +548,56 @@ fn default_usage_show_remaining() -> bool {
 }
 
 fn default_ui_font_family() -> String {
-    "\"SF Pro Text\", \"SF Pro Display\", -apple-system, \"Helvetica Neue\", sans-serif"
-        .to_string()
+    "\"InterVariable\", \"Inter\", -apple-system, \"Helvetica Neue\", sans-serif".to_string()
+}
+
+fn default_inter_font_features() -> HashMap<String, bool> {
+    let mut features = HashMap::new();
+    features.insert("aalt".into(), false);
+    features.insert("c2sc".into(), false);
+    features.insert("calt".into(), true);
+    features.insert("case".into(), false);
+    features.insert("ccmp".into(), true);
+    features.insert("cpsp".into(), false);
+    features.insert("cv01".into(), false);
+    features.insert("cv02".into(), false);
+    features.insert("cv03".into(), false);
+    features.insert("cv04".into(), false);
+    features.insert("cv05".into(), false);
+    features.insert("cv06".into(), false);
+    features.insert("cv07".into(), false);
+    features.insert("cv08".into(), false);
+    features.insert("cv09".into(), false);
+    features.insert("cv10".into(), false);
+    features.insert("cv11".into(), false);
+    features.insert("cv12".into(), false);
+    features.insert("cv13".into(), false);
+    features.insert("dlig".into(), false);
+    features.insert("dnom".into(), false);
+    features.insert("frac".into(), false);
+    features.insert("locl".into(), false);
+    features.insert("numr".into(), false);
+    features.insert("ordn".into(), false);
+    features.insert("pnum".into(), false);
+    features.insert("salt".into(), false);
+    features.insert("sinf".into(), false);
+    features.insert("ss01".into(), false);
+    features.insert("ss02".into(), false);
+    features.insert("ss03".into(), false);
+    features.insert("ss04".into(), false);
+    features.insert("ss05".into(), false);
+    features.insert("ss06".into(), false);
+    features.insert("ss07".into(), false);
+    features.insert("ss08".into(), false);
+    features.insert("subs".into(), false);
+    features.insert("sups".into(), false);
+    features.insert("tnum".into(), false);
+    features.insert("zero".into(), false);
+    features
 }
 
 fn default_code_font_family() -> String {
-    "\"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace".to_string()
+    "\"Geist Mono\", \"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace".to_string()
 }
 
 fn default_code_font_size() -> u8 {
@@ -773,7 +820,10 @@ fn default_other_ai_providers() -> Vec<OtherAiProvider> {
             api_key: None,
             command: Some("claude".to_string()),
             args: None,
-            models: Vec::new(),
+            models: vec![
+                "claude-4.5-opus".to_string(),
+                "claude-4.5-sonnet".to_string(),
+            ],
             default_model: None,
         },
         OtherAiProvider {
@@ -823,6 +873,7 @@ impl Default for AppSettings {
             theme: default_theme(),
             usage_show_remaining: default_usage_show_remaining(),
             ui_font_family: default_ui_font_family(),
+            inter_font_features: default_inter_font_features(),
             code_font_family: default_code_font_family(),
             code_font_size: default_code_font_size(),
             notification_sounds_enabled: true,
@@ -923,8 +974,8 @@ mod tests {
         assert!((settings.ui_scale - 1.0).abs() < f64::EPSILON);
         assert_eq!(settings.theme, "system");
         assert!(!settings.usage_show_remaining);
-        assert!(settings.ui_font_family.contains("SF Pro Text"));
-        assert!(settings.code_font_family.contains("SF Mono"));
+        assert!(settings.ui_font_family.contains("Inter"));
+        assert!(settings.code_font_family.contains("Geist Mono"));
         assert_eq!(settings.code_font_size, 11);
         assert!(settings.notification_sounds_enabled);
         assert!(settings.preload_git_diffs);

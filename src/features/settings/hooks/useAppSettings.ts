@@ -4,9 +4,11 @@ import { getAppSettings, runCodexDoctor, updateAppSettings } from "../../../serv
 import { clampUiScale, UI_SCALE_DEFAULT } from "../../../utils/uiScale";
 import {
   DEFAULT_CODE_FONT_FAMILY,
+  DEFAULT_INTER_FONT_FEATURES,
   DEFAULT_UI_FONT_FAMILY,
   CODE_FONT_SIZE_DEFAULT,
   clampCodeFontSize,
+  normalizeInterFontFeatures,
 } from "../../../utils/fonts";
 import {
   DEFAULT_OPEN_APP_ID,
@@ -37,7 +39,7 @@ const defaultSettings: AppSettings = {
       apiKey: null,
       command: "claude",
       args: null,
-      models: [],
+      models: ["claude-4.5-opus", "claude-4.5-sonnet"],
       defaultModel: null,
     },
     {
@@ -76,6 +78,7 @@ const defaultSettings: AppSettings = {
   theme: "system",
   usageShowRemaining: false,
   uiFontFamily: DEFAULT_UI_FONT_FAMILY,
+  interFontFeatures: DEFAULT_INTER_FONT_FEATURES,
   codeFontFamily: DEFAULT_CODE_FONT_FAMILY,
   codeFontSize: CODE_FONT_SIZE_DEFAULT,
   notificationSoundsEnabled: true,
@@ -159,6 +162,7 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
       DEFAULT_UI_FONT_FAMILY,
       [LEGACY_UI_FONT_FAMILY],
     ),
+    interFontFeatures: normalizeInterFontFeatures(settings.interFontFeatures),
     codeFontFamily: normalizeFontWithLegacy(
       settings.codeFontFamily,
       DEFAULT_CODE_FONT_FAMILY,
