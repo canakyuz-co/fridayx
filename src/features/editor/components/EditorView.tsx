@@ -94,9 +94,10 @@ export function EditorView({
   onMonacoReady,
 }: EditorViewProps) {
   const activeBuffer = activePath ? buffersByPath[activePath] : null;
-  const isMarkdown =
-    Boolean(activeBuffer) &&
-    (activeBuffer.language === "markdown" || isMarkdownPath(activeBuffer.path));
+  const activeBufferPath = activeBuffer?.path ?? null;
+  const isMarkdown = activeBuffer
+    ? activeBuffer.language === "markdown" || isMarkdownPath(activeBuffer.path)
+    : false;
   const [markdownView, setMarkdownView] = useState<"code" | "preview" | "split">(
     "code",
   );
@@ -244,11 +245,11 @@ export function EditorView({
   }, [applyTheme]);
 
   useEffect(() => {
-    if (!activeBuffer) {
+    if (!activeBufferPath) {
       return;
     }
     setMarkdownView(isMarkdown ? "split" : "code");
-  }, [activeBuffer?.path, isMarkdown]);
+  }, [activeBufferPath, isMarkdown]);
 
   if (!workspaceId) {
     return <EditorPlaceholder hasWorkspace={false} />;

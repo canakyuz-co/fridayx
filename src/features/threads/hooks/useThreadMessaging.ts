@@ -105,7 +105,7 @@ function extractPlanJson(text: string): PlanJsonPayload | null {
   }
 }
 
-function normalizePlanPayload(payload: PlanJsonPayload | null) {
+function normalizePlanPayload(turnId: string, payload: PlanJsonPayload | null) {
   if (!payload) {
     return null;
   }
@@ -130,7 +130,7 @@ function normalizePlanPayload(payload: PlanJsonPayload | null) {
       return null;
     })
     .filter(Boolean);
-  return normalizePlanUpdate(explanation, steps);
+  return normalizePlanUpdate(turnId, explanation, steps);
 }
 
 function formatPlanAsMessage(plan: ReturnType<typeof normalizePlanUpdate>) {
@@ -389,7 +389,10 @@ export function useThreadMessaging({
                     });
                   }
                   if (isPlanMode) {
+                    const turnId =
+                      activeTurnIdByThread[threadId] ?? "pending";
                     const parsed = normalizePlanPayload(
+                      turnId,
                       extractPlanJson(accumulatedText),
                     );
                     if (!parsed) {
@@ -445,7 +448,10 @@ export function useThreadMessaging({
                   modelName,
                   claudeMessages,
                 );
-                plan = normalizePlanPayload(extractPlanJson(response.content));
+                plan = normalizePlanPayload(
+                  activeTurnIdByThread[threadId] ?? "pending",
+                  extractPlanJson(response.content),
+                );
                 if (response.usage) {
                   onClaudeUsage?.(response.usage);
                 }
@@ -582,7 +588,10 @@ export function useThreadMessaging({
                     modelName,
                     promptText,
                   );
-              plan = normalizePlanPayload(extractPlanJson(response.content));
+              plan = normalizePlanPayload(
+                activeTurnIdByThread[threadId] ?? "pending",
+                extractPlanJson(response.content),
+              );
               attempt += 1;
             }
             if (!plan) {
@@ -706,6 +715,7 @@ export function useThreadMessaging({
     },
     [
       accessMode,
+      activeTurnIdByThread,
       collaborationMode,
       customPrompts,
       dispatch,
