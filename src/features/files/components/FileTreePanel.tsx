@@ -19,9 +19,6 @@ import Search from "lucide-react/dist/esm/icons/search";
 import FilePlus from "lucide-react/dist/esm/icons/file-plus";
 import FolderPlus from "lucide-react/dist/esm/icons/folder-plus";
 import RefreshCcw from "lucide-react/dist/esm/icons/refresh-ccw";
-import FileText from "lucide-react/dist/esm/icons/file-text";
-import Folder from "lucide-react/dist/esm/icons/folder";
-import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
 import { PanelTabs, type PanelTabId } from "../../layout/components/PanelTabs";
 import {
   createWorkspaceDir,
@@ -32,6 +29,7 @@ import {
 } from "../../../services/tauri";
 import type { OpenAppTarget } from "../../../types";
 import { languageFromPath } from "../../../utils/syntax";
+import { getFileIconDescriptor } from "../../../utils/fileIcons";
 import { FilePreviewPopover } from "./FilePreviewPopover";
 
 type FileTreeNode = {
@@ -698,19 +696,19 @@ export function FileTreePanel({
             ) : (
               <span className="file-tree-spacer" aria-hidden />
             )}
-            <span
-              className={`file-tree-icon ${isFolder ? "is-folder" : "is-file"}`}
-              aria-hidden
-            >
-              {isFolder ? (
-                isExpanded ? (
-                  <FolderOpen className="file-tree-icon-svg" />
-                ) : (
-                  <Folder className="file-tree-icon-svg" />
-                )
-              ) : (
-                <FileText className="file-tree-icon-svg" />
-              )}
+            <span className="file-tree-icon" aria-hidden>
+              {(() => {
+                const icon = getFileIconDescriptor(node.path, isFolder, isExpanded);
+                return (
+                  <img
+                    className="file-tree-icon-img"
+                    src={icon.src}
+                    alt=""
+                    loading="lazy"
+                    aria-hidden
+                  />
+                );
+              })()}
             </span>
             <span className="file-tree-name">{node.name}</span>
           </button>
