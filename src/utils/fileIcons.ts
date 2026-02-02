@@ -1,10 +1,36 @@
-const ICON_BASE = "/icons/catppuccin/mocha";
+const ICON_BASE = "/icons/catppuccin/frappe";
 
 const DEFAULT_FILE_ICON = `${ICON_BASE}/_file.svg`;
 const DEFAULT_FOLDER_ICON = `${ICON_BASE}/_folder.svg`;
 const DEFAULT_FOLDER_OPEN_ICON = `${ICON_BASE}/_folder_open.svg`;
 
 const FILE_NAME_ICON_MAP = new Map<string, string>([
+  ["astro.config.mjs", "astro-config.svg"],
+  ["astro.config.ts", "astro-config.svg"],
+  ["astro.config.js", "astro-config.svg"],
+  ["vite.config.ts", "vite.svg"],
+  ["vite.config.js", "vite.svg"],
+  ["vite.config.mjs", "vite.svg"],
+  ["next.config.js", "next.svg"],
+  ["next.config.mjs", "next.svg"],
+  ["next.config.ts", "next.svg"],
+  ["nuxt.config.ts", "nuxt.svg"],
+  ["nuxt.config.js", "nuxt.svg"],
+  ["remix.config.js", "remix.svg"],
+  ["remix.config.ts", "remix.svg"],
+  ["tailwind.config.js", "tailwind.svg"],
+  ["tailwind.config.ts", "tailwind.svg"],
+  ["postcss.config.js", "postcss.svg"],
+  ["postcss.config.cjs", "postcss.svg"],
+  ["postcss.config.mjs", "postcss.svg"],
+  ["jest.config.js", "jest.svg"],
+  ["jest.config.ts", "jest.svg"],
+  ["vitest.config.ts", "vitest.svg"],
+  ["vitest.config.mts", "vitest.svg"],
+  ["playwright.config.ts", "playwright.svg"],
+  ["playwright.config.mts", "playwright.svg"],
+  ["storybook.config.ts", "storybook.svg"],
+  ["storybook.config.js", "storybook.svg"],
   ["dockerfile", "docker.svg"],
   ["docker-compose.yml", "docker-compose.svg"],
   ["docker-compose.yaml", "docker-compose.svg"],
@@ -18,6 +44,7 @@ const FILE_NAME_ICON_MAP = new Map<string, string>([
   ["yarn.lock", "lock.svg"],
   ["cargo.lock", "lock.svg"],
   ["bun.lockb", "lock.svg"],
+  ["bun.lock", "lock.svg"],
   ["tsconfig.json", "typescript-config.svg"],
   ["jsconfig.json", "javascript-config.svg"],
 ]);
@@ -40,6 +67,15 @@ const EXT_ICON_MAP = new Map<string, string>([
   ["yaml", "yaml.svg"],
   ["yml", "yaml.svg"],
   ["toml", "toml.svg"],
+  ["astro", "astro.svg"],
+  ["svelte", "svelte.svg"],
+  ["vue", "vue.svg"],
+  ["solid", "solid.svg"],
+  ["prisma", "prisma.svg"],
+  ["graphql", "graphql.svg"],
+  ["gql", "graphql.svg"],
+  ["sql", "database.svg"],
+  ["pcss", "postcss.svg"],
   ["rs", "rust.svg"],
   ["go", "go.svg"],
   ["py", "python.svg"],
