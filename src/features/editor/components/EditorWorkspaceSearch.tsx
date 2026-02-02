@@ -66,6 +66,30 @@ function highlightMatch(lineText: string, matchText?: string | null) {
   );
 }
 
+const INCLUDE_PRESETS: Array<{ id: string; label: string; value: string }> = [
+  { id: "all", label: "All", value: "" },
+  { id: "src", label: "src/**", value: "src/**" },
+  { id: "apps", label: "apps/**", value: "apps/**" },
+  { id: "packages", label: "packages/**", value: "packages/**" },
+  { id: "custom", label: "Custom", value: "" },
+];
+
+const EXCLUDE_PRESETS: Array<{ id: string; label: string; value: string }> = [
+  { id: "default", label: "Default", value: "node_modules/**, dist/**, .git/**" },
+  { id: "none", label: "None", value: "" },
+  { id: "build", label: "Build", value: "dist/**, build/**, target/**" },
+  { id: "custom", label: "Custom", value: "" },
+];
+
+function presetFromValue(
+  presets: Array<{ id: string; value: string }>,
+  value: string,
+) {
+  const trimmed = value.trim();
+  const matched = presets.find((preset) => preset.value === trimmed);
+  return matched?.id ?? "custom";
+}
+
 export function EditorWorkspaceSearch({
   isOpen,
   activeTab,
@@ -87,6 +111,15 @@ export function EditorWorkspaceSearch({
   onSelectAction,
 }: EditorWorkspaceSearchProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const includePreset = useMemo(
+    () => presetFromValue(INCLUDE_PRESETS, includeGlobs),
+    [includeGlobs],
+  );
+  const excludePreset = useMemo(
+    () => presetFromValue(EXCLUDE_PRESETS, excludeGlobs),
+    [excludeGlobs],
+  );
 
   const summary = useMemo(() => {
     if (!query.trim()) {
@@ -134,6 +167,8 @@ export function EditorWorkspaceSearch({
   }
 
   const showTextControls = activeTab === "text" || activeTab === "all";
+  const showCustomInclude = showTextControls && includePreset === "custom";
+  const showCustomExclude = showTextControls && excludePreset === "custom";
 
   return (
     <div className="editor-workspace-search" role="dialog" aria-modal="true">
@@ -188,26 +223,76 @@ export function EditorWorkspaceSearch({
           <div className="editor-workspace-search__filters">
             <label className="editor-workspace-search__filter">
               <span>Include</span>
-              <input
-                type="text"
-                value={includeGlobs}
-                onChange={(event) => onIncludeChange(event.target.value)}
-                placeholder="src/**"
+              <select
+                value={includePreset}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  const preset = INCLUDE_PRESETS.find((entry) => entry.id === next);
+                  if (preset && preset.id !== "custom") {
+                    onIncludeChange(preset.value);
+                  }
+                }}
                 disabled={!showTextControls}
-              />
+              >
+                {INCLUDE_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="editor-workspace-search__filter">
               <span>Exclude</span>
-              <input
-                type="text"
-                value={excludeGlobs}
-                onChange={(event) => onExcludeChange(event.target.value)}
-                placeholder="node_modules/**"
+              <select
+                value={excludePreset}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  const preset = EXCLUDE_PRESETS.find((entry) => entry.id === next);
+                  if (preset && preset.id !== "custom") {
+                    onExcludeChange(preset.value);
+                  }
+                }}
                 disabled={!showTextControls}
-              />
+              >
+                {EXCLUDE_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="editor-workspace-search__filter editor-workspace-search__filter--toggle">
+              <span>Include non-project</span>
+              <input type="checkbox" />
             </label>
           </div>
         </div>
+        {(showCustomInclude || showCustomExclude) && (
+          <div className="editor-workspace-search__custom-row">
+            {showCustomInclude ? (
+              <label className="editor-workspace-search__custom-field">
+                <span>Include globs</span>
+                <input
+                  type="text"
+                  value={includeGlobs}
+                  onChange={(event) => onIncludeChange(event.target.value)}
+                  placeholder="src/**, apps/**"
+                />
+              </label>
+            ) : null}
+            {showCustomExclude ? (
+              <label className="editor-workspace-search__custom-field">
+                <span>Exclude globs</span>
+                <input
+                  type="text"
+                  value={excludeGlobs}
+                  onChange={(event) => onExcludeChange(event.target.value)}
+                  placeholder="node_modules/**, dist/**"
+                />
+              </label>
+            ) : null}
+          </div>
+        )}
         <div className="editor-workspace-search__summary">{summary}</div>
         <div className="editor-workspace-search__results">
           {(activeTab === "all" || activeTab === "actions") && actions.length > 0 ? (
