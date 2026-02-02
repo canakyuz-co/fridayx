@@ -11,7 +11,8 @@ import { Markdown } from "../../messages/components/Markdown";
 import { EditorCommandPalette } from "./EditorCommandPalette";
 import { EditorWorkspaceSearch } from "./EditorWorkspaceSearch";
 import type { EditorKeymap, LaunchScriptEntry } from "../../../types";
-import { searchWorkspaceFiles } from "../../../services/tauri";
+import { lspRequest, searchWorkspaceFiles } from "../../../services/tauri";
+import { languageFromPath } from "../../../utils/syntax";
 
 import "monaco-editor/esm/vs/language/css/monaco.contribution";
 import "monaco-editor/esm/vs/language/html/monaco.contribution";
@@ -46,6 +47,14 @@ type WorkspaceSearchResult = {
   matchText?: string | null;
 };
 
+type WorkspaceSymbolResult = {
+  name: string;
+  kind: "class" | "symbol";
+  line: number;
+  column: number;
+  detail?: string | null;
+};
+
 type WorkspaceSearchTab =
   | "all"
   | "files"
@@ -68,6 +77,7 @@ type EditorViewProps = {
   buffersByPath: Record<string, EditorBuffer>;
   availablePaths: string[];
   editorKeymap: EditorKeymap;
+  workspacePath: string | null;
   launchScript: string | null;
   launchScripts: LaunchScriptEntry[];
   onSelectPath: (path: string) => void;
@@ -158,6 +168,11 @@ export function EditorView({
   >([]);
   const [workspaceSearchLoading, setWorkspaceSearchLoading] = useState(false);
   const [workspaceSearchError, setWorkspaceSearchError] = useState<string | null>(null);
+  const [workspaceSymbolResults, setWorkspaceSymbolResults] = useState<
+    WorkspaceSymbolResult[]
+  >([]);
+  const [workspaceSymbolLoading, setWorkspaceSymbolLoading] = useState(false);
+  const [workspaceSymbolError, setWorkspaceSymbolError] = useState<string | null>(null);
   const shiftTapRef = useRef(0);
   const pendingRevealRef = useRef<{ path: string; line: number; column: number } | null>(
     null,
@@ -197,6 +212,8 @@ export function EditorView({
     setWorkspaceSearchResults([]);
     setWorkspaceSearchError(null);
     setWorkspaceSearchTab("all");
+    setWorkspaceSymbolResults([]);
+    setWorkspaceSymbolError(null);
   }, [workspaceId]);
 
   const tabs = useMemo(
@@ -467,6 +484,155 @@ export function EditorView({
       .slice(0, 120);
   }, [availablePaths, workspaceSearchQuery]);
 
+  const workspaceClassResults = useMemo(
+    () => workspaceSymbolResults.filter((entry) => entry.kind === "class"),
+    [workspaceSymbolResults],
+  );
+
+  const workspaceSymbolsResults = useMemo(
+    () => workspaceSymbolResults.filter((entry) => entry.kind === "symbol"),
+    [workspaceSymbolResults],
+  );
+
+  const resolveLanguageId = useCallback(
+    (path: string, language: string | null) => {
+      const raw = language && language !== "plaintext" ? language : languageFromPath(path);
+      if (!raw) {
+        return null;
+      }
+      const normalized =
+        raw === "tsx"
+          ? "typescript"
+          : raw === "jsx"
+            ? "javascript"
+            : raw === "bash"
+              ? "shell"
+              : raw;
+      const supported = new Set([
+        "typescript",
+        "javascript",
+        "json",
+        "css",
+        "scss",
+        "less",
+        "html",
+        "markdown",
+        "rust",
+        "python",
+        "go",
+        "terraform",
+        "sql",
+        "yaml",
+        "toml",
+        "xml",
+        "lua",
+        "graphql",
+        "prisma",
+        "ruby",
+        "c",
+        "cpp",
+        "dockerfile",
+        "shell",
+        "swift",
+        "php",
+      ]);
+      return supported.has(normalized) ? normalized : null;
+    },
+    [],
+  );
+
+  const toFileUri = useCallback((rootPath: string, relative: string) => {
+    const normalizedRoot = rootPath.replace(/\\/g, "/").replace(/\/+$/, "");
+    const normalizedRel = relative.replace(/\\/g, "/").replace(/^\/+/, "");
+    const full = `${normalizedRoot}/${normalizedRel}`;
+    const prefix = full.startsWith("/") ? "file://" : "file:///";
+    return encodeURI(`${prefix}${full}`);
+  }, []);
+
+  useEffect(() => {
+    if (!workspaceSearchOpen) {
+      return;
+    }
+    if (workspaceSearchTab !== "classes" && workspaceSearchTab !== "symbols") {
+      return;
+    }
+    if (!workspaceId || !workspacePath || !activeBufferPath || !activeBuffer) {
+      setWorkspaceSymbolResults([]);
+      setWorkspaceSymbolError(null);
+      return;
+    }
+    const languageId = resolveLanguageId(activeBufferPath, activeBuffer.language);
+    if (!languageId) {
+      setWorkspaceSymbolResults([]);
+      setWorkspaceSymbolError("Symbols not available for this file type.");
+      return;
+    }
+    const uri = toFileUri(workspacePath, activeBufferPath);
+    const query = workspaceSearchQuery.trim().toLowerCase();
+    setWorkspaceSymbolLoading(true);
+    lspRequest(workspaceId, languageId, "textDocument/documentSymbol", {
+      textDocument: { uri },
+    })
+      .then((response) => {
+        const results: WorkspaceSymbolResult[] = [];
+        const addSymbol = (name: string, kind: number, line: number, column: number) => {
+          const normalizedName = name.trim();
+          if (!normalizedName) {
+            return;
+          }
+          if (query && !normalizedName.toLowerCase().includes(query)) {
+            return;
+          }
+          const isClass = kind === 5;
+          results.push({
+            name: normalizedName,
+            kind: isClass ? "class" : "symbol",
+            line,
+            column,
+          });
+        };
+
+        const walkDocumentSymbols = (items: any[]) => {
+          for (const item of items) {
+            const name = item?.name ?? "";
+            const kind = item?.kind ?? 0;
+            const range = item?.range ?? item?.location?.range ?? null;
+            const line = (range?.start?.line ?? 0) + 1;
+            const column = (range?.start?.character ?? 0) + 1;
+            addSymbol(name, kind, line, column);
+            if (Array.isArray(item?.children)) {
+              walkDocumentSymbols(item.children);
+            }
+          }
+        };
+
+        if (Array.isArray(response)) {
+          walkDocumentSymbols(response);
+        }
+        setWorkspaceSymbolResults(results);
+        setWorkspaceSymbolError(null);
+      })
+      .catch((error) => {
+        setWorkspaceSymbolResults([]);
+        setWorkspaceSymbolError(
+          error instanceof Error ? error.message : String(error),
+        );
+      })
+      .finally(() => {
+        setWorkspaceSymbolLoading(false);
+      });
+  }, [
+    activeBuffer,
+    activeBufferPath,
+    resolveLanguageId,
+    toFileUri,
+    workspaceId,
+    workspacePath,
+    workspaceSearchOpen,
+    workspaceSearchQuery,
+    workspaceSearchTab,
+  ]);
+
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
       if (event.repeat) {
@@ -708,6 +874,10 @@ export function EditorView({
         excludeGlobs={workspaceSearchExclude}
         results={workspaceSearchResults}
         fileResults={workspaceSearchFileResults}
+        classResults={workspaceClassResults}
+        symbolResults={workspaceSymbolsResults}
+        symbolError={workspaceSymbolError}
+        symbolLoading={workspaceSymbolLoading}
         actions={workspaceSearchActions}
         isLoading={workspaceSearchLoading}
         error={workspaceSearchError}
@@ -730,6 +900,18 @@ export function EditorView({
         }}
         onSelectAction={(action) => {
           action.onSelect();
+          closeWorkspaceSearch();
+        }}
+        onSelectSymbol={(symbol) => {
+          if (!activeBufferPath) {
+            return;
+          }
+          pendingRevealRef.current = {
+            path: activeBufferPath,
+            line: symbol.line,
+            column: symbol.column,
+          };
+          onOpenPath(activeBufferPath);
           closeWorkspaceSearch();
         }}
       />

@@ -2209,6 +2209,7 @@ function MainApp() {
       buffersByPath={editorState.buffersByPath}
       availablePaths={files}
       editorKeymap={appSettings.editorKeymap}
+      workspacePath={activeWorkspace?.path ?? null}
       launchScript={launchScriptState.launchScript}
       launchScripts={launchScriptsState.launchScripts}
       onSelectPath={editorState.setActivePath}

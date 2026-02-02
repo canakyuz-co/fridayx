@@ -1,4 +1,9 @@
 import Search from "lucide-react/dist/esm/icons/search";
+import FileText from "lucide-react/dist/esm/icons/file-text";
+import Terminal from "lucide-react/dist/esm/icons/terminal";
+import Hash from "lucide-react/dist/esm/icons/hash";
+import Boxes from "lucide-react/dist/esm/icons/boxes";
+import Braces from "lucide-react/dist/esm/icons/braces";
 import X from "lucide-react/dist/esm/icons/x";
 import { useEffect, useMemo, useRef } from "react";
 
@@ -34,6 +39,10 @@ type EditorWorkspaceSearchProps = {
   excludeGlobs: string;
   results: WorkspaceSearchResult[];
   fileResults: string[];
+  classResults: WorkspaceSymbolResult[];
+  symbolResults: WorkspaceSymbolResult[];
+  symbolLoading: boolean;
+  symbolError: string | null;
   actions: WorkspaceSearchAction[];
   isLoading: boolean;
   error: string | null;
@@ -44,6 +53,7 @@ type EditorWorkspaceSearchProps = {
   onSelectResult: (result: WorkspaceSearchResult) => void;
   onSelectFile: (path: string) => void;
   onSelectAction: (action: WorkspaceSearchAction) => void;
+  onSelectSymbol: (symbol: WorkspaceSymbolResult) => void;
 };
 
 function highlightMatch(lineText: string, matchText?: string | null) {
@@ -76,6 +86,10 @@ export function EditorWorkspaceSearch({
   excludeGlobs,
   results,
   fileResults,
+  classResults,
+  symbolResults,
+  symbolLoading,
+  symbolError,
   actions,
   isLoading,
   error,
@@ -86,6 +100,7 @@ export function EditorWorkspaceSearch({
   onSelectResult,
   onSelectFile,
   onSelectAction,
+  onSelectSymbol,
 }: EditorWorkspaceSearchProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -104,6 +119,16 @@ export function EditorWorkspaceSearch({
     }
     return `${results.length} result${results.length === 1 ? "" : "s"}`;
   }, [error, isLoading, query, results.length]);
+
+  const symbolSummary = useMemo(() => {
+    if (symbolLoading) {
+      return "Loading symbols...";
+    }
+    if (symbolError) {
+      return symbolError;
+    }
+    return null;
+  }, [symbolError, symbolLoading]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -193,6 +218,9 @@ export function EditorWorkspaceSearch({
                   className="editor-workspace-search__result"
                   onClick={() => onSelectAction(action)}
                 >
+                  <div className="editor-workspace-search__result-icon">
+                    <Terminal size={14} aria-hidden />
+                  </div>
                   <div className="editor-workspace-search__result-path">
                     {action.label}
                   </div>
@@ -217,6 +245,9 @@ export function EditorWorkspaceSearch({
                   className="editor-workspace-search__result"
                   onClick={() => onSelectFile(path)}
                 >
+                  <div className="editor-workspace-search__result-icon">
+                    <FileText size={14} aria-hidden />
+                  </div>
                   <div className="editor-workspace-search__result-path">
                     {path.split("/").pop() ?? path}
                   </div>
@@ -237,6 +268,9 @@ export function EditorWorkspaceSearch({
                   className="editor-workspace-search__result"
                   onClick={() => onSelectResult(result)}
                 >
+                  <div className="editor-workspace-search__result-icon">
+                    <Hash size={14} aria-hidden />
+                  </div>
                   <div className="editor-workspace-search__result-path">
                     {result.path}
                   </div>
@@ -251,6 +285,55 @@ export function EditorWorkspaceSearch({
                 </button>
               ))
             : null}
+          {(activeTab === "all" || activeTab === "classes") &&
+          classResults.length > 0
+            ? classResults.map((symbol) => (
+                <button
+                  key={`class-${symbol.name}-${symbol.line}-${symbol.column}`}
+                  type="button"
+                  className="editor-workspace-search__result"
+                  onClick={() => onSelectSymbol(symbol)}
+                >
+                  <div className="editor-workspace-search__result-icon">
+                    <Boxes size={14} aria-hidden />
+                  </div>
+                  <div className="editor-workspace-search__result-path">
+                    {symbol.name}
+                  </div>
+                  <div className="editor-workspace-search__result-line">
+                    <span className="editor-workspace-search__result-loc">
+                      {symbol.line}:{symbol.column}
+                    </span>
+                  </div>
+                </button>
+              ))
+            : null}
+          {(activeTab === "all" || activeTab === "symbols") &&
+          symbolResults.length > 0
+            ? symbolResults.map((symbol) => (
+                <button
+                  key={`symbol-${symbol.name}-${symbol.line}-${symbol.column}`}
+                  type="button"
+                  className="editor-workspace-search__result"
+                  onClick={() => onSelectSymbol(symbol)}
+                >
+                  <div className="editor-workspace-search__result-icon">
+                    <Braces size={14} aria-hidden />
+                  </div>
+                  <div className="editor-workspace-search__result-path">
+                    {symbol.name}
+                  </div>
+                  <div className="editor-workspace-search__result-line">
+                    <span className="editor-workspace-search__result-loc">
+                      {symbol.line}:{symbol.column}
+                    </span>
+                  </div>
+                </button>
+              ))
+            : null}
+          {symbolSummary ? (
+            <div className="editor-workspace-search__empty">{symbolSummary}</div>
+          ) : null}
         </div>
       </div>
     </div>
