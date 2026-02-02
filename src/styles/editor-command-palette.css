@@ -13,19 +13,20 @@
   position: absolute;
   inset: 0;
   border: none;
-  background: rgba(5, 8, 14, 0.6);
+  background: rgba(4, 6, 10, 0.72);
   cursor: default;
   pointer-events: auto;
+  backdrop-filter: blur(6px);
 }
 
 .editor-command-palette__panel {
   position: relative;
   width: min(720px, 92vw);
   max-height: 70vh;
-  background: var(--surface-card-strong);
-  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--surface-card-strong) 92%, black 8%);
+  border: 1px solid color-mix(in srgb, var(--border-strong) 70%, white 30%);
   border-radius: 16px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.6);
   overflow: hidden;
   pointer-events: auto;
 }
@@ -36,9 +37,9 @@
   align-items: center;
   gap: 10px;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 60%, white 40%);
   color: var(--text-muted);
-  background: var(--surface-topbar);
+  background: color-mix(in srgb, var(--surface-topbar) 86%, black 14%);
 }
 
 .editor-command-palette__input {
@@ -55,8 +56,8 @@
   color: var(--text-muted);
   padding: 4px 8px;
   border-radius: 999px;
-  border: 1px solid var(--border-muted);
-  background: var(--surface-control);
+  border: 1px solid color-mix(in srgb, var(--border-muted) 70%, white 30%);
+  background: color-mix(in srgb, var(--surface-control) 84%, black 16%);
 }
 
 .editor-command-palette__results {
@@ -71,7 +72,7 @@
 
 .editor-command-palette__section-title {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin: 4px 8px 8px;
@@ -87,15 +88,16 @@
   padding: 10px 10px;
   border-radius: 12px;
   border: 1px solid transparent;
-  background: transparent;
+  background: color-mix(in srgb, var(--surface-card) 88%, transparent);
   color: var(--text-strong);
   text-align: left;
   cursor: pointer;
 }
 
 .editor-command-palette__item.is-active {
-  background: var(--surface-hover);
+  background: color-mix(in srgb, var(--surface-hover) 70%, white 30%);
   border-color: var(--border-stronger);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
 }
 
 .editor-command-palette__icon {
@@ -122,8 +124,8 @@
   padding: 2px 6px;
   border-radius: 999px;
   color: var(--text-accent);
-  border: 1px solid var(--border-accent-soft);
-  background: var(--surface-control);
+  border: 1px solid color-mix(in srgb, var(--border-accent-soft) 70%, white 30%);
+  background: color-mix(in srgb, var(--surface-control) 85%, black 15%);
   margin-left: auto;
 }
 
