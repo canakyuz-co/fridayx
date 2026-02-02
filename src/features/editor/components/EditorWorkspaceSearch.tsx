@@ -158,6 +158,22 @@ export function EditorWorkspaceSearch({
             <X size={14} aria-hidden />
           </button>
         </div>
+        <div className="editor-workspace-search__tabs">
+          {(["all", "classes", "files", "symbols", "actions", "text"] as WorkspaceSearchTab[]).map(
+            (tab) => (
+              <button
+                key={tab}
+                type="button"
+                className={`editor-workspace-search__tab${
+                  tab === activeTab ? " is-active" : ""
+                }`}
+                onClick={() => onTabChange(tab)}
+              >
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </button>
+            ),
+          )}
+        </div>
         <div className="editor-workspace-search__search-row">
           <div className="editor-workspace-search__search-input">
             <Search size={16} aria-hidden />
@@ -169,45 +185,27 @@ export function EditorWorkspaceSearch({
               placeholder="Type / to see commands"
             />
           </div>
-          <div className="editor-workspace-search__right-controls">
-            <div className="editor-workspace-search__tabs">
-              {(["all", "classes", "files", "symbols", "actions", "text"] as WorkspaceSearchTab[]).map(
-                (tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    className={`editor-workspace-search__tab${
-                      tab === activeTab ? " is-active" : ""
-                    }`}
-                    onClick={() => onTabChange(tab)}
-                  >
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  </button>
-                ),
-              )}
-            </div>
-            <div className="editor-workspace-search__filters">
-              <label className="editor-workspace-search__filter">
-                <span>Include</span>
-                <input
-                  type="text"
-                  value={includeGlobs}
-                  onChange={(event) => onIncludeChange(event.target.value)}
-                  placeholder="src/**"
-                  disabled={!showTextControls}
-                />
-              </label>
-              <label className="editor-workspace-search__filter">
-                <span>Exclude</span>
-                <input
-                  type="text"
-                  value={excludeGlobs}
-                  onChange={(event) => onExcludeChange(event.target.value)}
-                  placeholder="node_modules/**"
-                  disabled={!showTextControls}
-                />
-              </label>
-            </div>
+          <div className="editor-workspace-search__filters">
+            <label className="editor-workspace-search__filter">
+              <span>Include</span>
+              <input
+                type="text"
+                value={includeGlobs}
+                onChange={(event) => onIncludeChange(event.target.value)}
+                placeholder="src/**"
+                disabled={!showTextControls}
+              />
+            </label>
+            <label className="editor-workspace-search__filter">
+              <span>Exclude</span>
+              <input
+                type="text"
+                value={excludeGlobs}
+                onChange={(event) => onExcludeChange(event.target.value)}
+                placeholder="node_modules/**"
+                disabled={!showTextControls}
+              />
+            </label>
           </div>
         </div>
         <div className="editor-workspace-search__summary">{summary}</div>
