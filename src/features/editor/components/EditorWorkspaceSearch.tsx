@@ -10,12 +10,31 @@ type WorkspaceSearchResult = {
   matchText?: string | null;
 };
 
+type WorkspaceSearchTab =
+  | "all"
+  | "files"
+  | "actions"
+  | "text"
+  | "classes"
+  | "symbols";
+
+type WorkspaceSearchAction = {
+  id: string;
+  label: string;
+  detail?: string | null;
+  onSelect: () => void;
+};
+
 type EditorWorkspaceSearchProps = {
   isOpen: boolean;
+  activeTab: WorkspaceSearchTab;
+  onTabChange: (tab: WorkspaceSearchTab) => void;
   query: string;
   includeGlobs: string;
   excludeGlobs: string;
   results: WorkspaceSearchResult[];
+  fileResults: string[];
+  actions: WorkspaceSearchAction[];
   isLoading: boolean;
   error: string | null;
   onClose: () => void;
@@ -23,6 +42,8 @@ type EditorWorkspaceSearchProps = {
   onIncludeChange: (value: string) => void;
   onExcludeChange: (value: string) => void;
   onSelectResult: (result: WorkspaceSearchResult) => void;
+  onSelectFile: (path: string) => void;
+  onSelectAction: (action: WorkspaceSearchAction) => void;
 };
 
 function highlightMatch(lineText: string, matchText?: string | null) {
@@ -47,10 +68,14 @@ function highlightMatch(lineText: string, matchText?: string | null) {
 
 export function EditorWorkspaceSearch({
   isOpen,
+  activeTab,
+  onTabChange,
   query,
   includeGlobs,
   excludeGlobs,
   results,
+  fileResults,
+  actions,
   isLoading,
   error,
   onClose,
@@ -58,6 +83,8 @@ export function EditorWorkspaceSearch({
   onIncludeChange,
   onExcludeChange,
   onSelectResult,
+  onSelectFile,
+  onSelectAction,
 }: EditorWorkspaceSearchProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -88,9 +115,25 @@ export function EditorWorkspaceSearch({
     return () => window.clearTimeout(timer);
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [isOpen, onClose]);
+
   if (!isOpen) {
     return null;
   }
+
+  const showTextControls = activeTab === "text" || activeTab === "all";
 
   return (
     <div className="editor-workspace-search" role="dialog" aria-modal="true">
@@ -101,10 +144,10 @@ export function EditorWorkspaceSearch({
         aria-label="Close workspace search"
       />
       <div className="editor-workspace-search__panel">
-        <div className="editor-workspace-search__header">
+        <div className="editor-workspace-search__topbar">
           <div className="editor-workspace-search__title">
             <Search size={16} aria-hidden />
-            Workspace search
+            Search
           </div>
           <button
             type="button"
@@ -115,58 +158,128 @@ export function EditorWorkspaceSearch({
             <X size={14} aria-hidden />
           </button>
         </div>
-        <div className="editor-workspace-search__inputs">
-          <label className="editor-workspace-search__field">
-            <span>Query</span>
+        <div className="editor-workspace-search__search-row">
+          <div className="editor-workspace-search__search-input">
+            <Search size={16} aria-hidden />
             <input
               ref={inputRef}
               type="search"
               value={query}
               onChange={(event) => onQueryChange(event.target.value)}
-              placeholder="Search text or regex..."
+              placeholder="Type / to see commands"
             />
-          </label>
-          <label className="editor-workspace-search__field">
-            <span>Include folders (comma-separated globs)</span>
-            <input
-              type="text"
-              value={includeGlobs}
-              onChange={(event) => onIncludeChange(event.target.value)}
-              placeholder="src/**, apps/**"
-            />
-          </label>
-          <label className="editor-workspace-search__field">
-            <span>Exclude folders (comma-separated globs)</span>
-            <input
-              type="text"
-              value={excludeGlobs}
-              onChange={(event) => onExcludeChange(event.target.value)}
-              placeholder="node_modules/**, dist/**"
-            />
-          </label>
-          <div className="editor-workspace-search__summary">{summary}</div>
+          </div>
+          <div className="editor-workspace-search__right-controls">
+            <div className="editor-workspace-search__tabs">
+              {(["all", "classes", "files", "symbols", "actions", "text"] as WorkspaceSearchTab[]).map(
+                (tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    className={`editor-workspace-search__tab${
+                      tab === activeTab ? " is-active" : ""
+                    }`}
+                    onClick={() => onTabChange(tab)}
+                  >
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </button>
+                ),
+              )}
+            </div>
+            <div className="editor-workspace-search__filters">
+              <label className="editor-workspace-search__filter">
+                <span>Include</span>
+                <input
+                  type="text"
+                  value={includeGlobs}
+                  onChange={(event) => onIncludeChange(event.target.value)}
+                  placeholder="src/**"
+                  disabled={!showTextControls}
+                />
+              </label>
+              <label className="editor-workspace-search__filter">
+                <span>Exclude</span>
+                <input
+                  type="text"
+                  value={excludeGlobs}
+                  onChange={(event) => onExcludeChange(event.target.value)}
+                  placeholder="node_modules/**"
+                  disabled={!showTextControls}
+                />
+              </label>
+            </div>
+          </div>
         </div>
+        <div className="editor-workspace-search__summary">{summary}</div>
         <div className="editor-workspace-search__results">
-          {results.map((result) => (
-            <button
-              key={`${result.path}:${result.line}:${result.column}`}
-              type="button"
-              className="editor-workspace-search__result"
-              onClick={() => onSelectResult(result)}
-            >
-              <div className="editor-workspace-search__result-path">
-                {result.path}
-              </div>
-              <div className="editor-workspace-search__result-line">
-                <span className="editor-workspace-search__result-loc">
-                  {result.line}:{result.column}
-                </span>
-                <span className="editor-workspace-search__result-text">
-                  {highlightMatch(result.lineText, result.matchText)}
-                </span>
-              </div>
-            </button>
-          ))}
+          {(activeTab === "all" || activeTab === "actions") && actions.length > 0 ? (
+            <div className="editor-workspace-search__section">
+              <div className="editor-workspace-search__section-title">Actions</div>
+              {actions.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  className="editor-workspace-search__result"
+                  onClick={() => onSelectAction(action)}
+                >
+                  <div className="editor-workspace-search__result-path">
+                    {action.label}
+                  </div>
+                  {action.detail ? (
+                    <div className="editor-workspace-search__result-line">
+                      <span className="editor-workspace-search__result-text">
+                        {action.detail}
+                      </span>
+                    </div>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {(activeTab === "all" || activeTab === "files") && fileResults.length > 0 ? (
+            <div className="editor-workspace-search__section">
+              <div className="editor-workspace-search__section-title">Files</div>
+              {fileResults.map((path) => (
+                <button
+                  key={path}
+                  type="button"
+                  className="editor-workspace-search__result"
+                  onClick={() => onSelectFile(path)}
+                >
+                  <div className="editor-workspace-search__result-path">
+                    {path.split("/").pop() ?? path}
+                  </div>
+                  <div className="editor-workspace-search__result-line">
+                    <span className="editor-workspace-search__result-text">
+                      {path}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {(activeTab === "all" || activeTab === "text") && results.length > 0
+            ? results.map((result) => (
+                <button
+                  key={`${result.path}:${result.line}:${result.column}`}
+                  type="button"
+                  className="editor-workspace-search__result"
+                  onClick={() => onSelectResult(result)}
+                >
+                  <div className="editor-workspace-search__result-path">
+                    {result.path}
+                  </div>
+                  <div className="editor-workspace-search__result-line">
+                    <span className="editor-workspace-search__result-loc">
+                      {result.line}:{result.column}
+                    </span>
+                    <span className="editor-workspace-search__result-text">
+                      {highlightMatch(result.lineText, result.matchText)}
+                    </span>
+                  </div>
+                </button>
+              ))
+            : null}
         </div>
       </div>
     </div>

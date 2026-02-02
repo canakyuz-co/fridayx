@@ -46,6 +46,21 @@ type WorkspaceSearchResult = {
   matchText?: string | null;
 };
 
+type WorkspaceSearchTab =
+  | "all"
+  | "files"
+  | "actions"
+  | "text"
+  | "classes"
+  | "symbols";
+
+type WorkspaceSearchAction = {
+  id: string;
+  label: string;
+  detail?: string | null;
+  onSelect: () => void;
+};
+
 type EditorViewProps = {
   workspaceId: string | null;
   openPaths: string[];
@@ -132,6 +147,7 @@ export function EditorView({
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [workspaceSearchOpen, setWorkspaceSearchOpen] = useState(false);
+  const [workspaceSearchTab, setWorkspaceSearchTab] = useState<WorkspaceSearchTab>("all");
   const [workspaceSearchQuery, setWorkspaceSearchQuery] = useState("");
   const [workspaceSearchInclude, setWorkspaceSearchInclude] = useState("");
   const [workspaceSearchExclude, setWorkspaceSearchExclude] = useState(
@@ -156,6 +172,13 @@ export function EditorView({
   }, []);
 
   const openWorkspaceSearch = useCallback(() => {
+    setWorkspaceSearchTab("all");
+    setWorkspaceSearchOpen(true);
+    setCommandPaletteOpen(false);
+  }, []);
+
+  const openWorkspaceSearchWithTab = useCallback((tab: WorkspaceSearchTab) => {
+    setWorkspaceSearchTab(tab);
     setWorkspaceSearchOpen(true);
     setCommandPaletteOpen(false);
   }, []);
@@ -173,6 +196,7 @@ export function EditorView({
     setWorkspaceSearchQuery("");
     setWorkspaceSearchResults([]);
     setWorkspaceSearchError(null);
+    setWorkspaceSearchTab("all");
   }, [workspaceId]);
 
   const tabs = useMemo(
@@ -391,6 +415,58 @@ export function EditorView({
     workspaceSearchQuery,
   ]);
 
+  const workspaceSearchActions = useMemo<WorkspaceSearchAction[]>(() => {
+    const actions: WorkspaceSearchAction[] = [
+      {
+        id: "find",
+        label: "Find in file",
+        detail: "Search within the current file",
+        onSelect: openFind,
+      },
+      {
+        id: "replace",
+        label: "Replace in file",
+        detail: "Find and replace within the current file",
+        onSelect: openReplace,
+      },
+    ];
+    if (launchScript) {
+      actions.push({
+        id: "launch",
+        label: "Run workspace launch script",
+        detail: "Run the default workspace command",
+        onSelect: onRunLaunchScript,
+      });
+    }
+    for (const entry of launchScripts) {
+      const label = entry.label?.trim() || "Launch script";
+      actions.push({
+        id: `launch-${entry.id}`,
+        label: `Run ${label}`,
+        detail: label,
+        onSelect: () => onRunLaunchScriptEntry(entry.id),
+      });
+    }
+    return actions;
+  }, [
+    launchScript,
+    launchScripts,
+    onRunLaunchScript,
+    onRunLaunchScriptEntry,
+    openFind,
+    openReplace,
+  ]);
+
+  const workspaceSearchFileResults = useMemo(() => {
+    const normalized = workspaceSearchQuery.trim().toLowerCase();
+    if (!normalized) {
+      return [];
+    }
+    return availablePaths
+      .filter((path) => path.toLowerCase().includes(normalized))
+      .slice(0, 120);
+  }, [availablePaths, workspaceSearchQuery]);
+
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
       if (event.repeat) {
@@ -404,13 +480,26 @@ export function EditorView({
         if (now - shiftTapRef.current < 350) {
           shiftTapRef.current = 0;
           event.preventDefault();
-          openCommandPalette();
+          openWorkspaceSearchWithTab("files");
           return;
         }
         shiftTapRef.current = now;
         return;
       }
-      if (event.key.toLowerCase() === "p" && event.shiftKey && (event.metaKey || event.ctrlKey)) {
+      if (
+        event.key.toLowerCase() === "f" &&
+        event.shiftKey &&
+        (event.metaKey || event.ctrlKey)
+      ) {
+        event.preventDefault();
+        openWorkspaceSearchWithTab("text");
+        return;
+      }
+      if (
+        event.key.toLowerCase() === "p" &&
+        event.shiftKey &&
+        (event.metaKey || event.ctrlKey)
+      ) {
         if (editorKeymap === "vscode" || editorKeymap === "default") {
           event.preventDefault();
           openCommandPalette();
@@ -421,7 +510,7 @@ export function EditorView({
     return () => {
       window.removeEventListener("keydown", handleGlobalKeyDown, true);
     };
-  }, [commandPaletteOpen, editorKeymap, openCommandPalette]);
+  }, [commandPaletteOpen, editorKeymap, openCommandPalette, openWorkspaceSearchWithTab]);
 
   if (!workspaceId) {
     return <EditorPlaceholder hasWorkspace={false} />;
@@ -612,10 +701,14 @@ export function EditorView({
       />
       <EditorWorkspaceSearch
         isOpen={workspaceSearchOpen}
+        activeTab={workspaceSearchTab}
+        onTabChange={setWorkspaceSearchTab}
         query={workspaceSearchQuery}
         includeGlobs={workspaceSearchInclude}
         excludeGlobs={workspaceSearchExclude}
         results={workspaceSearchResults}
+        fileResults={workspaceSearchFileResults}
+        actions={workspaceSearchActions}
         isLoading={workspaceSearchLoading}
         error={workspaceSearchError}
         onClose={closeWorkspaceSearch}
@@ -629,6 +722,14 @@ export function EditorView({
             column: result.column,
           };
           onOpenPath(result.path);
+          closeWorkspaceSearch();
+        }}
+        onSelectFile={(path) => {
+          onOpenPath(path);
+          closeWorkspaceSearch();
+        }}
+        onSelectAction={(action) => {
+          action.onSelect();
           closeWorkspaceSearch();
         }}
       />
