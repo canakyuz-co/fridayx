@@ -505,8 +505,12 @@ export function useThreadMessaging({
       const provider = providerId ? otherAiProviders.find((p) => p.id === providerId) : null;
       const modelName = isOtherAiModel ? resolvedModel!.slice(colonIndex + 1) : null;
 
-        if (provider && provider.protocol === "acp") {
-        const command = provider.command?.trim();
+      if (provider && provider.protocol === "acp") {
+        const isInternalAcp =
+          provider.provider === "claude" || provider.provider === "gemini";
+        const command = isInternalAcp
+          ? `acp:${provider.provider}`
+          : provider.command?.trim();
         if (!command) {
           markProcessing(threadId, false);
           pushThreadErrorMessage(
@@ -544,10 +548,17 @@ export function useThreadMessaging({
           },
         };
         try {
+          const env = {
+            ...(provider.env ?? {}),
+            ...(provider.apiKey ? { API_KEY: provider.apiKey } : {}),
+          };
           const sessionId = await acpStartSession({
             command,
-            args: provider.args?.trim() ? provider.args.trim().split(/\\s+/) : [],
-            env: provider.env ?? undefined,
+            args:
+              isInternalAcp || !provider.args?.trim()
+                ? []
+                : provider.args.trim().split(/\\s+/),
+            env,
           });
           let response: unknown;
           let accumulatedText = "";
