@@ -114,6 +114,13 @@ enum DaemonEvent {
     AppServer(AppServerEvent),
     #[allow(dead_code)]
     TerminalOutput(TerminalOutput),
+    AcpEvent(AcpEventPayload),
+}
+
+#[derive(Clone, Serialize)]
+struct AcpEventPayload {
+    session_id: String,
+    payload: Value,
 }
 
 impl EventSink for DaemonEventSink {
@@ -195,6 +202,22 @@ impl DaemonState {
     ) -> Result<Value, String> {
         let mut host = self.acp_host.lock().await;
         host.send(&session_id, request).await
+    }
+
+    async fn acp_send_stream(
+        &self,
+        session_id: String,
+        request: Value,
+    ) -> Result<Value, String> {
+        let mut host = self.acp_host.lock().await;
+        let event_session_id = session_id.clone();
+        host.send_stream(&session_id, request, |event| {
+            let _ = self.event_sink.tx.send(DaemonEvent::AcpEvent(AcpEventPayload {
+                session_id: event_session_id.clone(),
+                payload: event.clone(),
+            }));
+        })
+        .await
     }
 
     async fn acp_stop_session(&self, session_id: String) -> Result<(), String> {
@@ -1470,6 +1493,10 @@ fn build_event_notification(event: DaemonEvent) -> Option<String> {
             "method": "terminal-output",
             "params": payload,
         }),
+        DaemonEvent::AcpEvent(payload) => json!({
+            "method": "acp-event",
+            "params": payload,
+        }),
     };
     serde_json::to_string(&payload).ok()
 }
@@ -1780,6 +1807,13 @@ async fn handle_rpc_request(
             let request = parse_optional_value(&params, "request")
                 .ok_or_else(|| "missing `request`".to_string())?;
             let response = state.acp_send(session_id, request).await?;
+            Ok(response)
+        }
+        "acp_send_stream" => {
+            let session_id = parse_string(&params, "sessionId")?;
+            let request = parse_optional_value(&params, "request")
+                .ok_or_else(|| "missing `request`".to_string())?;
+            let response = state.acp_send_stream(session_id, request).await?;
             Ok(response)
         }
         "acp_stop_session" => {

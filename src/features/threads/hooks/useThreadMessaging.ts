@@ -20,13 +20,15 @@ import {
   sendGeminiCliMessageSync,
   sendGeminiMessageSync,
   acpStartSession,
-  acpSend,
+  acpSendStream,
   acpStopSession,
   type ClaudeMessage,
   type ClaudeRateLimits,
   type ClaudeUsage,
   listMcpServerStatus as listMcpServerStatusService,
 } from "../../../services/tauri";
+import { subscribeAcpEvents } from "../../../services/events";
+import type { Unsubscribe } from "../../../services/events";
 import { expandCustomPromptText } from "../../../utils/customPrompts";
 import {
   asString,
@@ -198,6 +200,27 @@ function extractAcpText(payload: unknown): string | null {
       if (firstMessage && typeof firstMessage.content === "string") {
         return firstMessage.content;
       }
+    }
+  }
+  return null;
+}
+
+function extractAcpDelta(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const value = (payload as Record<string, unknown>).params ?? payload;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const delta =
+      (typeof record.delta === "string" && record.delta) ||
+      (typeof record.contentDelta === "string" && record.contentDelta) ||
+      (typeof record.content_delta === "string" && record.content_delta) ||
+      (typeof record.textDelta === "string" && record.textDelta) ||
+      (typeof record.text_delta === "string" && record.text_delta) ||
+      (typeof record.chunk === "string" && record.chunk);
+    if (delta) {
+      return delta;
     }
   }
   return null;
@@ -391,12 +414,57 @@ export function useThreadMessaging({
             env: provider.env ?? undefined,
           });
           let response: unknown;
+          let accumulatedText = "";
+          let unsubscribe: Unsubscribe | null = null;
+          const assistantMessageId = `assistant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          if (!isPlanMode) {
+            dispatch({
+              type: "upsertItem",
+              workspaceId: workspace.id,
+              threadId,
+              item: {
+                id: assistantMessageId,
+                kind: "message",
+                role: "assistant",
+                text: "",
+              },
+              hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+            });
+          }
           try {
-            response = await acpSend(sessionId, request);
+            unsubscribe = subscribeAcpEvents((event) => {
+              if (event.sessionId !== sessionId) {
+                return;
+              }
+              const delta = extractAcpDelta(event.payload);
+              if (!delta) {
+                return;
+              }
+              accumulatedText += delta;
+              if (isPlanMode) {
+                return;
+              }
+              dispatch({
+                type: "upsertItem",
+                workspaceId: workspace.id,
+                threadId,
+                item: {
+                  id: assistantMessageId,
+                  kind: "message",
+                  role: "assistant",
+                  text: accumulatedText,
+                },
+                hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+              });
+            });
+            response = await acpSendStream(sessionId, request);
           } finally {
+            if (unsubscribe) {
+              unsubscribe();
+            }
             await acpStopSession(sessionId).catch(() => {});
           }
-          const responseText = extractAcpText(response);
+          const responseText = accumulatedText || extractAcpText(response);
           if (!responseText) {
             throw new Error("ACP response did not include text.");
           }
@@ -425,7 +493,7 @@ export function useThreadMessaging({
               workspaceId: workspace.id,
               threadId,
               item: {
-                id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                id: assistantMessageId,
                 kind: "message",
                 role: "assistant",
                 text: formatPlanAsMessage(parsed),
@@ -438,7 +506,7 @@ export function useThreadMessaging({
               workspaceId: workspace.id,
               threadId,
               item: {
-                id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                id: assistantMessageId,
                 kind: "message",
                 role: "assistant",
                 text: responseText,

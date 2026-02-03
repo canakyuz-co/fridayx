@@ -1,7 +1,13 @@
 use std::collections::HashMap;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 use crate::state::AppState;
+
+#[derive(serde::Serialize, Clone)]
+struct AcpEvent {
+    session_id: String,
+    payload: serde_json::Value,
+}
 
 #[tauri::command]
 pub(crate) async fn acp_start_session(
@@ -23,6 +29,29 @@ pub(crate) async fn acp_send(
 ) -> Result<serde_json::Value, String> {
     let mut host = state.acp_host.lock().await;
     host.send(&session_id, request).await
+}
+
+#[tauri::command]
+pub(crate) async fn acp_send_stream(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let mut host = state.acp_host.lock().await;
+    let event_session_id = session_id.clone();
+    let response = host
+        .send_stream(&session_id, request, |event| {
+            let _ = app.emit(
+                "acp-event",
+                AcpEvent {
+                    session_id: event_session_id.clone(),
+                    payload: event.clone(),
+                },
+            );
+        })
+        .await?;
+    Ok(response)
 }
 
 #[tauri::command]

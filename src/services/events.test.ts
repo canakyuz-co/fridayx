@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import type { AppServerEvent } from "../types";
 import {
   subscribeAppServerEvents,
+  subscribeAcpEvents,
   subscribeLspNotifications,
   subscribeMenuCycleCollaborationMode,
   subscribeMenuCycleModel,
@@ -111,6 +112,33 @@ describe("events subscriptions", () => {
     };
     const event: Event<typeof payload> = {
       event: "lsp-notification",
+      id: 1,
+      payload,
+    };
+    listener(event);
+    expect(onEvent).toHaveBeenCalledWith(payload);
+
+    cleanup();
+  });
+
+  it("delivers ACP events to subscribers", async () => {
+    let listener: EventCallback<unknown> = () => {};
+    const unlisten = vi.fn();
+
+    vi.mocked(listen).mockImplementation((_event, handler) => {
+      listener = handler as EventCallback<unknown>;
+      return Promise.resolve(unlisten);
+    });
+
+    const onEvent = vi.fn();
+    const cleanup = subscribeAcpEvents(onEvent);
+
+    const payload = {
+      sessionId: "acp-session",
+      payload: { type: "delta", text: "hi" },
+    };
+    const event: Event<typeof payload> = {
+      event: "acp-event",
       id: 1,
       payload,
     };

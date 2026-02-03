@@ -16,6 +16,11 @@ export type LspNotificationEvent = {
   params: unknown;
 };
 
+export type AcpEvent = {
+  sessionId: string;
+  payload: unknown;
+};
+
 type SubscriptionOptions = {
   onError?: (error: unknown) => void;
 };
@@ -87,6 +92,7 @@ const appServerHub = createEventHub<AppServerEvent>("app-server-event");
 const dictationDownloadHub = createEventHub<DictationModelStatus>("dictation-download");
 const dictationEventHub = createEventHub<DictationEvent>("dictation-event");
 const lspNotificationHub = createEventHub<LspNotificationEvent>("lsp-notification");
+const acpEventHub = createEventHub<AcpEvent>("acp-event");
 const terminalOutputHub = createEventHub<TerminalOutputEvent>("terminal-output");
 const updaterCheckHub = createEventHub<void>("updater-check");
 const menuNewAgentHub = createEventHub<void>("menu-new-agent");
@@ -139,6 +145,13 @@ export function subscribeLspNotifications(
   options?: SubscriptionOptions,
 ): Unsubscribe {
   return lspNotificationHub.subscribe(onEvent, options);
+}
+
+export function subscribeAcpEvents(
+  onEvent: (event: AcpEvent) => void,
+  options?: SubscriptionOptions,
+): Unsubscribe {
+  return acpEventHub.subscribe(onEvent, options);
 }
 
 export function subscribeTerminalOutput(

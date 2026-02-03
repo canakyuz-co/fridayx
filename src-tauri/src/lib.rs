@@ -103,6 +103,7 @@ pub fn run() {
             ai_core::commands::ai_generate_stream,
             acp::acp_start_session,
             acp::acp_send,
+            acp::acp_send_stream,
             acp::acp_stop_session,
             claude_api::send_claude_message,
             claude_api::send_claude_message_sync,

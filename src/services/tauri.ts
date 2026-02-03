@@ -891,7 +891,14 @@ export async function acpSend(
   sessionId: string,
   request: unknown,
 ): Promise<unknown> {
-  return invoke("acp_send", { sessionId, request });
+  return invoke("acp_send_stream", { sessionId, request });
+}
+
+export async function acpSendStream(
+  sessionId: string,
+  request: unknown,
+): Promise<unknown> {
+  return invoke("acp_send_stream", { sessionId, request });
 }
 
 export async function acpStopSession(sessionId: string): Promise<void> {

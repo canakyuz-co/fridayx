@@ -70,13 +70,23 @@ impl AcpHost {
     }
 
     pub(crate) async fn send(&mut self, session_id: &str, payload: Value) -> Result<Value, String> {
+        self.send_stream(session_id, payload, |_| {}).await
+    }
+
+    pub(crate) async fn send_stream<F>(
+        &mut self,
+        session_id: &str,
+        payload: Value,
+        mut on_event: F,
+    ) -> Result<Value, String>
+    where
+        F: FnMut(&Value),
+    {
         let session = self
             .sessions
             .get_mut(session_id)
             .ok_or_else(|| "ACP session not found".to_string())?;
-        let request_id = payload
-            .get("id")
-            .and_then(|value| value.as_i64().map(|id| id.to_string()).or_else(|| value.as_str().map(|s| s.to_string())));
+        let request_id = extract_id(&payload);
         let body = serde_json::to_string(&payload)
             .map_err(|err| format!("ACP serialize failed: {err}"))?;
         let header = format!("Content-Length: {}\r\n\r\n", body.as_bytes().len());
@@ -98,10 +108,9 @@ impl AcpHost {
 
         loop {
             let response = read_message(&mut session.stdout).await?;
+            on_event(&response);
             if let Some(ref id) = request_id {
-                let response_id = response
-                    .get("id")
-                    .and_then(|value| value.as_i64().map(|v| v.to_string()).or_else(|| value.as_str().map(|s| s.to_string())));
+                let response_id = extract_id(&response);
                 if response_id.as_deref() != Some(id) {
                     continue;
                 }
@@ -118,6 +127,15 @@ fn build_session_id() -> String {
         .map(|duration| duration.as_millis())
         .unwrap_or(0);
     format!("acp-{millis}-{counter}")
+}
+
+fn extract_id(value: &Value) -> Option<String> {
+    value.get("id").and_then(|value| {
+        value
+            .as_i64()
+            .map(|id| id.to_string())
+            .or_else(|| value.as_str().map(|s| s.to_string()))
+    })
 }
 
 async fn read_message(reader: &mut BufReader<ChildStdout>) -> Result<Value, String> {
