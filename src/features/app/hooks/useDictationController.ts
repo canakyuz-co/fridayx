@@ -22,7 +22,10 @@ type DictationController = {
   cancelDictation: ReturnType<typeof useDictation>["cancel"];
 };
 
-export function useDictationController(appSettings: AppSettings): DictationController {
+export function useDictationController(
+  appSettings: AppSettings,
+  options?: { suppress?: boolean },
+): DictationController {
   const dictationModel = useDictationModel(appSettings.dictationModelId);
   const {
     state: dictationState,
@@ -38,12 +41,13 @@ export function useDictationController(appSettings: AppSettings): DictationContr
     clearHint: clearDictationHint,
   } = useDictation();
   const dictationReady = dictationModel.status?.state === "ready";
+  const dictationEnabled = appSettings.dictationEnabled && !options?.suppress;
   const holdDictationKey = (appSettings.dictationHoldKey ?? "").toLowerCase();
   const permissionRequestPendingRef = useRef(false);
   const permissionRequestedRef = useRef(false);
 
   const handleToggleDictation = useCallback(async () => {
-    if (!appSettings.dictationEnabled || !dictationReady) {
+    if (!dictationEnabled || !dictationReady) {
       return;
     }
     try {
@@ -58,8 +62,8 @@ export function useDictationController(appSettings: AppSettings): DictationContr
       // Errors are surfaced through dictation events.
     }
   }, [
-    appSettings.dictationEnabled,
     appSettings.dictationPreferredLanguage,
+    dictationEnabled,
     dictationReady,
     dictationState,
     startDictation,
@@ -89,7 +93,7 @@ export function useDictationController(appSettings: AppSettings): DictationContr
   }, []);
 
   useHoldToDictate({
-    enabled: appSettings.dictationEnabled,
+    enabled: dictationEnabled,
     ready: dictationReady,
     state: dictationState,
     preferredLanguage: appSettings.dictationPreferredLanguage,
@@ -100,7 +104,7 @@ export function useDictationController(appSettings: AppSettings): DictationContr
   });
 
   useEffect(() => {
-    if (!appSettings.dictationEnabled) {
+    if (!dictationEnabled) {
       permissionRequestedRef.current = false;
       return;
     }
@@ -123,7 +127,7 @@ export function useDictationController(appSettings: AppSettings): DictationContr
       .finally(() => {
         permissionRequestPendingRef.current = false;
       });
-  }, [appSettings.dictationEnabled, dictationReady]);
+  }, [dictationEnabled, dictationReady]);
 
 
   return {

@@ -199,6 +199,8 @@ export type AppSettings = {
   dictationModelId: string;
   dictationPreferredLanguage: string | null;
   dictationHoldKey: string | null;
+  voiceAssistantModelId: string;
+  voiceAssistantPreferredLanguage: string | null;
   ttsEnabled: boolean;
   ttsVoice: string | null;
   composerEditorPreset: ComposerEditorPreset;

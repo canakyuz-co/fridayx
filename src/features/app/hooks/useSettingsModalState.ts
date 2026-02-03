@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 export type SettingsSection =
   | "projects"
   | "display"
+  | "voice-assistant"
   | "dictation"
   | "shortcuts"
   | "open-apps"

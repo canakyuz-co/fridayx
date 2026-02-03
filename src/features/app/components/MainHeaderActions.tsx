@@ -49,7 +49,7 @@ export const MainHeaderActions = memo(function MainHeaderActions({
             ? voiceAssistantActive
               ? "Stop listening"
               : "Start listening"
-            : "Dictation model not ready"
+            : "Voice assistant model not ready"
         }
         disabled={!voiceAssistantReady}
         data-tauri-drag-region="false"
