@@ -931,18 +931,21 @@ export function useThreadMessaging({
             return;
           }
 
+          const promptText = isPlanMode
+            ? buildPlanPrompt(finalText, 0)
+            : buildOtherAiPrompt(recentHistory, finalText);
           const response = useCli
             ? await sendGeminiCliMessageSync(
                 provider.command!,
                 provider.args ?? null,
-                finalText,
+                promptText,
                 workspace.path,
                 provider.env ?? null,
               )
             : await sendGeminiMessageSync(
                 provider.apiKey!,
                 modelName,
-                finalText,
+                promptText,
               );
           dispatch({
             type: "upsertItem",
