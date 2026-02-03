@@ -24,11 +24,6 @@ type ThreadEventHandlersOptions = {
   pushThreadErrorMessage: (threadId: string, message: string) => void;
   onDebug?: (entry: DebugEntry) => void;
   onWorkspaceConnected: (workspaceId: string) => void;
-  onAssistantMessageCompleted?: (
-    workspaceId: string,
-    threadId: string,
-    text: string,
-  ) => void;
   applyCollabThreadLinks: (
     threadId: string,
     item: Record<string, unknown>,
@@ -50,7 +45,6 @@ export function useThreadEventHandlers({
   pushThreadErrorMessage,
   onDebug,
   onWorkspaceConnected,
-  onAssistantMessageCompleted,
   applyCollabThreadLinks,
   approvalAllowlistRef,
   pendingInterruptsRef,
@@ -81,7 +75,6 @@ export function useThreadEventHandlers({
     safeMessageActivity,
     recordThreadActivity,
     applyCollabThreadLinks,
-    onAssistantMessageCompleted,
   });
 
   const {

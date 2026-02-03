@@ -93,8 +93,6 @@ const defaultSettings: AppSettings = {
   dictationModelId: "base",
   dictationPreferredLanguage: null,
   dictationHoldKey: "alt",
-  ttsEnabled: false,
-  ttsVoice: null,
   composerEditorPreset: "default",
   composerFenceExpandOnSpace: false,
   composerFenceExpandOnEnter: false,
@@ -170,7 +168,6 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
     ...settings,
     codexBin: settings.codexBin?.trim() ? settings.codexBin.trim() : null,
     codexArgs: settings.codexArgs?.trim() ? settings.codexArgs.trim() : null,
-    ttsVoice: settings.ttsVoice?.trim() ? settings.ttsVoice.trim() : null,
     uiScale: clampUiScale(settings.uiScale),
     theme: allowedThemes.has(settings.theme) ? settings.theme : "system",
     uiFontFamily: normalizeFontWithLegacy(

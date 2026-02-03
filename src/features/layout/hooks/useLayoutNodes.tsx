@@ -3,7 +3,6 @@ import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
 import { Sidebar } from "../../app/components/Sidebar";
 import { Home } from "../../home/components/Home";
 import { MainHeader } from "../../app/components/MainHeader";
-import { FridayAura } from "../../app/components/FridayAura";
 import { Messages } from "../../messages/components/Messages";
 import { ApprovalToasts } from "../../app/components/ApprovalToasts";
 import { UpdateToast } from "../../update/components/UpdateToast";
@@ -457,7 +456,6 @@ type LayoutNodesResult = {
   homeNode: ReactNode;
   mainHeaderNode: ReactNode;
   desktopTopbarLeftNode: ReactNode;
-  desktopTopbarCenterNode?: ReactNode;
   tabletNavNode: ReactNode;
   tabBarNode: ReactNode;
   gitDiffPanelNode: ReactNode;
@@ -734,7 +732,6 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       {mainHeaderNode}
     </>
   );
-  const desktopTopbarCenterNode = <FridayAura />;
 
   const tabletNavNode = (
     <TabletNav activeTab={options.tabletNavTab} onSelect={options.onSelectTab} />
@@ -961,7 +958,6 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
     homeNode,
     mainHeaderNode,
     desktopTopbarLeftNode,
-    desktopTopbarCenterNode,
     tabletNavNode,
     tabBarNode,
     gitDiffPanelNode,

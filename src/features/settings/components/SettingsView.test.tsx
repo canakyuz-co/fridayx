@@ -87,8 +87,6 @@ const baseSettings: AppSettings = {
   dictationModelId: "base",
   dictationPreferredLanguage: null,
   dictationHoldKey: null,
-  ttsEnabled: false,
-  ttsVoice: null,
   composerEditorPreset: "default",
   composerFenceExpandOnSpace: false,
   composerFenceExpandOnEnter: false,

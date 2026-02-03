@@ -6,7 +6,6 @@ mod backend;
 mod codex;
 mod files;
 mod dictation;
-mod tts;
 mod event_sink;
 mod git;
 mod git_utils;
@@ -212,7 +211,6 @@ pub fn run() {
             dictation::dictation_request_permission,
             dictation::dictation_stop,
             dictation::dictation_cancel,
-            tts::tts_speak,
             local_usage::local_usage_snapshot,
             tasks::list_tasks,
             tasks::create_task,

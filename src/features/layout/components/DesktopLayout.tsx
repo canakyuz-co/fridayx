@@ -10,7 +10,6 @@ type DesktopLayoutProps = {
   showHome: boolean;
   showWorkspace: boolean;
   topbarLeftNode: ReactNode;
-  topbarCenterNode?: ReactNode;
   activeTab: "projects" | "codex" | "git" | "log" | "editor";
   centerMode: "chat" | "diff";
   messagesNode: ReactNode;
@@ -36,7 +35,6 @@ export function DesktopLayout({
   showHome,
   showWorkspace,
   topbarLeftNode,
-  topbarCenterNode,
   activeTab,
   centerMode,
   messagesNode,
@@ -108,7 +106,7 @@ export function DesktopLayout({
 
         {showWorkspace && (
           <>
-            <MainTopbar leftNode={topbarLeftNode} centerNode={topbarCenterNode} />
+            <MainTopbar leftNode={topbarLeftNode} />
             {approvalToastsNode}
             {showEditor ? (
               <div className="content">

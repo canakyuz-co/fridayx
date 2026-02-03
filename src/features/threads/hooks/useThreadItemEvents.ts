@@ -16,11 +16,6 @@ type UseThreadItemEventsOptions = {
     threadId: string,
     timestamp?: number,
   ) => void;
-  onAssistantMessageCompleted?: (
-    workspaceId: string,
-    threadId: string,
-    text: string,
-  ) => void;
   applyCollabThreadLinks: (
     threadId: string,
     item: Record<string, unknown>,
@@ -35,7 +30,6 @@ export function useThreadItemEvents({
   markReviewing,
   safeMessageActivity,
   recordThreadActivity,
-  onAssistantMessageCompleted,
   applyCollabThreadLinks,
 }: UseThreadItemEventsOptions) {
   const handleItemUpdate = useCallback(
@@ -167,7 +161,6 @@ export function useThreadItemEvents({
       if (threadId !== activeThreadId) {
         dispatch({ type: "markUnread", threadId, hasUnread: true });
       }
-      onAssistantMessageCompleted?.(workspaceId, threadId, text);
     },
     [
       activeThreadId,
@@ -175,7 +168,6 @@ export function useThreadItemEvents({
       getCustomName,
       recordThreadActivity,
       safeMessageActivity,
-      onAssistantMessageCompleted,
     ],
   );
 
