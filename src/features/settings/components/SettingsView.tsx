@@ -1018,8 +1018,10 @@ export function SettingsView({
     }
     const normalizedProvider = normalizeOtherAiProvider(provider, draft);
     const cliCommand = normalizedProvider.command?.trim() ?? "";
-    const useCli = normalizedProvider.protocol === "cli" && cliCommand.length > 0;
+    const canUseCli = cliCommand.length > 0;
     const apiKey = (draft.apiKey ?? provider.apiKey ?? "").trim();
+    const prefersCli = normalizedProvider.protocol === "cli";
+    const useCli = (prefersCli || !apiKey) && canUseCli;
     if (!useCli && !apiKey) {
       pushErrorToast({
         title: "API key required",
