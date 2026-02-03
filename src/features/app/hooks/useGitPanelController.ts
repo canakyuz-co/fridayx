@@ -117,7 +117,8 @@ export function useGitPanelController({
   const gitPanelVisible = Boolean(
     activeWorkspace && (!isCompact ? activeTab !== "editor" : compactTab === "git"),
   );
-  const shouldLoadGitLog = gitPanelVisible && gitPanelMode === "log";
+  const shouldLoadGitLog =
+    gitPanelVisible && (gitPanelMode === "log" || diffUiVisible);
 
   const {
     diffs: gitDiffs,

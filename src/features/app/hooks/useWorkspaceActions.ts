@@ -1,8 +1,6 @@
 import type { RefObject } from "react";
 import { useCallback } from "react";
-import * as Sentry from "@sentry/react";
 import { useNewAgentShortcut } from "./useNewAgentShortcut";
-import { pushErrorToast } from "../../../services/toasts";
 import type { DebugEntry, WorkspaceInfo } from "../../../types";
 
 type Params = {
@@ -10,12 +8,11 @@ type Params = {
   isCompact: boolean;
   addWorkspace: () => Promise<WorkspaceInfo | null>;
   addWorkspaceFromPath: (path: string) => Promise<WorkspaceInfo | null>;
-  connectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
-  startThreadForWorkspace: (workspaceId: string) => Promise<string | null>;
   setActiveThreadId: (threadId: string | null, workspaceId: string) => void;
   setActiveTab: (tab: "projects" | "codex" | "git" | "log" | "editor") => void;
   exitDiffView: () => void;
   selectWorkspace: (workspaceId: string) => void;
+  onStartNewAgentDraft: (workspaceId: string) => void;
   openWorktreePrompt: (workspace: WorkspaceInfo) => void;
   openClonePrompt: (workspace: WorkspaceInfo) => void;
   composerInputRef: RefObject<HTMLTextAreaElement | null>;
@@ -27,12 +24,11 @@ export function useWorkspaceActions({
   isCompact,
   addWorkspace,
   addWorkspaceFromPath,
-  connectWorkspace,
-  startThreadForWorkspace,
   setActiveThreadId,
   setActiveTab,
   exitDiffView,
   selectWorkspace,
+  onStartNewAgentDraft,
   openWorktreePrompt,
   openClonePrompt,
   composerInputRef,
@@ -91,49 +87,23 @@ export function useWorkspaceActions({
 
   const handleAddAgent = useCallback(
     async (workspace: WorkspaceInfo) => {
-      try {
-        exitDiffView();
-        selectWorkspace(workspace.id);
-        if (!workspace.connected) {
-          await connectWorkspace(workspace);
-        }
-        const threadId = await startThreadForWorkspace(workspace.id);
-        if (threadId) {
-          Sentry.metrics.count("agent_created", 1, {
-            attributes: {
-              workspace_id: workspace.id,
-              thread_id: threadId,
-            },
-          });
-        }
-        if (isCompact) {
-          setActiveTab("codex");
-        }
-        setTimeout(() => composerInputRef.current?.focus(), 0);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        onDebug({
-          id: `${Date.now()}-client-add-agent-error`,
-          timestamp: Date.now(),
-          source: "error",
-          label: "agent/add error",
-          payload: message,
-        });
-        pushErrorToast({
-          title: "Failed to create agent",
-          message,
-        });
+      exitDiffView();
+      selectWorkspace(workspace.id);
+      setActiveThreadId(null, workspace.id);
+      onStartNewAgentDraft(workspace.id);
+      if (isCompact) {
+        setActiveTab("codex");
       }
+      setTimeout(() => composerInputRef.current?.focus(), 0);
     },
     [
       composerInputRef,
-      connectWorkspace,
       exitDiffView,
       isCompact,
-      onDebug,
+      onStartNewAgentDraft,
       selectWorkspace,
+      setActiveThreadId,
       setActiveTab,
-      startThreadForWorkspace,
     ],
   );
 

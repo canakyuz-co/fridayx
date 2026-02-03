@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { Dispatch, MutableRefObject } from "react";
 import type {
   ConversationItem,
@@ -59,6 +59,8 @@ export function useThreadActions({
   replaceOnResumeRef,
   applyCollabThreadLinksFromThread,
 }: UseThreadActionsOptions) {
+  const resumeInFlightByThreadRef = useRef<Record<string, number>>({});
+
   const extractThreadId = useCallback((response: Record<string, any>) => {
     const result = response.result ?? null;
     const threadId =
@@ -152,6 +154,12 @@ export function useThreadActions({
         label: "thread/resume",
         payload: { workspaceId, threadId },
       });
+      const inFlightCount =
+        (resumeInFlightByThreadRef.current[threadId] ?? 0) + 1;
+      resumeInFlightByThreadRef.current[threadId] = inFlightCount;
+      if (inFlightCount === 1) {
+        dispatch({ type: "setThreadResumeLoading", threadId, isLoading: true });
+      }
       try {
         const response =
           (await resumeThreadService(workspaceId, threadId)) as
@@ -211,7 +219,7 @@ export function useThreadActions({
               type: "setThreadName",
               workspaceId,
               threadId,
-              name: previewThreadName(preview, `Agent ${threadId.slice(0, 4)}`),
+              name: previewThreadName(preview, "New Agent"),
             });
           }
           const lastAgentMessage = [...mergedItems]
@@ -243,6 +251,17 @@ export function useThreadActions({
           payload: error instanceof Error ? error.message : String(error),
         });
         return null;
+      } finally {
+        const nextCount = Math.max(
+          0,
+          (resumeInFlightByThreadRef.current[threadId] ?? 1) - 1,
+        );
+        if (nextCount === 0) {
+          delete resumeInFlightByThreadRef.current[threadId];
+          dispatch({ type: "setThreadResumeLoading", threadId, isLoading: false });
+        } else {
+          resumeInFlightByThreadRef.current[threadId] = nextCount;
+        }
       }
     },
     [

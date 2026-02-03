@@ -1,4 +1,4 @@
-import { useCallback, useReducer, useRef } from "react";
+import { useCallback, useMemo, useReducer, useRef } from "react";
 import * as Sentry from "@sentry/react";
 import type { CustomPromptOption, DebugEntry, OtherAiProvider, WorkspaceInfo } from "../../../types";
 import type { ClaudeRateLimits, ClaudeUsage } from "../../../services/tauri";
@@ -15,6 +15,7 @@ import { useThreadRateLimits } from "./useThreadRateLimits";
 import { useThreadSelectors } from "./useThreadSelectors";
 import { useThreadStatus } from "./useThreadStatus";
 import { useThreadUserInput } from "./useThreadUserInput";
+import { setThreadName as setThreadNameService } from "../../../services/tauri";
 import { makeCustomNameKey, saveCustomName } from "../utils/threadStorage";
 
 type UseThreadsOptions = {
@@ -25,6 +26,7 @@ type UseThreadsOptions = {
   effort?: string | null;
   collaborationMode?: Record<string, unknown> | null;
   accessMode?: "read-only" | "current" | "full-access";
+  reviewDeliveryMode?: "inline" | "detached";
   steerEnabled?: boolean;
   customPrompts?: CustomPromptOption[];
   otherAiProviders?: OtherAiProvider[];
@@ -41,6 +43,7 @@ export function useThreads({
   effort,
   collaborationMode,
   accessMode,
+  reviewDeliveryMode = "inline",
   steerEnabled = false,
   customPrompts = [],
   otherAiProviders = [],
@@ -52,6 +55,9 @@ export function useThreads({
   const loadedThreadsRef = useRef<Record<string, boolean>>({});
   const replaceOnResumeRef = useRef<Record<string, boolean>>({});
   const pendingInterruptsRef = useRef<Set<string>>(new Set());
+  const planByThreadRef = useRef(state.planByThread);
+  const detachedReviewNoticeRef = useRef<Set<string>>(new Set());
+  planByThreadRef.current = state.planByThread;
   const { approvalAllowlistRef, handleApprovalDecision, handleApprovalRemember } =
     useThreadApprovals({ dispatch, onDebug });
   const { handleUserInputSubmit } = useThreadUserInput({ dispatch });
@@ -128,15 +134,75 @@ export function useThreads({
     [onWorkspaceConnected, refreshAccountRateLimits, refreshAccountInfo],
   );
 
+  const handleAccountUpdated = useCallback(
+    (workspaceId: string) => {
+      void refreshAccountRateLimits(workspaceId);
+      void refreshAccountInfo(workspaceId);
+    },
+    [refreshAccountRateLimits, refreshAccountInfo],
+  );
+
   const isThreadHidden = useCallback(
     (workspaceId: string, threadId: string) =>
       Boolean(state.hiddenThreadIdsByWorkspace[workspaceId]?.[threadId]),
     [state.hiddenThreadIdsByWorkspace],
   );
 
-  const handlers = useThreadEventHandlers({
+  const handleReviewExited = useCallback(
+    (workspaceId: string, threadId: string) => {
+      const parentId = state.threadParentById[threadId];
+      if (!parentId || parentId === threadId) {
+        return;
+      }
+      const parentStatus = state.threadStatusById[parentId];
+      if (!parentStatus?.isReviewing) {
+        return;
+      }
+
+      markReviewing(parentId, false);
+      markProcessing(parentId, false);
+      setActiveTurnId(parentId, null);
+
+      const timestamp = Date.now();
+      recordThreadActivity(workspaceId, parentId, timestamp);
+      dispatch({
+        type: "setThreadTimestamp",
+        workspaceId,
+        threadId: parentId,
+        timestamp,
+      });
+      const noticeKey = `${parentId}->${threadId}`;
+      const alreadyNotified = detachedReviewNoticeRef.current.has(noticeKey);
+      if (!alreadyNotified) {
+        detachedReviewNoticeRef.current.add(noticeKey);
+        dispatch({
+          type: "addAssistantMessage",
+          threadId: parentId,
+          text: `Detached review completed. [Open review thread](/thread/${threadId})`,
+        });
+      }
+      if (parentId !== activeThreadId) {
+        dispatch({ type: "markUnread", threadId: parentId, hasUnread: true });
+      }
+      safeMessageActivity();
+    },
+    [
+      activeThreadId,
+      dispatch,
+      markProcessing,
+      markReviewing,
+      recordThreadActivity,
+      safeMessageActivity,
+      setActiveTurnId,
+      state.threadParentById,
+      state.threadStatusById,
+    ],
+  );
+
+  const threadHandlers = useThreadEventHandlers({
     activeThreadId,
     dispatch,
+    planByThreadRef,
     getCustomName,
     isThreadHidden,
     markProcessing,
@@ -148,9 +214,26 @@ export function useThreads({
     onDebug,
     onWorkspaceConnected: handleWorkspaceConnected,
     applyCollabThreadLinks,
+    onReviewExited: handleReviewExited,
     approvalAllowlistRef,
     pendingInterruptsRef,
   });
+
+  const handleAccountLoginCompleted = useCallback(
+    (workspaceId: string) => {
+      handleAccountUpdated(workspaceId);
+    },
+    [handleAccountUpdated],
+  );
+
+  const handlers = useMemo(
+    () => ({
+      ...threadHandlers,
+      onAccountUpdated: handleAccountUpdated,
+      onAccountLoginCompleted: handleAccountLoginCompleted,
+    }),
+    [threadHandlers, handleAccountUpdated, handleAccountLoginCompleted],
+  );
 
   useAppServerEvents(handlers);
 
@@ -238,6 +321,7 @@ export function useThreads({
     startFork,
     startReview,
     startResume,
+    startApps,
     startMcp,
     startStatus,
     reviewPrompt,
@@ -267,6 +351,7 @@ export function useThreads({
     model,
     effort,
     collaborationMode,
+    reviewDeliveryMode,
     steerEnabled,
     customPrompts,
     otherAiProviders,
@@ -332,8 +417,19 @@ export function useThreads({
       const key = makeCustomNameKey(workspaceId, threadId);
       customNamesRef.current[key] = newName;
       dispatch({ type: "setThreadName", workspaceId, threadId, name: newName });
+      void Promise.resolve(
+        setThreadNameService(workspaceId, threadId, newName),
+      ).catch((error) => {
+        onDebug?.({
+          id: `${Date.now()}-client-thread-rename-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "thread/name/set error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+      });
     },
-    [customNamesRef, dispatch],
+    [customNamesRef, dispatch, onDebug],
   );
 
   return {
@@ -345,6 +441,7 @@ export function useThreads({
     threadsByWorkspace: state.threadsByWorkspace,
     threadParentById: state.threadParentById,
     threadStatusById: state.threadStatusById,
+    threadResumeLoadingById: state.threadResumeLoadingById,
     threadListLoadingByWorkspace: state.threadListLoadingByWorkspace,
     threadListPagingByWorkspace: state.threadListPagingByWorkspace,
     threadListCursorByWorkspace: state.threadListCursorByWorkspace,
@@ -376,6 +473,7 @@ export function useThreads({
     startFork,
     startReview,
     startResume,
+    startApps,
     startMcp,
     startStatus,
     reviewPrompt,

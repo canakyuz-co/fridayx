@@ -6,9 +6,11 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent,
+  type RefObject,
 } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type {
+  AppOption,
   CustomPromptOption,
   DictationTranscript,
   ModelOption,
@@ -71,6 +73,8 @@ type WorkspaceHomeProps = {
   threadStatusById: Record<string, ThreadStatus>;
   onSelectInstance: (workspaceId: string, threadId: string) => void;
   skills: SkillOption[];
+  appsEnabled: boolean;
+  apps: AppOption[];
   prompts: CustomPromptOption[];
   files: string[];
   dictationEnabled: boolean;
@@ -84,6 +88,8 @@ type WorkspaceHomeProps = {
   onDismissDictationHint: () => void;
   dictationTranscript: DictationTranscript | null;
   onDictationTranscriptHandled: (id: string) => void;
+  textareaRef?: RefObject<HTMLTextAreaElement | null>;
+  onFileAutocompleteActiveChange?: (active: boolean) => void;
   agentMdContent: string;
   agentMdExists: boolean;
   agentMdTruncated: boolean;
@@ -146,6 +152,8 @@ export function WorkspaceHome({
   threadStatusById,
   onSelectInstance,
   skills,
+  appsEnabled,
+  apps,
   prompts,
   files,
   dictationEnabled,
@@ -159,6 +167,8 @@ export function WorkspaceHome({
   onDismissDictationHint,
   dictationTranscript,
   onDictationTranscriptHandled,
+  textareaRef: textareaRefProp,
+  onFileAutocompleteActiveChange,
   agentMdContent,
   agentMdExists,
   agentMdTruncated,
@@ -181,7 +191,8 @@ export function WorkspaceHome({
   const iconSrc = useMemo(() => convertFileSrc(iconPath), [iconPath]);
   const runModeRef = useRef<HTMLDivElement | null>(null);
   const modelsRef = useRef<HTMLDivElement | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const fallbackTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const textareaRef = textareaRefProp ?? fallbackTextareaRef;
   const {
     activeImages,
     attachImages,
@@ -195,23 +206,30 @@ export function WorkspaceHome({
   const {
     isAutocompleteOpen,
     autocompleteMatches,
+    autocompleteAnchorIndex,
     highlightIndex,
     setHighlightIndex,
     applyAutocomplete,
     handleInputKeyDown,
     handleTextChange,
     handleSelectionChange,
+    fileTriggerActive,
   } = useComposerAutocompleteState({
     text: prompt,
     selectionStart,
     disabled: isSubmitting,
+    appsEnabled,
     skills,
+    apps,
     prompts,
     files,
     textareaRef,
     setText: onPromptChange,
     setSelectionStart,
   });
+  useEffect(() => {
+    onFileAutocompleteActiveChange?.(fileTriggerActive);
+  }, [fileTriggerActive, onFileAutocompleteActiveChange]);
   const {
     handleHistoryKeyDown,
     handleHistoryTextChange,
@@ -247,7 +265,11 @@ export function WorkspaceHome({
       return;
     }
     const cursor =
-      textarea.selectionStart ?? selectionStart ?? prompt.length ?? 0;
+      autocompleteAnchorIndex ??
+      textarea.selectionStart ??
+      selectionStart ??
+      prompt.length ??
+      0;
     const caret = getCaretPosition(textarea, cursor);
     if (!caret) {
       return;
@@ -266,7 +288,7 @@ export function WorkspaceHome({
       bottom: "auto",
       right: "auto",
     });
-  }, [isAutocompleteOpen, prompt, selectionStart]);
+  }, [autocompleteAnchorIndex, isAutocompleteOpen, prompt, selectionStart, textareaRef]);
 
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
@@ -322,6 +344,7 @@ export function WorkspaceHome({
     prompt,
     resetHistoryNavigation,
     selectionStart,
+    textareaRef,
   ]);
 
   const handleRunSubmit = async () => {

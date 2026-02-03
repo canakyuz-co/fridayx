@@ -48,6 +48,7 @@ const baseSettings: AppSettings = {
     },
   ],
   defaultAccessMode: "current",
+  reviewDeliveryMode: "inline",
   composerModelShortcut: null,
   composerAccessShortcut: null,
   composerReasoningShortcut: null,
@@ -78,11 +79,14 @@ const baseSettings: AppSettings = {
     "\"Geist Mono\", \"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace",
   codeFontSize: 11,
   notificationSoundsEnabled: true,
+  systemNotificationsEnabled: true,
   preloadGitDiffs: true,
   experimentalCollabEnabled: false,
-  experimentalCollaborationModesEnabled: false,
+  collaborationModesEnabled: true,
   experimentalSteerEnabled: false,
   experimentalUnifiedExecEnabled: false,
+  experimentalAppsEnabled: false,
+  personality: "friendly",
   dictationEnabled: false,
   dictationModelId: "base",
   dictationPreferredLanguage: null,
@@ -157,6 +161,7 @@ const renderDisplaySection = (
     scaleShortcutTitle: "Scale shortcut",
     scaleShortcutText: "Use Command +/-",
     onTestNotificationSound: vi.fn(),
+    onTestSystemNotification: vi.fn(),
     dictationModelStatus: null,
     onDownloadDictationModel: vi.fn(),
     onCancelDictationDownload: vi.fn(),
@@ -167,6 +172,50 @@ const renderDisplaySection = (
   fireEvent.click(screen.getByRole("button", { name: "Display & Sound" }));
 
   return { onUpdateAppSettings, onToggleTransparency };
+};
+
+const renderFeaturesSection = (
+  options: {
+    appSettings?: Partial<AppSettings>;
+    onUpdateAppSettings?: ComponentProps<typeof SettingsView>["onUpdateAppSettings"];
+  } = {},
+) => {
+  cleanup();
+  const onUpdateAppSettings =
+    options.onUpdateAppSettings ?? vi.fn().mockResolvedValue(undefined);
+  const props: ComponentProps<typeof SettingsView> = {
+    reduceTransparency: false,
+    onToggleTransparency: vi.fn(),
+    appSettings: { ...baseSettings, ...options.appSettings },
+    openAppIconById: {},
+    onUpdateAppSettings,
+    workspaceGroups: [],
+    groupedWorkspaces: [],
+    ungroupedLabel: "Ungrouped",
+    onClose: vi.fn(),
+    onMoveWorkspace: vi.fn(),
+    onDeleteWorkspace: vi.fn(),
+    onCreateWorkspaceGroup: vi.fn().mockResolvedValue(null),
+    onRenameWorkspaceGroup: vi.fn().mockResolvedValue(null),
+    onMoveWorkspaceGroup: vi.fn().mockResolvedValue(null),
+    onDeleteWorkspaceGroup: vi.fn().mockResolvedValue(null),
+    onAssignWorkspaceGroup: vi.fn().mockResolvedValue(null),
+    onRunDoctor: vi.fn().mockResolvedValue(createDoctorResult()),
+    onUpdateWorkspaceCodexBin: vi.fn().mockResolvedValue(undefined),
+    onUpdateWorkspaceSettings: vi.fn().mockResolvedValue(undefined),
+    scaleShortcutTitle: "Scale shortcut",
+    scaleShortcutText: "Use Command +/-",
+    onTestNotificationSound: vi.fn(),
+    onTestSystemNotification: vi.fn(),
+    dictationModelStatus: null,
+    onDownloadDictationModel: vi.fn(),
+    onCancelDictationDownload: vi.fn(),
+    onRemoveDictationModel: vi.fn(),
+    initialSection: "features",
+  };
+
+  render(<SettingsView {...props} />);
+  return { onUpdateAppSettings };
 };
 
 describe("SettingsView Display", () => {
@@ -386,6 +435,7 @@ describe("SettingsView Codex overrides", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
         dictationModelStatus={null}
         onDownloadDictationModel={vi.fn()}
         onCancelDictationDownload={vi.fn()}
@@ -402,6 +452,70 @@ describe("SettingsView Codex overrides", () => {
       expect(onUpdateWorkspaceSettings).toHaveBeenCalledWith("w1", {
         codexArgs: "--profile dev",
       });
+    });
+  });
+
+  it("updates review mode in codex section", async () => {
+    cleanup();
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={baseSettings}
+        openAppIconById={{}}
+        onUpdateAppSettings={onUpdateAppSettings}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="codex"
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Review mode"), {
+      target: { value: "detached" },
+    });
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ reviewDeliveryMode: "detached" }),
+      );
+    });
+  });
+});
+
+describe("SettingsView Features", () => {
+  it("updates personality selection", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderFeaturesSection({ onUpdateAppSettings });
+
+    fireEvent.change(screen.getByLabelText("Personality"), {
+      target: { value: "pragmatic" },
+    });
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ personality: "pragmatic" }),
+      );
     });
   });
 });
@@ -433,6 +547,7 @@ describe("SettingsView Shortcuts", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
         dictationModelStatus={null}
         onDownloadDictationModel={vi.fn()}
         onCancelDictationDownload={vi.fn()}
@@ -473,6 +588,7 @@ describe("SettingsView Shortcuts", () => {
         scaleShortcutTitle="Scale shortcut"
         scaleShortcutText="Use Command +/-"
         onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
         dictationModelStatus={null}
         onDownloadDictationModel={vi.fn()}
         onCancelDictationDownload={vi.fn()}

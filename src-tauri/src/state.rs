@@ -3,11 +3,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 use tokio::sync::Mutex;
-use tokio::sync::oneshot;
 
 use crate::dictation::DictationState;
 use crate::lsp::LspManager;
 use crate::shared::acp_core::AcpHost;
+use crate::shared::codex_core::CodexLoginCancelState;
 use crate::storage::{read_settings, read_workspaces};
 use crate::types::{AppSettings, WorkspaceEntry};
 
@@ -23,7 +23,7 @@ pub(crate) struct AppState {
     pub(crate) dictation: Mutex<DictationState>,
     pub(crate) lsp_manager: Mutex<LspManager>,
     pub(crate) acp_host: Mutex<AcpHost>,
-    pub(crate) codex_login_cancels: Mutex<HashMap<String, oneshot::Sender<()>>>,
+    pub(crate) codex_login_cancels: Mutex<HashMap<String, CodexLoginCancelState>>,
 }
 
 impl AppState {

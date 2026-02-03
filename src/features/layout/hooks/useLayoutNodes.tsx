@@ -30,6 +30,7 @@ import type {
   ComposerEditorSettings,
   CustomPromptOption,
   AccountSnapshot,
+  AppOption,
   DebugEntry,
   DictationSessionState,
   DictationTranscript,
@@ -106,9 +107,12 @@ type LayoutNodesOptions = {
   }>;
   hasWorkspaceGroups: boolean;
   deletingWorktreeIds: Set<string>;
+  newAgentDraftWorkspaceId?: string | null;
+  startingDraftThreadWorkspaceId?: string | null;
   threadsByWorkspace: Record<string, ThreadSummary[]>;
   threadParentById: Record<string, string>;
   threadStatusById: Record<string, ThreadActivityStatus>;
+  threadResumeLoadingById: Record<string, boolean>;
   threadListLoadingByWorkspace: Record<string, boolean>;
   threadListPagingByWorkspace: Record<string, boolean>;
   threadListCursorByWorkspace: Record<string, string | null>;
@@ -156,6 +160,7 @@ type LayoutNodesOptions = {
   onAddCloneAgent: (workspace: WorkspaceInfo) => Promise<void>;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
   onSelectThread: (workspaceId: string, threadId: string) => void;
+  onOpenThreadLink: (threadId: string) => void;
   onDeleteThread: (workspaceId: string, threadId: string) => void;
   onSyncThread: (workspaceId: string, threadId: string) => void;
   pinThread: (workspaceId: string, threadId: string) => boolean;
@@ -320,12 +325,18 @@ type LayoutNodesOptions = {
   onCommit?: () => void | Promise<void>;
   onCommitAndPush?: () => void | Promise<void>;
   onCommitAndSync?: () => void | Promise<void>;
+  onPull?: () => void | Promise<void>;
+  onFetch?: () => void | Promise<void>;
   onPush?: () => void | Promise<void>;
   onSync?: () => void | Promise<void>;
   commitLoading?: boolean;
+  pullLoading?: boolean;
+  fetchLoading?: boolean;
   pushLoading?: boolean;
   syncLoading?: boolean;
   commitError?: string | null;
+  pullError?: string | null;
+  fetchError?: string | null;
   pushError?: string | null;
   syncError?: string | null;
   commitsAhead?: number;
@@ -354,6 +365,7 @@ type LayoutNodesOptions = {
   onQueue: (text: string, images: string[]) => void | Promise<void>;
   onStop: () => void;
   canStop: boolean;
+  onFileAutocompleteActiveChange?: (active: boolean) => void;
   isReviewing: boolean;
   isProcessing: boolean;
   steerEnabled: boolean;
@@ -409,9 +421,12 @@ type LayoutNodesOptions = {
   accessMode: AccessMode;
   onSelectAccessMode: (mode: AccessMode) => void;
   skills: SkillOption[];
+  appsEnabled: boolean;
+  apps: AppOption[];
   prompts: CustomPromptOption[];
   files: string[];
   onInsertComposerText: (text: string) => void;
+  canInsertComposerText: boolean;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   composerEditorSettings: ComposerEditorSettings;
   composerEditorExpanded: boolean;
@@ -480,6 +495,8 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       groupedWorkspaces={options.groupedWorkspaces}
       hasWorkspaceGroups={options.hasWorkspaceGroups}
       deletingWorktreeIds={options.deletingWorktreeIds}
+      newAgentDraftWorkspaceId={options.newAgentDraftWorkspaceId}
+      startingDraftThreadWorkspaceId={options.startingDraftThreadWorkspaceId}
       threadsByWorkspace={options.threadsByWorkspace}
       threadParentById={options.threadParentById}
       threadStatusById={options.threadStatusById}
@@ -540,9 +557,11 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       codeBlockCopyUseModifier={options.codeBlockCopyUseModifier}
       userInputRequests={options.userInputRequests}
       onUserInputSubmit={options.handleUserInputSubmit}
-      isThinking={
+      onOpenThreadLink={options.onOpenThreadLink}
+      isThinking={options.isProcessing}
+      isLoadingMessages={
         options.activeThreadId
-          ? options.threadStatusById[options.activeThreadId]?.isProcessing ?? false
+          ? options.threadResumeLoadingById[options.activeThreadId] ?? false
           : false
       }
       processingStartedAt={activeThreadStatus?.processingStartedAt ?? null}
@@ -557,6 +576,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       onStop={options.onStop}
       canStop={options.canStop}
       disabled={options.isReviewing}
+      onFileAutocompleteActiveChange={options.onFileAutocompleteActiveChange}
       contextUsage={options.activeTokenUsage}
       queuedMessages={options.activeQueue}
       sendLabel={
@@ -590,6 +610,8 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       accessMode={options.accessMode}
       onSelectAccessMode={options.onSelectAccessMode}
       skills={options.skills}
+      appsEnabled={options.appsEnabled}
+      apps={options.apps}
       prompts={options.prompts}
       files={options.files}
       textareaRef={options.textareaRef}
@@ -751,11 +773,18 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         workspaceId={options.activeWorkspace.id}
         workspacePath={options.activeWorkspace.path}
         files={options.files}
+        modifiedFiles={[
+          ...new Set([
+            ...options.gitStatus.stagedFiles.map((file) => file.path),
+            ...options.gitStatus.unstagedFiles.map((file) => file.path),
+          ]),
+        ]}
         isLoading={options.fileTreeLoading}
         filePanelMode={options.filePanelMode}
         onFilePanelModeChange={options.onFilePanelModeChange}
         onInsertText={options.onInsertComposerText}
         onOpenFile={options.onOpenFile}
+        canInsertText={options.canInsertComposerText}
         openTargets={options.openAppTargets}
         openAppIconById={options.openAppIconById}
         selectedOpenAppId={options.selectedOpenAppId}
@@ -784,6 +813,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
   } else {
     gitDiffPanelNode = (
       <GitDiffPanel
+        workspaceId={options.activeWorkspace?.id ?? null}
         mode={options.gitPanelMode}
         onModeChange={options.onGitPanelModeChange}
         filePanelMode={options.filePanelMode}
@@ -849,12 +879,18 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         onCommit={options.onCommit}
         onCommitAndPush={options.onCommitAndPush}
         onCommitAndSync={options.onCommitAndSync}
+        onPull={options.onPull}
+        onFetch={options.onFetch}
         onPush={options.onPush}
         onSync={options.onSync}
         commitLoading={options.commitLoading}
+        pullLoading={options.pullLoading}
+        fetchLoading={options.fetchLoading}
         pushLoading={options.pushLoading}
         syncLoading={options.syncLoading}
         commitError={options.commitError}
+        pullError={options.pullError}
+        fetchError={options.fetchError}
         pushError={options.pushError}
         syncError={options.syncError}
         commitsAhead={options.commitsAhead}

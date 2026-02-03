@@ -21,6 +21,11 @@ export type AcpEvent = {
   payload: unknown;
 };
 
+export type TerminalExitEvent = {
+  workspaceId: string;
+  terminalId: string;
+};
+
 type SubscriptionOptions = {
   onError?: (error: unknown) => void;
 };
@@ -94,6 +99,7 @@ const dictationEventHub = createEventHub<DictationEvent>("dictation-event");
 const lspNotificationHub = createEventHub<LspNotificationEvent>("lsp-notification");
 const acpEventHub = createEventHub<AcpEvent>("acp-event");
 const terminalOutputHub = createEventHub<TerminalOutputEvent>("terminal-output");
+const terminalExitHub = createEventHub<TerminalExitEvent>("terminal-exit");
 const updaterCheckHub = createEventHub<void>("updater-check");
 const menuNewAgentHub = createEventHub<void>("menu-new-agent");
 const menuNewWorktreeAgentHub = createEventHub<void>("menu-new-worktree-agent");
@@ -159,6 +165,13 @@ export function subscribeTerminalOutput(
   options?: SubscriptionOptions,
 ): Unsubscribe {
   return terminalOutputHub.subscribe(onEvent, options);
+}
+
+export function subscribeTerminalExit(
+  onEvent: (event: TerminalExitEvent) => void,
+  options?: SubscriptionOptions,
+): Unsubscribe {
+  return terminalExitHub.subscribe(onEvent, options);
 }
 
 export function subscribeUpdaterCheck(

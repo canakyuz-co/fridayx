@@ -362,6 +362,8 @@ pub(crate) struct AppSettings {
     pub(crate) other_ai_providers: Vec<OtherAiProvider>,
     #[serde(default = "default_access_mode", rename = "defaultAccessMode")]
     pub(crate) default_access_mode: String,
+    #[serde(default = "default_review_delivery_mode", rename = "reviewDeliveryMode")]
+    pub(crate) review_delivery_mode: String,
     #[serde(
         default = "default_composer_model_shortcut",
         rename = "composerModelShortcut"
@@ -469,15 +471,20 @@ pub(crate) struct AppSettings {
     #[serde(default = "default_preload_git_diffs", rename = "preloadGitDiffs")]
     pub(crate) preload_git_diffs: bool,
     #[serde(
+        default = "default_system_notifications_enabled",
+        rename = "systemNotificationsEnabled"
+    )]
+    pub(crate) system_notifications_enabled: bool,
+    #[serde(
         default = "default_experimental_collab_enabled",
         rename = "experimentalCollabEnabled"
     )]
     pub(crate) experimental_collab_enabled: bool,
     #[serde(
-        default = "default_experimental_collaboration_modes_enabled",
-        rename = "experimentalCollaborationModesEnabled"
+        default = "default_collaboration_modes_enabled",
+        rename = "collaborationModesEnabled"
     )]
-    pub(crate) experimental_collaboration_modes_enabled: bool,
+    pub(crate) collaboration_modes_enabled: bool,
     #[serde(
         default = "default_experimental_steer_enabled",
         rename = "experimentalSteerEnabled"
@@ -488,6 +495,16 @@ pub(crate) struct AppSettings {
         rename = "experimentalUnifiedExecEnabled"
     )]
     pub(crate) experimental_unified_exec_enabled: bool,
+    #[serde(
+        default = "default_experimental_apps_enabled",
+        rename = "experimentalAppsEnabled"
+    )]
+    pub(crate) experimental_apps_enabled: bool,
+    #[serde(
+        default = "default_personality",
+        rename = "personality"
+    )]
+    pub(crate) personality: String,
     #[serde(default = "default_dictation_enabled", rename = "dictationEnabled")]
     pub(crate) dictation_enabled: bool,
     #[serde(
@@ -546,6 +563,10 @@ impl Default for BackendMode {
 
 fn default_access_mode() -> String {
     "current".to_string()
+}
+
+fn default_review_delivery_mode() -> String {
+    "inline".to_string()
 }
 
 fn default_remote_backend_host() -> String {
@@ -702,6 +723,10 @@ fn default_notification_sounds_enabled() -> bool {
     true
 }
 
+fn default_system_notifications_enabled() -> bool {
+    true
+}
+
 fn default_preload_git_diffs() -> bool {
     true
 }
@@ -710,8 +735,8 @@ fn default_experimental_collab_enabled() -> bool {
     false
 }
 
-fn default_experimental_collaboration_modes_enabled() -> bool {
-    false
+fn default_collaboration_modes_enabled() -> bool {
+    true
 }
 
 fn default_experimental_steer_enabled() -> bool {
@@ -720,6 +745,14 @@ fn default_experimental_steer_enabled() -> bool {
 
 fn default_experimental_unified_exec_enabled() -> bool {
     false
+}
+
+fn default_experimental_apps_enabled() -> bool {
+    false
+}
+
+fn default_personality() -> String {
+    "friendly".to_string()
 }
 
 fn default_dictation_enabled() -> bool {
@@ -875,6 +908,7 @@ impl Default for AppSettings {
             remote_backend_token: None,
             other_ai_providers: default_other_ai_providers(),
             default_access_mode: "current".to_string(),
+            review_delivery_mode: default_review_delivery_mode(),
             composer_model_shortcut: default_composer_model_shortcut(),
             composer_access_shortcut: default_composer_access_shortcut(),
             composer_reasoning_shortcut: default_composer_reasoning_shortcut(),
@@ -903,11 +937,14 @@ impl Default for AppSettings {
             code_font_family: default_code_font_family(),
             code_font_size: default_code_font_size(),
             notification_sounds_enabled: true,
+            system_notifications_enabled: true,
             preload_git_diffs: default_preload_git_diffs(),
             experimental_collab_enabled: false,
-            experimental_collaboration_modes_enabled: false,
+            collaboration_modes_enabled: true,
             experimental_steer_enabled: false,
             experimental_unified_exec_enabled: false,
+            experimental_apps_enabled: false,
+            personality: default_personality(),
             dictation_enabled: false,
             dictation_model_id: default_dictation_model_id(),
             dictation_preferred_language: None,
@@ -945,6 +982,7 @@ mod tests {
         assert_eq!(settings.other_ai_providers[0].id, "claude");
         assert_eq!(settings.other_ai_providers[1].id, "gemini");
         assert_eq!(settings.default_access_mode, "current");
+        assert_eq!(settings.review_delivery_mode, "inline");
         assert_eq!(
             settings.composer_model_shortcut.as_deref(),
             Some("cmd+shift+m")
@@ -1005,8 +1043,12 @@ mod tests {
         assert!(settings.code_font_family.contains("Geist Mono"));
         assert_eq!(settings.code_font_size, 11);
         assert!(settings.notification_sounds_enabled);
+        assert!(settings.system_notifications_enabled);
         assert!(settings.preload_git_diffs);
+        assert!(settings.collaboration_modes_enabled);
         assert!(!settings.experimental_steer_enabled);
+        assert!(!settings.experimental_apps_enabled);
+        assert_eq!(settings.personality, "friendly");
         assert!(!settings.dictation_enabled);
         assert_eq!(settings.dictation_model_id, "base");
         assert!(settings.dictation_preferred_language.is_none());

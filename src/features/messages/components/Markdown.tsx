@@ -23,6 +23,7 @@ type MarkdownProps = {
   codeBlockCopyUseModifier?: boolean;
   onOpenFileLink?: (path: string) => void;
   onOpenFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
+  onOpenThreadLink?: (threadId: string) => void;
 };
 
 type CodeBlockProps = {
@@ -283,6 +284,7 @@ export function Markdown({
   codeBlockCopyUseModifier = false,
   onOpenFileLink,
   onOpenFileLinkMenu,
+  onOpenThreadLink,
 }: MarkdownProps) {
   const normalizedValue = codeBlock ? value : normalizeListIndentation(value);
   const content = codeBlock
@@ -304,6 +306,25 @@ export function Markdown({
   const components: Components = {
     a: ({ href, children }) => {
       const url = href ?? "";
+      const threadId = url.startsWith("thread://")
+        ? url.slice("thread://".length).trim()
+        : url.startsWith("/thread/")
+          ? url.slice("/thread/".length).trim()
+          : "";
+      if (threadId) {
+        return (
+          <a
+            href={href}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onOpenThreadLink?.(threadId);
+            }}
+          >
+            {children}
+          </a>
+        );
+      }
       if (isFileLinkUrl(url)) {
         const path = decodeFileLink(url);
         return (

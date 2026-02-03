@@ -5,8 +5,8 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use git2::{BranchType, DiffOptions, Repository, Sort, Status, StatusOptions};
 use serde_json::json;
 use tauri::State;
-use tokio::process::Command;
 
+use crate::shared::process_core::tokio_command;
 use crate::git_utils::{
     checkout_branch, commit_to_entry, diff_patch_to_string, diff_stats_for_path,
     image_mime_type, list_git_roots as scan_git_roots, parse_github_repo, resolve_git_root,
@@ -47,7 +47,7 @@ fn read_image_base64(path: &Path) -> Option<String> {
 
 async fn run_git_command(repo_root: &Path, args: &[&str]) -> Result<(), String> {
     let git_bin = resolve_git_binary().map_err(|e| format!("Failed to run git: {e}"))?;
-    let output = Command::new(git_bin)
+    let output = tokio_command(git_bin)
         .args(args)
         .current_dir(repo_root)
         .env("PATH", git_env_path())
@@ -172,6 +172,10 @@ fn upstream_remote_and_branch(repo_root: &Path) -> Result<Option<(String, String
 async fn push_with_upstream(repo_root: &Path) -> Result<(), String> {
     let upstream = upstream_remote_and_branch(repo_root)?;
     if let Some((remote, branch)) = upstream {
+        // Refresh remote-tracking refs before push so ahead/behind state is current
+        // and we can surface pull/sync requirements before attempting the push.
+        // This is best-effort because some setups intentionally allow push but not fetch.
+        let _ = run_git_command(repo_root, &["fetch", "--prune", remote.as_str()]).await;
         let refspec = format!("HEAD:{branch}");
         return run_git_command(
             repo_root,
@@ -180,6 +184,58 @@ async fn push_with_upstream(repo_root: &Path) -> Result<(), String> {
         .await;
     }
     run_git_command(repo_root, &["push"]).await
+}
+
+async fn fetch_with_default_remote(repo_root: &Path) -> Result<(), String> {
+    let upstream = upstream_remote_and_branch(repo_root)?;
+    if let Some((remote, _)) = upstream {
+        return run_git_command(repo_root, &["fetch", "--prune", remote.as_str()]).await;
+    }
+    run_git_command(repo_root, &["fetch", "--prune"]).await
+}
+
+async fn pull_with_default_strategy(repo_root: &Path) -> Result<(), String> {
+    fn autostash_unsupported(lower: &str) -> bool {
+        lower.contains("unknown option") && lower.contains("autostash")
+    }
+
+    fn needs_reconcile_strategy(lower: &str) -> bool {
+        lower.contains("need to specify how to reconcile divergent branches")
+            || lower.contains("you have divergent branches")
+    }
+
+    // Respect user/repo git config first, while still allowing dirty worktrees.
+    match run_git_command(repo_root, &["pull", "--autostash"]).await {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            let lower = err.to_lowercase();
+            if autostash_unsupported(&lower) {
+                match run_git_command(repo_root, &["pull"]).await {
+                    Ok(()) => Ok(()),
+                    Err(no_autostash_err) => {
+                        let no_autostash_lower = no_autostash_err.to_lowercase();
+                        if needs_reconcile_strategy(&no_autostash_lower) {
+                            return run_git_command(repo_root, &["pull", "--no-rebase"]).await;
+                        }
+                        Err(no_autostash_err)
+                    }
+                }
+            } else if needs_reconcile_strategy(&lower) {
+                match run_git_command(repo_root, &["pull", "--no-rebase", "--autostash"]).await {
+                    Ok(()) => Ok(()),
+                    Err(merge_err) => {
+                        let merge_lower = merge_err.to_lowercase();
+                        if autostash_unsupported(&merge_lower) {
+                            return run_git_command(repo_root, &["pull", "--no-rebase"]).await;
+                        }
+                        Err(merge_err)
+                    }
+                }
+            } else {
+                Err(err)
+            }
+        }
+    }
 }
 
 fn status_for_index(status: Status) -> Option<&'static str> {
@@ -689,7 +745,22 @@ pub(crate) async fn pull_git(
         .clone();
 
     let repo_root = resolve_git_root(&entry)?;
-    run_git_command(&repo_root, &["pull"]).await
+    pull_with_default_strategy(&repo_root).await
+}
+
+#[tauri::command]
+pub(crate) async fn fetch_git(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+
+    let repo_root = resolve_git_root(&entry)?;
+    fetch_with_default_remote(&repo_root).await
 }
 
 #[tauri::command]
@@ -705,7 +776,7 @@ pub(crate) async fn sync_git(
 
     let repo_root = resolve_git_root(&entry)?;
     // Pull first, then push (like VSCode sync)
-    run_git_command(&repo_root, &["pull"]).await?;
+    pull_with_default_strategy(&repo_root).await?;
     push_with_upstream(&repo_root).await
 }
 
@@ -1127,7 +1198,7 @@ pub(crate) async fn get_github_issues(
     let repo_root = resolve_git_root(&entry)?;
     let repo_name = github_repo_from_path(&repo_root)?;
 
-    let output = Command::new("gh")
+    let output = tokio_command("gh")
         .args([
             "issue",
             "list",
@@ -1162,7 +1233,7 @@ pub(crate) async fn get_github_issues(
 
     let search_query = format!("repo:{repo_name} is:issue is:open");
     let search_query = search_query.replace(' ', "+");
-    let total = match Command::new("gh")
+    let total = match tokio_command("gh")
         .args([
             "api",
             &format!("/search/issues?q={search_query}"),
@@ -1197,7 +1268,7 @@ pub(crate) async fn get_github_pull_requests(
     let repo_root = resolve_git_root(&entry)?;
     let repo_name = github_repo_from_path(&repo_root)?;
 
-    let output = Command::new("gh")
+    let output = tokio_command("gh")
         .args([
             "pr",
             "list",
@@ -1234,7 +1305,7 @@ pub(crate) async fn get_github_pull_requests(
 
     let search_query = format!("repo:{repo_name} is:pr is:open");
     let search_query = search_query.replace(' ', "+");
-    let total = match Command::new("gh")
+    let total = match tokio_command("gh")
         .args([
             "api",
             &format!("/search/issues?q={search_query}"),
@@ -1273,7 +1344,7 @@ pub(crate) async fn get_github_pull_request_diff(
     let repo_root = resolve_git_root(&entry)?;
     let repo_name = github_repo_from_path(&repo_root)?;
 
-    let output = Command::new("gh")
+    let output = tokio_command("gh")
         .args([
             "pr",
             "diff",
@@ -1325,7 +1396,7 @@ pub(crate) async fn get_github_pull_request_comments(
         format!("/repos/{repo_name}/issues/{pr_number}/comments?per_page=30");
     let jq_filter = r#"[.[] | {id, body, createdAt: .created_at, url: .html_url, author: (if .user then {login: .user.login} else null end)}]"#;
 
-    let output = Command::new("gh")
+    let output = tokio_command("gh")
         .args(["api", &comments_endpoint, "--jq", jq_filter])
         .current_dir(&repo_root)
         .output()

@@ -486,6 +486,15 @@
   min-width: 0;
 }
 
+.composer-suggestion-section {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 6px 8px 2px;
+}
+
 .composer-suggestion:hover,
 .composer-suggestion.is-active {
   background: var(--surface-item);
@@ -513,6 +522,12 @@
   height: 14px;
 }
 
+.composer-suggestion-icon-image {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
 .composer-suggestion-content {
   display: flex;
   flex-direction: column;
@@ -525,18 +540,18 @@
   font-size: 12px;
   font-weight: 600;
   width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .composer-suggestion-description {
   font-size: 10px;
   color: var(--text-muted);
   width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .composer-bar {

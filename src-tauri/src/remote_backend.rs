@@ -254,6 +254,9 @@ async fn read_loop(
             "acp-event" => {
                 let _ = app.emit("acp-event", params);
             }
+            "terminal-exit" => {
+                let _ = app.emit("terminal-exit", params);
+            }
             _ => {}
         }
     }

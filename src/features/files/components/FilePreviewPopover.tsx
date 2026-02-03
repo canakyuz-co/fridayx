@@ -24,6 +24,7 @@ type FilePreviewPopoverProps = {
   onLineMouseUp?: (index: number, event: MouseEvent<HTMLButtonElement>) => void;
   onClearSelection: () => void;
   onAddSelection: () => void;
+  canInsertText?: boolean;
   onClose: () => void;
   selectionHints?: string[];
   style?: CSSProperties;
@@ -49,6 +50,7 @@ export function FilePreviewPopover({
   onLineMouseUp,
   onClearSelection,
   onAddSelection,
+  canInsertText = true,
   onClose,
   selectionHints = [],
   style,
@@ -180,7 +182,7 @@ export function FilePreviewPopover({
                 type="button"
                 className="primary file-preview-action file-preview-action--add"
                 onClick={onAddSelection}
-                disabled={!selection}
+                disabled={!selection || !canInsertText}
               >
                 Add to chat
               </button>

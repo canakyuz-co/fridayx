@@ -24,6 +24,7 @@ const LEGACY_UI_FONT_FAMILY =
   "\"SF Pro Text\", \"SF Pro Display\", -apple-system, \"Helvetica Neue\", sans-serif";
 const LEGACY_CODE_FONT_FAMILY =
   "\"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace";
+const allowedPersonality = new Set(["friendly", "pragmatic"]);
 
 const defaultSettings: AppSettings = {
   codexBin: null,
@@ -56,6 +57,7 @@ const defaultSettings: AppSettings = {
     },
   ],
   defaultAccessMode: "current",
+  reviewDeliveryMode: "inline",
   composerModelShortcut: "cmd+shift+m",
   composerAccessShortcut: "cmd+shift+a",
   composerReasoningShortcut: "cmd+shift+r",
@@ -84,11 +86,14 @@ const defaultSettings: AppSettings = {
   codeFontFamily: DEFAULT_CODE_FONT_FAMILY,
   codeFontSize: CODE_FONT_SIZE_DEFAULT,
   notificationSoundsEnabled: true,
+  systemNotificationsEnabled: true,
   preloadGitDiffs: true,
   experimentalCollabEnabled: false,
-  experimentalCollaborationModesEnabled: false,
+  collaborationModesEnabled: true,
   experimentalSteerEnabled: false,
   experimentalUnifiedExecEnabled: false,
+  experimentalAppsEnabled: false,
+  personality: "friendly",
   dictationEnabled: false,
   dictationModelId: "base",
   dictationPreferredLanguage: null,
@@ -186,6 +191,11 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
       ? settings.editorKeymap
       : "jetbrains",
     otherAiProviders: normalizedOtherAiProviders,
+    personality: allowedPersonality.has(settings.personality)
+      ? settings.personality
+      : "friendly",
+    reviewDeliveryMode:
+      settings.reviewDeliveryMode === "detached" ? "detached" : "inline",
     openAppTargets: normalizedTargets,
     selectedOpenAppId,
   };

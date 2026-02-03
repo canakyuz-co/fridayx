@@ -15,6 +15,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import ChevronsUpDown from "lucide-react/dist/esm/icons/chevrons-up-down";
+import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import Search from "lucide-react/dist/esm/icons/search";
 import FilePlus from "lucide-react/dist/esm/icons/file-plus";
 import FolderPlus from "lucide-react/dist/esm/icons/folder-plus";
@@ -30,6 +31,7 @@ import {
 import type { OpenAppTarget } from "../../../types";
 import { languageFromPath } from "../../../utils/syntax";
 import { getFileIconDescriptor } from "../../../utils/fileIcons";
+import { getFileTypeIconUrl } from "../../../utils/fileTypeIcons";
 import { FilePreviewPopover } from "./FilePreviewPopover";
 
 type FileTreeNode = {
@@ -43,10 +45,12 @@ type FileTreePanelProps = {
   workspaceId: string;
   workspacePath: string;
   files: string[];
+  modifiedFiles: string[];
   isLoading: boolean;
   filePanelMode: PanelTabId;
   onFilePanelModeChange: (mode: PanelTabId) => void;
   onInsertText?: (text: string) => void;
+  canInsertText: boolean;
   showTabs?: boolean;
   showMentionActions?: boolean;
   onOpenFile?: (path: string) => void;
@@ -155,10 +159,12 @@ export function FileTreePanel({
   workspaceId,
   workspacePath,
   files,
+  modifiedFiles,
   isLoading,
   filePanelMode,
   onFilePanelModeChange,
   onInsertText,
+  canInsertText,
   showTabs = true,
   showMentionActions = true,
   onOpenFile,
@@ -170,6 +176,7 @@ export function FileTreePanel({
 }: FileTreePanelProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
+  const [filterMode, setFilterMode] = useState<"all" | "modified">("all");
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [previewAnchor, setPreviewAnchor] = useState<{
     top: number;
@@ -193,21 +200,26 @@ export function FileTreePanel({
   const showLoading = isLoading && files.length === 0;
   const deferredQuery = useDeferredValue(query);
   const normalizedQuery = deferredQuery.trim().toLowerCase();
+  const modifiedPathSet = useMemo(() => new Set(modifiedFiles), [modifiedFiles]);
   const previewKind = useMemo(
     () => (previewPath && isImagePath(previewPath) ? "image" : "text"),
     [previewPath],
   );
 
   const filteredFiles = useMemo(() => {
+    const baseFiles =
+      filterMode === "modified"
+        ? files.filter((path) => modifiedPathSet.has(path))
+        : files;
     if (!normalizedQuery) {
-      return files;
+      return baseFiles;
     }
-    return files.filter((path) => path.toLowerCase().includes(normalizedQuery));
-  }, [files, normalizedQuery]);
+    return baseFiles.filter((path) => path.toLowerCase().includes(normalizedQuery));
+  }, [files, filterMode, modifiedPathSet, normalizedQuery]);
 
   const { nodes, folderPaths } = useMemo(
-    () => buildTree(normalizedQuery ? filteredFiles : files),
-    [files, filteredFiles, normalizedQuery],
+    () => buildTree(filteredFiles),
+    [filteredFiles],
   );
 
   const visibleFolderPaths = folderPaths;
@@ -590,7 +602,13 @@ export function FileTreePanel({
   );
 
   const handleAddSelection = useCallback(() => {
-    if (previewKind !== "text" || !previewPath || !previewSelection || !onInsertText) {
+    if (
+      !canInsertText ||
+      previewKind !== "text" ||
+      !previewPath ||
+      !previewSelection ||
+      !onInsertText
+    ) {
       return;
     }
     const lines = previewContent.split("\n");
@@ -604,6 +622,7 @@ export function FileTreePanel({
     onInsertText(snippet);
     closePreview();
   }, [
+    canInsertText,
     previewContent,
     previewKind,
     previewPath,
@@ -617,6 +636,14 @@ export function FileTreePanel({
       event.preventDefault();
       event.stopPropagation();
       const items = [] as MenuItem[];
+      if (!isFolder && canInsertText && onInsertText) {
+        items.push(
+          await MenuItem.new({
+            text: "Add to chat",
+            action: () => onInsertText(relativePath),
+          }),
+        );
+      }
       if (isFolder) {
         items.push(
           await MenuItem.new({
@@ -655,11 +682,13 @@ export function FileTreePanel({
       await menu.popup(position, window);
     },
     [
+      canInsertText,
       handleCreateFile,
       handleCreateFolder,
       handleDeletePath,
       handleMovePath,
       handleRenamePath,
+      onInsertText,
       resolvePath,
     ],
   );
@@ -667,6 +696,7 @@ export function FileTreePanel({
   const renderNode = (node: FileTreeNode, depth: number) => {
     const isFolder = node.type === "folder";
     const isExpanded = isFolder && expandedFolders.has(node.path);
+    const fileTypeIconUrl = !isFolder ? getFileTypeIconUrl(node.path) : null;
     return (
       <div key={node.path}>
         <div className="file-tree-row-wrap">
@@ -702,7 +732,7 @@ export function FileTreePanel({
                 return (
                   <img
                     className="file-tree-icon-img"
-                    src={icon.src}
+                    src={fileTypeIconUrl ?? icon.src}
                     alt=""
                     loading="lazy"
                     aria-hidden
@@ -712,7 +742,7 @@ export function FileTreePanel({
             </span>
             <span className="file-tree-name">{node.name}</span>
           </button>
-          {!isFolder && showMentionActions && onInsertText && (
+          {!isFolder && showMentionActions && canInsertText && onInsertText && (
             <button
               type="button"
               className="ghost icon-button file-tree-action"
@@ -744,14 +774,18 @@ export function FileTreePanel({
         ) : null}
         <div className="file-tree-meta">
           <div className="file-tree-count">
-          {filteredFiles.length
-            ? normalizedQuery
-              ? `${filteredFiles.length} match${filteredFiles.length === 1 ? "" : "es"}`
-              : `${filteredFiles.length} file${filteredFiles.length === 1 ? "" : "s"}`
-            : showLoading
-              ? "Loading files"
-              : "No files"}
-        </div>
+            {filteredFiles.length
+              ? normalizedQuery
+                ? `${filteredFiles.length} match${filteredFiles.length === 1 ? "" : "es"}`
+                : filterMode === "modified"
+                  ? `${filteredFiles.length} modified`
+                  : `${filteredFiles.length} file${filteredFiles.length === 1 ? "" : "s"}`
+              : showLoading
+                ? "Loading files"
+                : filterMode === "modified"
+                  ? "No modified"
+                  : "No files"}
+          </div>
           <div className="file-tree-actions" role="group" aria-label="File actions">
             <button
               type="button"
@@ -807,6 +841,22 @@ export function FileTreePanel({
           onChange={(event) => setQuery(event.target.value)}
           aria-label="Filter files and folders"
         />
+        <button
+          type="button"
+          className={`ghost icon-button file-tree-search-filter${
+            filterMode === "modified" ? " is-active" : ""
+          }`}
+          onClick={() => {
+            setFilterMode((prev) => (prev === "all" ? "modified" : "all"));
+          }}
+          aria-pressed={filterMode === "modified"}
+          aria-label={
+            filterMode === "modified" ? "Show all files" : "Show modified files only"
+          }
+          title={filterMode === "modified" ? "Show all files" : "Show modified files only"}
+        >
+          <GitBranch size={14} aria-hidden />
+        </button>
       </div>
       <div className="file-tree-list">
         {showLoading ? (
@@ -821,7 +871,13 @@ export function FileTreePanel({
           </div>
         ) : nodes.length === 0 ? (
           <div className="file-tree-empty">
-            {normalizedQuery ? "No matches found." : "No files available."}
+            {normalizedQuery
+              ? filterMode === "modified"
+                ? "No modified files match your filter."
+                : "No matches found."
+              : filterMode === "modified"
+                ? "No modified files."
+                : "No files available."}
           </div>
         ) : (
           nodes.map((node) => renderNode(node, 0))

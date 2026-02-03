@@ -529,6 +529,17 @@ export function buildConversationItem(
       : asString(item.content ?? "");
     return { id, kind: "reasoning", summary, content };
   }
+  if (type === "plan") {
+    return {
+      id,
+      kind: "tool",
+      toolType: "plan",
+      title: "Plan",
+      detail: asString(item.status ?? ""),
+      status: asString(item.status ?? ""),
+      output: asString(item.text ?? ""),
+    };
+  }
   if (type === "commandExecution") {
     const command = Array.isArray(item.command)
       ? item.command.map((part) => asString(part)).join(" ")
@@ -651,6 +662,18 @@ export function buildConversationItem(
       title: "Image view",
       detail: asString(item.path ?? ""),
       status: "",
+      output: "",
+    };
+  }
+  if (type === "contextCompaction") {
+    const status = asString(item.status ?? "").trim();
+    return {
+      id,
+      kind: "tool",
+      toolType: type,
+      title: "Context compaction",
+      detail: "Compacting conversation context to fit token limits.",
+      status: status || "completed",
       output: "",
     };
   }

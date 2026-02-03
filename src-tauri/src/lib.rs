@@ -12,6 +12,7 @@ mod git_utils;
 mod local_usage;
 mod lsp;
 mod menu;
+mod notifications;
 mod prompts;
 mod remote_backend;
 mod rules;
@@ -98,6 +99,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             ai_core::commands::ai_provider_status,
             ai_core::commands::ai_generate_stream,
@@ -148,6 +150,7 @@ pub fn run() {
             codex::list_threads,
             codex::list_mcp_server_status,
             codex::archive_thread,
+            codex::set_thread_name,
             codex::collaboration_mode_list,
             workspaces::connect_workspace,
             git::get_git_status,
@@ -164,6 +167,7 @@ pub fn run() {
             git::commit_git,
             git::push_git,
             git::pull_git,
+            git::fetch_git,
             git::sync_git,
             git::get_github_issues,
             git::get_github_pull_requests,
@@ -188,6 +192,7 @@ pub fn run() {
             codex::codex_login,
             codex::codex_login_cancel,
             codex::skills_list,
+            codex::apps_list,
             prompts::prompts_list,
             prompts::prompts_create,
             prompts::prompts_update,
@@ -216,7 +221,9 @@ pub fn run() {
             tasks::create_task,
             tasks::update_task,
             tasks::set_task_status,
-            tasks::delete_task
+            tasks::delete_task,
+            notifications::is_macos_debug_build,
+            notifications::send_notification_fallback
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
