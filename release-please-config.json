@@ -4,7 +4,7 @@
   "bump-patch-for-minor-pre-major": true,
   "packages": {
     ".": {
-      "package-name": "friday",
+      "package-name": "fridex",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         "src-tauri/tauri.conf.json"

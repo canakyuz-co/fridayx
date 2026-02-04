@@ -1,7 +1,7 @@
 # Architecture V2: Universal AI Companion (Project JARVIS)
 
 ## 1. Executive Summary
-This architecture document outlines the transformation of "Friday" from a specialized Codex frontend into a **Universal, Hybrid AI Companion**. The goal is to create a personal desktop assistant that is:
+This architecture document outlines the transformation of "Fridex" from a specialized Codex frontend into a **Universal, Hybrid AI Companion**. The goal is to create a personal desktop assistant that is:
 - **Engine Agnostic:** Can switch between Claude, Gemini, Ollama (Local), and Shell.
 - **Cost Efficient:** Prioritizes free (Gemini Flash) and local (Ollama) tiers.
 - **Interactive:** Supports Voice Input/Output (STT/TTS) and "Companion Mode" (overlay UI).
@@ -238,4 +238,4 @@ type IssueAction =
 - **Shell Safety:** Never auto-execute shell commands without confirmation.
 
 ---
-*Created by: Gemini CLI for Project Friday/Jarvis*
+*Created by: Gemini CLI for Project Fridex/Jarvis*

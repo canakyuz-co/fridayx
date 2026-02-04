@@ -1,7 +1,7 @@
 # LLM Olgunlaşma ve Ölçekleme Notları
 
 ## Amaç
-Bu belge, LLM'lerin ölçekleme sınırlarına yaklaşması tartışmasının Friday ile entegre edilecek bağımsız AI servis mimarisine etkilerini özetler. Hedef, kararları abartıdan arındırıp ölçülebilir stratejilere bağlamaktır.
+Bu belge, LLM'lerin ölçekleme sınırlarına yaklaşması tartışmasının Fridex ile entegre edilecek bağımsız AI servis mimarisine etkilerini özetler. Hedef, kararları abartıdan arındırıp ölçülebilir stratejilere bağlamaktır.
 
 ## Gözlemler (Yüksek Seviye)
 - Ölçekleme getirileri azalıyor: daha büyük model = daha büyük sıçrama beklentisi zayıflıyor.
@@ -33,4 +33,4 @@ Bu belge, LLM'lerin ölçekleme sınırlarına yaklaşması tartışmasının Fr
 - Kullanıcı geri bildirim skoru
 
 ## Sonuç
-LLM ölçekleme çağının olgunlaşması, Friday için bir gerileme değil; daha iyi mühendislik ve daha güvenilir ürün tasarımı için fırsattır. Bu nedenle mimaride doğrulanabilirlik, policy ve telemetry temel tasarım taşıdır.
+LLM ölçekleme çağının olgunlaşması, Fridex için bir gerileme değil; daha iyi mühendislik ve daha güvenilir ürün tasarımı için fırsattır. Bu nedenle mimaride doğrulanabilirlik, policy ve telemetry temel tasarım taşıdır.

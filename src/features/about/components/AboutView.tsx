@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
-const GITHUB_URL = "https://github.com/Dimillian/Friday";
-const TWITTER_URL = "https://x.com/dimillian";
+const GITHUB_URL = "https://github.com/canakyuz/Fridex";
+const TWITTER_URL = "https://x.com/canakyuz";
 
 export function AboutView() {
   const [version, setVersion] = useState<string | null>(null);
@@ -44,9 +44,9 @@ export function AboutView() {
           <img
             className="about-icon"
             src="/app-icon.png"
-            alt="Friday icon"
+            alt="Fridex icon"
           />
-          <div className="about-title">Friday</div>
+          <div className="about-title">Fridex</div>
         </div>
         <div className="about-version">
           {version ? `Version ${version}` : "Version —"}
@@ -72,7 +72,7 @@ export function AboutView() {
             Twitter
           </button>
         </div>
-        <div className="about-footer">Made with ♥ by Codex & Dimillian</div>
+        <div className="about-footer">Made with ♥ by Codex & canakyuz</div>
       </div>
     </div>
   );

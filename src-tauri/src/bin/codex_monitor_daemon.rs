@@ -1409,20 +1409,20 @@ fn default_data_dir() -> PathBuf {
     if let Ok(xdg) = env::var("XDG_DATA_HOME") {
         let trimmed = xdg.trim();
         if !trimmed.is_empty() {
-            return PathBuf::from(trimmed).join("friday-daemon");
+            return PathBuf::from(trimmed).join("fridex-daemon");
         }
     }
     let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
     PathBuf::from(home)
         .join(".local")
         .join("share")
-        .join("friday-daemon")
+        .join("fridex-daemon")
 }
 
 fn usage() -> String {
     format!(
         "\
-USAGE:\n  friday-daemon [--listen <addr>] [--data-dir <path>] [--token <token> | --insecure-no-auth]\n\n\
+USAGE:\n  fridex-daemon [--listen <addr>] [--data-dir <path>] [--token <token> | --insecure-no-auth]\n\n\
 OPTIONS:\n  --listen <addr>        Bind address (default: {DEFAULT_LISTEN_ADDR})\n  --data-dir <path>      Data dir holding workspaces.json/settings.json\n  --token <token>        Shared token required by clients\n  --insecure-no-auth      Disable auth (dev only)\n  -h, --help             Show this help\n"
     )
 }
@@ -2133,7 +2133,7 @@ fn main() {
             .await
             .unwrap_or_else(|err| panic!("failed to bind {}: {err}", config.listen));
         eprintln!(
-            "friday-daemon listening on {} (data dir: {})",
+            "fridex-daemon listening on {} (data dir: {})",
             config.listen,
             state
                 .storage_path

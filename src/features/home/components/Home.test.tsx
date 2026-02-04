@@ -42,7 +42,7 @@ describe("Home", () => {
           {
             message: "Ship the dashboard refresh",
             timestamp: Date.now(),
-            projectName: "Friday",
+            projectName: "Fridex",
             groupName: "Frontend",
             workspaceId: "workspace-1",
             threadId: "thread-1",
@@ -59,7 +59,7 @@ describe("Home", () => {
       throw new Error("Expected latest agents section");
     }
     const latestScope = within(latestSection as HTMLElement);
-    expect(latestScope.getByText("Friday")).toBeTruthy();
+    expect(latestScope.getByText("Fridex")).toBeTruthy();
     expect(latestScope.getByText("Frontend")).toBeTruthy();
     const message = screen.getByText("Ship the dashboard refresh");
     const card = message.closest("button");

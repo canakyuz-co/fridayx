@@ -258,7 +258,7 @@ export function EditorView({
       const value = styles.getPropertyValue(name);
       return normalizeColor(value, fallback);
     };
-    monaco.editor.defineTheme("friday-app", {
+    monaco.editor.defineTheme("fridex-app", {
       base: "vs-dark",
       inherit: true,
       rules: [
@@ -305,7 +305,7 @@ export function EditorView({
         "editorRuler.foreground": readVar("--border-muted", "#1f2a3a"),
       },
     });
-    monaco.editor.setTheme("friday-app");
+    monaco.editor.setTheme("fridex-app");
   }, []);
 
   const handleBeforeMount = useCallback((monaco: Monaco) => {
@@ -891,7 +891,7 @@ export function EditorView({
                         path={activeBuffer.path}
                         language={activeBuffer.language ?? undefined}
                         value={activeBuffer.content}
-                        theme="friday-app"
+                        theme="fridex-app"
                         height="100%"
                         width="100%"
                         onChange={(value) => {
@@ -916,7 +916,7 @@ export function EditorView({
                   path={activeBuffer.path}
                   language={activeBuffer.language ?? undefined}
                   value={activeBuffer.content}
-                  theme="friday-app"
+                  theme="fridex-app"
                   height="100%"
                   width="100%"
                   onChange={(value) => {

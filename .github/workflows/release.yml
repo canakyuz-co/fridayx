@@ -111,15 +111,15 @@ jobs:
         run: |
           set -euo pipefail
           ditto -c -k --keepParent \
-            "src-tauri/target/release/bundle/macos/Codex Monitor.app" \
-            CodexMonitor.zip
+            "src-tauri/target/release/bundle/macos/Fridex.app" \
+            Fridex.zip
 
-          xcrun notarytool submit CodexMonitor.zip \
+          xcrun notarytool submit Fridex.zip \
             --keychain-profile "$NOTARY_PROFILE_NAME" \
             --wait
 
           xcrun stapler staple \
-            "src-tauri/target/release/bundle/macos/Codex Monitor.app"
+            "src-tauri/target/release/bundle/macos/Fridex.app"
 
       - name: Package artifacts
         run: |
@@ -135,42 +135,42 @@ jobs:
           )
 
           mkdir -p release-artifacts release-artifacts/dmg-root
-          rm -rf "release-artifacts/dmg-root/Codex Monitor.app"
-          ditto "src-tauri/target/release/bundle/macos/Codex Monitor.app" \
-            "release-artifacts/dmg-root/Codex Monitor.app"
+          rm -rf "release-artifacts/dmg-root/Fridex.app"
+          ditto "src-tauri/target/release/bundle/macos/Fridex.app" \
+            "release-artifacts/dmg-root/Fridex.app"
 
           ditto -c -k --keepParent \
-            "src-tauri/target/release/bundle/macos/Codex Monitor.app" \
-            "release-artifacts/CodexMonitor_${ARCH}.zip"
+            "src-tauri/target/release/bundle/macos/Fridex.app" \
+            "release-artifacts/Fridex_${ARCH}.zip"
 
-          hdiutil create -volname "Codex Monitor" \
+          hdiutil create -volname "Fridex" \
             -srcfolder release-artifacts/dmg-root \
             -ov -format UDZO \
-            "release-artifacts/CodexMonitor_${VERSION}_${ARCH}.dmg"
+            "release-artifacts/Fridex_${VERSION}_${ARCH}.dmg"
 
           COPYFILE_DISABLE=1 tar -czf \
-            "src-tauri/target/release/bundle/macos/Codex Monitor.app.tar.gz" \
-            -C src-tauri/target/release/bundle/macos "Codex Monitor.app"
+            "src-tauri/target/release/bundle/macos/Fridex.app.tar.gz" \
+            -C src-tauri/target/release/bundle/macos "Fridex.app"
 
           npm run tauri signer sign -- \
             -f "$HOME/.tauri/codexmonitor.key" \
             -p "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" \
-            "src-tauri/target/release/bundle/macos/Codex Monitor.app.tar.gz"
+            "src-tauri/target/release/bundle/macos/Fridex.app.tar.gz"
 
-          cp "src-tauri/target/release/bundle/macos/Codex Monitor.app.tar.gz" \
-            "release-artifacts/CodexMonitor_${ARCH}.app.tar.gz"
-          cp "src-tauri/target/release/bundle/macos/Codex Monitor.app.tar.gz.sig" \
-            "release-artifacts/CodexMonitor_${ARCH}.app.tar.gz.sig"
+          cp "src-tauri/target/release/bundle/macos/Fridex.app.tar.gz" \
+            "release-artifacts/Fridex_${ARCH}.app.tar.gz"
+          cp "src-tauri/target/release/bundle/macos/Fridex.app.tar.gz.sig" \
+            "release-artifacts/Fridex_${ARCH}.app.tar.gz.sig"
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-artifacts-${{ matrix.arch }}
           path: |
-            release-artifacts/CodexMonitor_*.zip
-            release-artifacts/CodexMonitor_*_*.dmg
-            release-artifacts/CodexMonitor_*.app.tar.gz
-            release-artifacts/CodexMonitor_*.app.tar.gz.sig
+            release-artifacts/Fridex_*.zip
+            release-artifacts/Fridex_*_*.dmg
+            release-artifacts/Fridex_*.app.tar.gz
+            release-artifacts/Fridex_*.app.tar.gz.sig
 
   build_linux:
     name: appimage (${{ matrix.arch }})
@@ -378,7 +378,7 @@ jobs:
               return "x86_64"
             return None
 
-          for tarball in artifacts_dir.rglob("CodexMonitor_*.app.tar.gz"):
+          for tarball in artifacts_dir.rglob("Fridex_*.app.tar.gz"):
             arch = detect_arch(tarball.name)
             if not arch:
               continue
@@ -386,7 +386,7 @@ jobs:
             if not sig_path.exists():
               raise SystemExit(f"Missing signature for {tarball.name}")
             platforms[f"darwin-{arch}"] = {
-              "url": f"https://github.com/Dimillian/CodexMonitor/releases/download/v${VERSION}/{tarball.name}",
+              "url": f"https://github.com/canakyuz/Fridex/releases/download/v${VERSION}/{tarball.name}",
               "signature": sig_path.read_text().strip(),
             }
 
@@ -404,7 +404,7 @@ jobs:
             if not sig_path.exists():
               raise SystemExit(f"Missing signature for {appimage.name}")
             platforms[f"linux-{arch}"] = {
-              "url": f"https://github.com/Dimillian/CodexMonitor/releases/download/v${VERSION}/{appimage.name}",
+              "url": f"https://github.com/canakyuz/Fridex/releases/download/v${VERSION}/{appimage.name}",
               "signature": sig_path.read_text().strip(),
             }
 
@@ -414,7 +414,7 @@ jobs:
             if not sig_path.exists():
               raise SystemExit(f"Missing signature for {msi.name}")
             platforms["windows-x86_64"] = {
-              "url": f"https://github.com/Dimillian/CodexMonitor/releases/download/v${VERSION}/{msi.name}",
+              "url": f"https://github.com/canakyuz/Fridex/releases/download/v${VERSION}/{msi.name}",
               "signature": sig_path.read_text().strip(),
             }
 
@@ -464,10 +464,10 @@ jobs:
           )
 
           gh release upload "v${VERSION}" \
-            release-artifacts/CodexMonitor_*.zip \
-            release-artifacts/CodexMonitor_*_*.dmg \
-            release-artifacts/CodexMonitor_*.app.tar.gz \
-            release-artifacts/CodexMonitor_*.app.tar.gz.sig \
+            release-artifacts/Fridex_*.zip \
+            release-artifacts/Fridex_*_*.dmg \
+            release-artifacts/Fridex_*.app.tar.gz \
+            release-artifacts/Fridex_*.app.tar.gz.sig \
             release-artifacts/*.AppImage* \
             release-artifacts/*.msi \
             release-artifacts/*.msi.sig \

@@ -1,11 +1,11 @@
-# Friday: Diger AI (Claude/Gemini vb.) Entegrasyonlari
+# Fridex: Diger AI (Claude/Gemini vb.) Entegrasyonlari
 
-Bu dokuman, **Codex app-server akisini bozmadan** Friday icinde baska LLM'leri (Claude, Gemini, vb.) nasil entegre ettigimizi ve hangi entegrasyon yollarinin ne zaman secilecegini tanimlar.
+Bu dokuman, **Codex app-server akisini bozmadan** Fridex icinde baska LLM'leri (Claude, Gemini, vb.) nasil entegre ettigimizi ve hangi entegrasyon yollarinin ne zaman secilecegini tanimlar.
 
 ## Hedef ve Kapsam
 
 - Codex (OpenAI) tarafi: `codex app-server` JSON-RPC akisi **degismeyecek**.
-- Diger modeller: Friday icinde **ayri bir "provider" katmani** ile calisacak.
+- Diger modeller: Fridex icinde **ayri bir "provider" katmani** ile calisacak.
 - Amaç: tek chat UI icinden model degistirerek (Codex/Claude/Gemini/Custom) calismak.
 
 ## Protokoller: API vs CLI vs ACP
@@ -17,18 +17,18 @@ Bu dokuman, **Codex app-server akisini bozmadan** Friday icinde baska LLM'leri (
 - Dezavantaj: API key yonetimi + rate limit + streaming format farkliliklari.
 
 ### 2) CLI (Komut calistirma)
-- Friday, local'de kurulu bir CLI'yi cagirir (ornegin `claude`, `gemini`).
+- Fridex, local'de kurulu bir CLI'yi cagirir (ornegin `claude`, `gemini`).
 - Auth genellikle CLI'nin kendi login/config mekanizmasidir (kullanici makinesinde).
 - Avantaj: API key girmeden calisabilir (CLI login ile).
 - Dezavantaj: model listesi her CLI'da yok; output formatlari degisebilir.
 
 ### 3) ACP (Agent Client Protocol)
-- ACP, editor/host (Friday) ile agent (CLI) arasinda ortak bir protokol.
+- ACP, editor/host (Fridex) ile agent (CLI) arasinda ortak bir protokol.
 - Zed ekosisteminde yaygin; bazi agent'lar ACP ile dogrudan stream-json delta gonderebilir.
 - Avantaj: streaming + arayuzle daha "canli" deneyim, tool-calling benzeri akislara uygun.
 - Dezavantaj: her provider/CLI ACP desteklemez; kurulum/komut seti degisebilir.
 
-## Friday'de Mimari (Codex bozulmadan)
+## Fridex'de Mimari (Codex bozulmadan)
 
 ### Codex (Degismez)
 - Backend, workspace basina `codex app-server` spawn eder.
@@ -50,7 +50,7 @@ Model secimi UI'da `providerId:modelName` formatindadir (ornegin `gemini:gemini-
 
 ### Gercekci beklenti
 - Bazi CLI'lar non-interactive model listesi sunmaz.
-- Bu durumda Friday, **fallback (varsayilan) model listesi** koyar ve kullanici isterse manuel duzenler.
+- Bu durumda Fridex, **fallback (varsayilan) model listesi** koyar ve kullanici isterse manuel duzenler.
 
 ### Strateji (sirayla)
 1. `protocol=cli` ve `command` varsa: CLI ile modeli calistir (key gerekmeden).
@@ -66,7 +66,7 @@ Model secimi UI'da `providerId:modelName` formatindadir (ornegin `gemini:gemini-
 - Mistral, Groq, Together, Fireworks, DeepSeek vb.: genelde API; cogu OpenAI-compatible da olabilir.
 
 ### Lokal / Self-hosted
-- Ollama: OpenAI-compatible proxy veya kendi API; Friday icin "OpenAI-compatible" provider olarak baglanabilir.
+- Ollama: OpenAI-compatible proxy veya kendi API; Fridex icin "OpenAI-compatible" provider olarak baglanabilir.
 - LM Studio: OpenAI-compatible server.
 - llama.cpp server / vLLM: OpenAI-compatible server (deployment kolayligi icin tercih).
 

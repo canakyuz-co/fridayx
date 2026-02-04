@@ -3208,7 +3208,7 @@ export function SettingsView({
               <section className="settings-section">
                 <div className="settings-section-title">Codex</div>
                 <div className="settings-section-subtitle">
-                  Configure the Codex CLI used by Friday and validate the install.
+                  Configure the Codex CLI used by Fridex and validate the install.
                 </div>
                 <div className="settings-field">
                   <label className="settings-field-label" htmlFor="codex-path">
@@ -3424,7 +3424,7 @@ export function SettingsView({
                       />
                     </div>
                     <div className="settings-help">
-                      Start the daemon separately and point Friday to it (host:port + token).
+                      Start the daemon separately and point Fridex to it (host:port + token).
                     </div>
                   </div>
                 )}

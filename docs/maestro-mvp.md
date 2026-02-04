@@ -1,7 +1,7 @@
-# Friday x Maestro Test Runner - MVP Dokümantasyonu
+# Fridex x Maestro Test Runner - MVP Dokümantasyonu
 
 ## 1) Amaç
-Friday içinde Maestro testlerini, kullanıcı CLI görmeden çalıştırmak. Kullanıcı `.yml/.yaml` dosyasını açar, Test Runner panelini açar, platform seçer ve testi çalıştırır. Sağ panelde canlı ekran + log görünür. Chat üzerinden `/test` komutu ile test seçip çalıştırma yapılır.
+Fridex içinde Maestro testlerini, kullanıcı CLI görmeden çalıştırmak. Kullanıcı `.yml/.yaml` dosyasını açar, Test Runner panelini açar, platform seçer ve testi çalıştırır. Sağ panelde canlı ekran + log görünür. Chat üzerinden `/test` komutu ile test seçip çalıştırma yapılır.
 
 ## 2) Kapsam (MVP)
 - Test formatı: Maestro YAML (`*.yml`, `*.yaml`)
@@ -15,7 +15,7 @@ Friday içinde Maestro testlerini, kullanıcı CLI görmeden çalıştırmak. Ku
 
 ### 3.1 Backend (Rust/Tauri)
 - Maestro MCP server STDIO üzerinden çalışır.
-- Friday backend MCP client olarak STDIO’dan JSON-RPC gönderir/okur.
+- Fridex backend MCP client olarak STDIO’dan JSON-RPC gönderir/okur.
 - Maestro MCP process yönetimi yapılır (spawn/health/kill).
 
 ### 3.2 Frontend (React)

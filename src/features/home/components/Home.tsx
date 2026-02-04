@@ -291,7 +291,7 @@ export function Home({
   return (
     <div className="home">
       <div className="home-hero">
-        <div className="home-title">Friday</div>
+        <div className="home-title">Fridex</div>
         <div className="home-subtitle">
           Orchestrate agents across your local projects.
         </div>

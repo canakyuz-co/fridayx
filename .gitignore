@@ -23,7 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 /release-artifacts
-Friday.zip
+Fridex.zip
 .codex-worktrees/
 .codexmonitor/
 .env

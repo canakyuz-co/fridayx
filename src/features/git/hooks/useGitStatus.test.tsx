@@ -11,7 +11,7 @@ vi.mock("../../../services/tauri", () => ({
 
 const workspace: WorkspaceInfo = {
   id: "workspace-1",
-  name: "Friday",
+  name: "Fridex",
   path: "/tmp/codex",
   connected: true,
   settings: { sidebarCollapsed: false },
@@ -19,7 +19,7 @@ const workspace: WorkspaceInfo = {
 
 const secondaryWorkspace: WorkspaceInfo = {
   id: "workspace-2",
-  name: "Friday Secondary",
+  name: "Fridex Secondary",
   path: "/tmp/codex-secondary",
   connected: true,
   settings: { sidebarCollapsed: false },

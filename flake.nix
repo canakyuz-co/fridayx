@@ -1,5 +1,5 @@
 {
-  description = "Friday Tauri app for orchestrating Codex agents";
+  description = "Fridex Tauri app for orchestrating Codex agents";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -21,7 +21,7 @@
         ];
 
         frontend = pkgs.buildNpmPackage {
-          pname = "friday-frontend";
+          pname = "fridex-frontend";
           version = packageJson.version;
           src = ./.;
           nodejs = pkgs.nodejs_20;
@@ -41,7 +41,7 @@
         };
 
         appPackage = pkgs.rustPlatform.buildRustPackage {
-          pname = "friday";
+          pname = "fridex";
           version = packageJson.version;
           src = ./src-tauri;
 
@@ -77,7 +77,7 @@
           installPhase = ''
             mkdir -p $out/bin
             target_dir="target/${pkgs.stdenv.hostPlatform.rust.rustcTarget}"
-            cp "$target_dir/release/friday" $out/bin/
+            cp "$target_dir/release/fridex" $out/bin/
           '';
         };
       in

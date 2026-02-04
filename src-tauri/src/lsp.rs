@@ -293,7 +293,7 @@ async fn download_to_path(
 ) -> Result<(), String> {
     let response = client
         .get(url)
-        .header("User-Agent", "Friday-LSP-Downloader")
+        .header("User-Agent", "Fridex-LSP-Downloader")
         .send()
         .await
         .map_err(|err| format!("LSP indirilemedi: {err}"))?;
@@ -543,7 +543,7 @@ async fn ensure_node_installed(
     let client = Client::new();
     let shasums = client
         .get(&shasums_url)
-        .header("User-Agent", "Friday-LSP-Downloader")
+        .header("User-Agent", "Fridex-LSP-Downloader")
         .send()
         .await
         .map_err(|err| format!("Node hash listesi indirilemedi: {err}"))?

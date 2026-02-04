@@ -662,7 +662,7 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
         : "";
 
     const confirmed = await ask(
-      `Are you sure you want to delete "${workspaceName}"?\n\nThis will remove the workspace from Friday.${detail}`,
+      `Are you sure you want to delete "${workspaceName}"?\n\nThis will remove the workspace from Fridex.${detail}`,
       {
         title: "Delete Workspace",
         kind: "warning",
@@ -714,7 +714,7 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
     const workspaceName = workspace?.name || "this worktree";
 
     const confirmed = await ask(
-      `Are you sure you want to delete "${workspaceName}"?\n\nThis will close the agent, remove its worktree, and delete it from Friday.`,
+      `Are you sure you want to delete "${workspaceName}"?\n\nThis will close the agent, remove its worktree, and delete it from Fridex.`,
       {
         title: "Delete Worktree",
         kind: "warning",

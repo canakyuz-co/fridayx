@@ -1,4 +1,4 @@
-# Zed Esinli Editor Yol Haritası (Friday)
+# Zed Esinli Editor Yol Haritası (Fridex)
 
 Bu doküman, mevcut kod tabanına göre Zed seviyesine yaklaşmak için eksik/gerekli alanları ve aşamalı planı özetler.  
 Odak: **Editor çekirdeği / performans**, sonra collab/remote/plugin alanları.
