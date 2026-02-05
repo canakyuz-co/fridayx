@@ -1,0 +1,365 @@
+\documentclass[11pt, a4paper]{report}
+
+% =============================================================================
+% Fridex / FridayX Canonical Spec (Live State)
+%
+% - Single document that merges the "manifesto" + "mathematical spec".
+% - Aligned with Friday app's live architecture (Tauri Rust + Codex app-server).
+% - Designed to compile with XeLaTeX (Tectonic) without relying on system fonts.
+% =============================================================================
+
+% --- PAGE / LANGUAGE ---
+\usepackage[a4paper, top=2.5cm, bottom=2.5cm, left=2cm, right=2cm]{geometry}
+\usepackage{fontspec}
+\usepackage[turkish, english, bidi=basic, provide=*]{babel}
+
+% Avoid system-font dependencies; TeX Gyre ships with TeX distributions.
+\setmainfont{TeX Gyre Heros}
+\setsansfont{TeX Gyre Heros}
+\setmonofont{TeX Gyre Cursor}
+
+% --- MATH / BOXES / LAYOUT ---
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\usepackage{booktabs}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{setspace}
+\usepackage{multicol}
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  urlcolor=black,
+  citecolor=black
+}
+
+\setlist[itemize]{label=-, leftmargin=1.2em}
+\onehalfspacing
+
+% --- BRAND PALETTE ---
+\definecolor{fridex_cyan}{RGB}{0, 191, 255}
+\definecolor{fridex_navy}{RGB}{10, 20, 30}
+\definecolor{math_bg}{RGB}{245, 252, 255}
+
+% --- TITLES ---
+\titleformat{\chapter}[display]
+  {\normalfont\bfseries\color{fridex_cyan}}
+  {\filleft\Huge\thechapter}
+  {1ex}
+  {\titlerule\vspace{1ex}\filleft\Huge}
+
+\titleformat{\section}{\color{fridex_cyan}\Large\bfseries}{\thesection}{1em}{}[\titlerule]
+\titleformat{\subsection}{\color{fridex_cyan!70!black}\large\bfseries}{\thesubsection}{1em}{}
+
+% --- BOXES ---
+\newtcolorbox{fridexbox}[2][]{
+  colback=white,
+  colframe=fridex_cyan,
+  fonttitle=\bfseries,
+  title=#2,
+  arc=3mm,
+  boxrule=1pt,
+  #1
+}
+
+\newtcolorbox{mathlogic}[1]{
+  colback=math_bg,
+  colframe=fridex_cyan!50!black,
+  boxrule=0.5pt,
+  arc=1mm,
+  title=\textit{Teknik Formülasyon: #1},
+  fonttitle=\small\bfseries
+}
+
+% --- HEADER / FOOTER ---
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\textcolor{fridex_cyan}{Fridex / FridayX Kanonik Spesifikasyon}}
+\rhead{\thepage}
+\lfoot{Bekircan Akyüz}
+\rfoot{Sürüm 4.0 (Canlı Durum)}
+
+\begin{document}
+
+% =============================================================================
+% COVER
+% =============================================================================
+\begin{titlepage}
+  \centering
+  \vspace*{3cm}
+  {\Huge \textbf{\textcolor{fridex_cyan}{FRIDEX}}} \\
+  \vspace{0.5cm}
+  {\Large \textbf{Otonom Bilişsel İşletim Sistemi (Cognos-OS)}} \\
+  \vspace{0.35cm}
+  {\large \textbf{FridayX Editör + Ajan Orkestrasyonu ile Kanonik Teknik Spesifikasyon}} \\
+  \vspace{2cm}
+  \begin{tcolorbox}[colback=fridex_navy, colframe=fridex_navy, arc=0mm]
+    \centering \textcolor{white}{"Zeka, verideki düzeni değil, belirsizlikteki fırsatı görmektir."}
+  \end{tcolorbox}
+  \vfill
+  \textbf{Yazar:} Bekircan Akyüz \\
+  \textbf{Rol:} Baş Sistem Mimarı \\
+  \textbf{Tarih:} \today \\
+  \vspace{1cm}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =============================================================================
+% PART I: VISION
+% =============================================================================
+\chapter{Stratejik Vizyon ve Sistem Felsefesi}
+
+\section{Giriş: Fridex ve FridayX Nedir?}
+\textbf{Fridex}, kullanıcı ile simbiyotik bağ kuran bir \textbf{Bilişsel İşletim Sistemi (Cognos-OS)} vizyonudur.
+\textbf{FridayX} ise bu vizyonu üretime taşıyan, yerel çalışma alanlarında (workspaces) \textbf{Codex ajanlarını} orkestre eden macOS odaklı bir editör ve kontrol düzlemidir.
+
+Bu döküman iki hedefi aynı anda taşır:
+\begin{itemize}
+  \item \textbf{Vizyon:} Sistem felsefesi, tasarım motivasyonları, kullanıcı niyeti ve belirsizlikle baş etme.
+  \item \textbf{Spesifikasyon:} Uygulanabilir mimari sözleşmeler, matematiksel modeller, test ve doğrulama süreci.
+\end{itemize}
+
+\section{Temel İlkeler}
+Fridex'in gelişimi üç ana sütun üzerine inşa edilir:
+\begin{itemize}
+  \item \textbf{Otonom Grounding (Topraklama):} Dijital sinyali fiziksel/sistem gerçekliğiyle eşleştirme.
+  \item \textbf{Privacy-by-Architecture (Mimariden Gelen Gizlilik):} Verinin mümkün olduğunca yerelde (local-first) işlenmesi.
+  \item \textbf{Epistemik Merak:} Sistemin bilgi eksikliklerini aktif biçimde kapatmaya çalışması.
+\end{itemize}
+
+\section{Üretim Guardrail'leri (Özet)}
+FridayX üretim rehberi; \textbf{DRY, KISS, YAGNI} ile birlikte performans ve güvenliği “birinci sınıf gereksinim” kabul eder:
+\begin{itemize}
+  \item \textbf{Multi-tenant izolasyonu:} \texttt{tenant\_id} bağlamı zorunlu; çapraz tenant erişim \textbf{yasak}.
+  \item \textbf{RBAC/ABAC:} deny-default; kararlar audit edilebilir olmalı.
+  \item \textbf{Observability:} log/metric/trace; PII maskeleme; \texttt{tenant\_id} etiketleme.
+  \item \textbf{Performans:} P95 $< 100ms$ hedefi; hot-path'lerde algoritmik verimlilik.
+\end{itemize}
+
+\newpage
+
+% =============================================================================
+% PART II: LIVE ARCHITECTURE
+% =============================================================================
+\chapter{Canlı Mimari: FridayX Yığını ve Veri Akışı}
+
+\section{Hibrit Yazılım Yığını}
+FridayX, bir masaüstü uygulaması olarak aşağıdaki canlı mimariyle çalışır:
+\begin{itemize}
+  \item \textbf{Frontend:} React + Vite (UI, editör, önizlemeler, olay abonelikleri).
+  \item \textbf{Backend (App):} Tauri Rust (platform köprüleri, workspace yönetimi, dosya IO, ajan orkestrasyonu).
+  \item \textbf{Backend (Ajan Katmanı):} Workspace başına \texttt{codex app-server} süreçleri; JSON-RPC üzerinden event akışı.
+\end{itemize}
+
+\begin{mathlogic}{İletişim Modeli (JSON-RPC)}
+\[
+\text{UI} \xleftrightarrow[\text{invoke/events}]{\text{Tauri IPC}}
+\text{Rust} \xleftrightarrow[\text{stdin/stdout}]{\text{JSON-RPC}}
+\text{codex app-server}
+\]
+\end{mathlogic}
+
+\section{IPC ve Veri Akışı (Pratik)}
+FridayX tarafında kritik sözleşme: \textbf{initialize} \textrightarrow{} \textbf{initialized} olmadan request gönderilmez.
+Threads listelenir (\texttt{thread/list}), devam ettirilir (\texttt{thread/resume}), arşivlenir (\texttt{thread/archive}).
+
+\section{Editör ve Önizleme İlkesi}
+Editör \textbf{kod görünümü} ile \textbf{önizleme}yi ayrıştırır:
+\begin{itemize}
+  \item Markdown dosyaları için \textbf{HTML preview}.
+  \item LaTeX dosyaları için \textbf{PDF compile + preview}.
+\end{itemize}
+Bu döküman, FridayX editörde LaTeX önizleme hattının “tek dosya” modunda kusursuz çalışmasını hedefler.
+
+\newpage
+
+% =============================================================================
+% PART III: COGNITIVE ENGINE (ACTIVE INFERENCE)
+% =============================================================================
+\chapter{Bilişsel Motor ve Aktif Çıkarım}
+
+\section{Aktif Çıkarım (Active Inference) Teorisi}
+Fridex, belirsizliği (entropy) azaltmaya çalışan bir ajan olarak modellenir.
+Bu yaklaşım, Karl Friston'ın “Serbest Enerji Prensibi” çizgisinde özetlenir.
+
+\subsection{Varyasyonel Serbest Enerji (VFE)}
+Sistem, duyusal girdi ile içsel dünya modeli arasındaki “sürprizi” minimize eder:
+\begin{equation}
+  \mathcal{F} = \mathrm{D}_{KL}[Q(s) \,\|\, P(s,o)]
+\end{equation}
+Burada $Q(s)$ sistemin inancı, $P(s,o)$ ise dünya durumudur.
+
+\subsection{Merak Mekanizması (EFE)}
+Fridex sadece komutları yerine getirmez; gelecekteki belirsizliği azaltmak için epistemik bilgi toplar:
+\begin{mathlogic}{Beklenen Serbest Enerji}
+  \[
+  G(\pi) \approx \text{Goal Achievement} + \text{Information Gain}
+  \]
+\end{mathlogic}
+
+\section{Bayesyen Niyet Çözümleme}
+\[
+P(\text{Niyet} \mid \text{Prompt, Sistem Durumu}) =
+\frac{P(\text{Prompt} \mid \text{Niyet})\, P(\text{Niyet})}{P(\text{Prompt})}
+\]
+
+\newpage
+
+% =============================================================================
+% PART IV: KNOWLEDGE GRAPH + MEMORY
+% =============================================================================
+\chapter{Hiyerarşik Hafıza: Çizge Tabanlı Model ve Skorlama}
+
+\section{Çizge Tabanlı Hafıza Topolojisi}
+Bilgiler; birbirinden kopuk vektörler yerine ilişkili düğümler olarak ele alınır.
+
+\begin{fridexbox}{Tanım: Hafıza Uzayı}
+Hafıza uzayı $\mathcal{M}$, bir çizge $G$ ile modellenir:
+\[
+G = (V, E, \mathcal{A}, \mathcal{R})
+\]
+\begin{itemize}
+  \item $V$: varlıklar kümesi (User, File, Project, Task).
+  \item $E \subseteq V \times V$: varlık ilişkileri.
+  \item $\mathcal{A}$: düğüm öznitelik vektörleri (embeddings).
+  \item $\mathcal{R}$: ilişki tipleri (örn. \texttt{OWNS}, \texttt{DEPENDS\_ON}).
+\end{itemize}
+\end{fridexbox}
+
+\subsection{Hibrit Erişim Skorlaması}
+Bir sorgu $q$ ile düğüm $v$ arasındaki alaka düzeyi:
+\[
+S(q, v) =
+\alpha \cdot
+\frac{\mathbf{e}_q \cdot \mathbf{e}_v}{\|\mathbf{e}_q\| \|\mathbf{e}_v\|}
+ + (1-\alpha)\cdot e^{-\lambda \cdot d(v, v_{focus})}
+\]
+\begin{itemize}
+  \item $\mathbf{e}_q, \mathbf{e}_v$: gömme vektörleri.
+  \item $d(\cdot)$: en kısa yol uzaklığı.
+  \item $\lambda$: sönümleme katsayısı.
+\end{itemize}
+
+\newpage
+
+% =============================================================================
+% PART V: POMDP BELIEF UPDATE
+% =============================================================================
+\chapter{Durum Tahmini: POMDP ve İnanç Güncelleme}
+
+\section{İnanç Durumu (Belief State)}
+\[
+B_t(s) = P(S_t = s \mid O_{1:t}, A_{1:t-1})
+\]
+\begin{itemize}
+  \item $O_t$: gözlem (kullanıcı girdisi, dosya içeriği, sistem telemetrisi).
+  \item $A_t$: eylem (dosya yazma, yanıt üretme, süreç başlatma).
+\end{itemize}
+
+\section{Bayesyen Güncelleme}
+\[
+B_{t+1}(s') = \eta \cdot P(O_{t+1} \mid s') \sum_{s} P(s' \mid s, A_t) B_t(s)
+\]
+
+\newpage
+
+% =============================================================================
+% PART VI: DECISION - EXPECTED FREE ENERGY
+% =============================================================================
+\chapter{Karar Mekanizması: Beklenen Serbest Enerji ve Fayda}
+
+\section{Beklenen Serbest Enerji (EFE)}
+\[
+G(\pi) = \sum_{\tau} G(\pi, \tau)
+\]
+
+\[
+G(\pi, t) \approx
+ - \mathbb{E}_{Q}[\ln P(O_t \mid C)]
+ - \mathbb{E}_{Q}\left[\ln \frac{Q(S_t \mid O_t, \pi)}{Q(S_t \mid \pi)}\right]
+\]
+
+\section{Üretim Basitleştirmesi: Utility}
+\[
+U(a) = w_1 \cdot \mathrm{Similarity}(\mathrm{Result}(a), \mathrm{Goal})
+ + w_2 \cdot \mathrm{InformationGain}(a)
+ - \mathrm{Cost}(a)
+\]
+
+\newpage
+
+% =============================================================================
+% PART VII: VSA / HDC
+% =============================================================================
+\chapter{Hiperboyutlu Hesaplama (VSA / HDC)}
+
+\section{Temel Operasyonlar}
+İkili spatter kodları ile ($D \approx 10{,}000$):
+\begin{enumerate}
+  \item \textbf{Binding (XOR):} $\mathbf{u} \otimes \mathbf{v} \Rightarrow u_i \oplus v_i$
+  \item \textbf{Bundling (Majority):} $\mathbf{u} + \mathbf{v} \Rightarrow [u_i + v_i > 1]$
+  \item \textbf{Permutation (Shift):} $\Pi(\mathbf{u}) \Rightarrow \text{rotate}(\mathbf{u})$
+\end{enumerate}
+
+\section{Yapısal Kodlama Örneği}
+\[
+V_{task} = (R_{type} \otimes V_{bug}) + (R_{project} \otimes V_{fridex})
+ + (R_{status} \otimes V_{pending})
+\]
+
+\newpage
+
+% =============================================================================
+% PART VIII: TESTING + AI AGENT CONFIG
+% =============================================================================
+\chapter{Test Süreci: AI Agent ile Sistem Analizi ve Detaylı Test Yazımı}
+
+\section{Amaç}
+Test süreci iki fazdan oluşur:
+\begin{itemize}
+  \item \textbf{Sistem Analizi:} değişikliğin etki alanı, riskler, performans/güvenlik etkisi.
+  \item \textbf{Detaylı Test Yazımı:} kritik mantık için hedefli test; gereksiz test yok.
+\end{itemize}
+
+\section{Agent Yapılandırması (Operasyonel Sözleşme)}
+FridayX üzerinde test ajanı şu kurallarla çalışır:
+\begin{itemize}
+  \item \textbf{Algoritmik analiz zorunlu:} her kritik fonksiyon için time/space (Big-O).
+  \item \textbf{Minimal diff:} sadece gerekli satırlar.
+  \item \textbf{Yasaklar:} brute-force, gereksiz nested loop, global state mutasyonu, aşırı test.
+  \item \textbf{Güvenlik:} PII maskeleme, log kısıntısı, secret yönetimi.
+  \item \textbf{Doğrulama:} lint + typecheck + ilgili testler; backend değiştiyse \texttt{cargo check}.
+  \item \textbf{Self-review:} tek paragraf; edge-case + performans + güvenlik + karmaşıklık.
+\end{itemize}
+
+\section{Test Kapsamı Rehberi}
+\begin{fridexbox}{Kritik Mantık İçin Test Örnekleri}
+\begin{itemize}
+  \item \textbf{LaTeX preview pipeline:} compile başarılı/başarısız durumları, log parse, debounce.
+  \item \textbf{Editor split view:} state geçişleri (code/split/preview), hata gösterimi.
+  \item \textbf{Performans:} büyük içerikte (örn. $> 50k$ karakter) UI kilitlenmeden derleme tetiklenmeli.
+  \item \textbf{Güvenlik:} dosya sistemi kökü (filesystem root) whitelist; path traversal engeli.
+\end{itemize}
+\end{fridexbox}
+
+\newpage
+
+\chapter{Sonuç ve Vizyon Notu}
+Fridex, bir araç olmanın ötesinde; insan zekasının dijital dünyadaki otonom temsilcisidir.
+FridayX bu temsilin üretimde \textbf{daha şeffaf, daha güvenli ve daha hızlı} çalışması için bir işletim katmanı sağlar.
+
+\vspace{2cm}
+\begin{center}
+  \textbf{Dökümanın Sonu}\\
+  \textit{Bu kanonik teknik spesifikasyon Bekircan Akyüz tarafından onaylanmıştır.}
+\end{center}
+
+\end{document}
+

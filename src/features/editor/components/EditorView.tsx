@@ -10,6 +10,7 @@ import { EditorPlaceholder } from "./EditorPlaceholder";
 import { Markdown } from "../../messages/components/Markdown";
 import { EditorCommandPalette } from "./EditorCommandPalette";
 import { EditorWorkspaceSearch } from "./EditorWorkspaceSearch";
+import { LatexPreview } from "./LatexPreview";
 import type { EditorKeymap, LaunchScriptEntry } from "../../../types";
 import {
   lspRequest,
@@ -106,6 +107,13 @@ function isMarkdownPath(path: string | null) {
   return path.endsWith(".md") || path.endsWith(".mdx");
 }
 
+function isLatexPath(path: string | null) {
+  if (!path) {
+    return false;
+  }
+  return path.endsWith(".tex");
+}
+
 function configureMonaco(_monaco: Monaco) {
   const globalScope = globalThis as typeof globalThis & {
     MonacoEnvironment?: { getWorker: (workerId: string, label: string) => Worker };
@@ -156,7 +164,9 @@ export function EditorView({
   const isMarkdown = activeBuffer
     ? activeBuffer.language === "markdown" || isMarkdownPath(activeBuffer.path)
     : false;
-  const [markdownView, setMarkdownView] = useState<"code" | "preview" | "split">(
+  const isLatex = activeBuffer ? isLatexPath(activeBuffer.path) : false;
+  const hasPreview = isMarkdown || isLatex;
+  const [previewView, setPreviewView] = useState<"code" | "preview" | "split">(
     "code",
   );
   const activePathRef = useRef(activePath);
@@ -847,15 +857,15 @@ export function EditorView({
             </button>
           ))
         )}
-        {isMarkdown ? (
-          <div className="editor-tabs-actions" role="group" aria-label="Markdown view">
+        {hasPreview ? (
+          <div className="editor-tabs-actions" role="group" aria-label="Preview view">
             <button
               type="button"
               className={`icon-button editor-view-toggle${
-                markdownView === "code" ? " is-active" : ""
+                previewView === "code" ? " is-active" : ""
               }`}
-              onClick={() => setMarkdownView("code")}
-              aria-pressed={markdownView === "code"}
+              onClick={() => setPreviewView("code")}
+              aria-pressed={previewView === "code"}
               aria-label="Code view"
               title="Code view"
             >
@@ -864,10 +874,10 @@ export function EditorView({
             <button
               type="button"
               className={`icon-button editor-view-toggle${
-                markdownView === "split" ? " is-active" : ""
+                previewView === "split" ? " is-active" : ""
               }`}
-              onClick={() => setMarkdownView("split")}
-              aria-pressed={markdownView === "split"}
+              onClick={() => setPreviewView("split")}
+              aria-pressed={previewView === "split"}
               aria-label="Split view"
               title="Split view"
             >
@@ -876,10 +886,10 @@ export function EditorView({
             <button
               type="button"
               className={`icon-button editor-view-toggle${
-                markdownView === "preview" ? " is-active" : ""
+                previewView === "preview" ? " is-active" : ""
               }`}
-              onClick={() => setMarkdownView("preview")}
-              aria-pressed={markdownView === "preview"}
+              onClick={() => setPreviewView("preview")}
+              aria-pressed={previewView === "preview"}
               aria-label="Preview"
               title="Preview"
             >
@@ -901,9 +911,9 @@ export function EditorView({
                   Buyuk dosya kesildi. Duzenleme devre disi.
                 </div>
               ) : null}
-              {isMarkdown ? (
-                <div className={`editor-split editor-split--${markdownView}`}>
-                  {markdownView !== "preview" ? (
+              {hasPreview ? (
+                <div className={`editor-split editor-split--${previewView}`}>
+                  {previewView !== "preview" ? (
                     <div className="editor-pane editor-pane--code">
                       <Editor
                         path={activeBuffer.path}
@@ -921,11 +931,23 @@ export function EditorView({
                       />
                     </div>
                   ) : null}
-                  {markdownView !== "code" ? (
+                  {previewView !== "code" ? (
                     <div className="editor-pane editor-pane--preview">
-                      <div className="editor-markdown-preview">
-                        <Markdown className="markdown" value={activeBuffer.content} />
-                      </div>
+                      {isMarkdown ? (
+                        <div className="editor-markdown-preview">
+                          <Markdown className="markdown" value={activeBuffer.content} />
+                        </div>
+                      ) : isLatex && workspaceId ? (
+                        <LatexPreview
+                          workspaceId={workspaceId}
+                          path={activeBuffer.path}
+                          source={activeBuffer.content}
+                        />
+                      ) : (
+                        <div className="editor-state error">
+                          LaTeX onizleme icin workspace gerekli.
+                        </div>
+                      )}
                     </div>
                   ) : null}
                 </div>

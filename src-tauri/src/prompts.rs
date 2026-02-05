@@ -272,6 +272,38 @@ fn discover_prompts_in(dir: &Path, scope: Option<&str>) -> Vec<CustomPromptEntry
     out
 }
 
+fn ensure_seed_prompts(dir: &Path) {
+    // Keep this idempotent and non-destructive: only create if missing.
+    let path = dir.join("test-analyst.md");
+    if path.exists() {
+        return;
+    }
+
+    let content = r#"---
+description: "Sistem analizi + risk + hedefli test yazimi (kritik mantik), minimal diff."
+argument-hint: "Degisiklik/PR baglami (kisa)"
+---
+# Test Analyst (FridayX)
+
+Bu prompt, degisiklikleri uretim guardrail'lerine gore analiz eder ve sadece kritik mantik icin test yazar.
+
+Zorunlu ciktilar:
+1) Sistem analizi: etki alani, riskler (guvenlik/perf), geri donus plan.
+2) Algoritmik analiz: kritik fonksiyonlar icin time/space (Big-O) + trade-off.
+3) Test plani: hangi testler neden gerekli (asiri test yok).
+4) Test implementasyonu: mevcut test altyapisina uygun, minimal diff.
+5) Self-review: edge-case + performans + guvenlik + karmasiklik.
+
+Kisitlar:
+- Mock/test data uretme (varsa mevcut altyapiyi kullan).
+- Brute-force / gereksiz nested loop yok.
+- Global state mutasyonu yok (gerekmiyorsa).
+- Hata formatlari ve PII maskeleme kurallarina uy.
+"#;
+
+    let _ = fs::write(path, content);
+}
+
 #[tauri::command]
 pub(crate) async fn prompts_list(
     state: State<'_, AppState>,
@@ -293,6 +325,7 @@ pub(crate) async fn prompts_list(
         let mut out = Vec::new();
         if let Some(dir) = workspace_dir {
             let _ = fs::create_dir_all(&dir);
+            ensure_seed_prompts(&dir);
             out.extend(discover_prompts_in(&dir, Some("workspace")));
         }
         if let Some(dir) = global_dir {
