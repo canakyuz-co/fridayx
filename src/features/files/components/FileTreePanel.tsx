@@ -17,9 +17,6 @@ import Plus from "lucide-react/dist/esm/icons/plus";
 import ChevronsUpDown from "lucide-react/dist/esm/icons/chevrons-up-down";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import Search from "lucide-react/dist/esm/icons/search";
-import FilePlus from "lucide-react/dist/esm/icons/file-plus";
-import FolderPlus from "lucide-react/dist/esm/icons/folder-plus";
-import RefreshCcw from "lucide-react/dist/esm/icons/refresh-ccw";
 import { PanelTabs, type PanelTabId } from "../../layout/components/PanelTabs";
 import {
   createWorkspaceDir,
@@ -788,18 +785,20 @@ export function FileTreePanel({
                   ? "No modified"
                   : "No files"}
           </div>
-          <div className="file-tree-actions" role="group" aria-label="File actions">
-            <button
-              type="button"
-              className="ghost icon-button"
-              onClick={() => onRefreshFiles?.()}
-              aria-label="Refresh files"
-              title="Refresh files"
-              disabled={actionBusy}
-            >
-              <RefreshCcw size={14} aria-hidden />
-            </button>
-          </div>
+          {showCreateActions ? (
+            <div className="file-tree-actions" role="group" aria-label="Create">
+              <button
+                type="button"
+                className="ghost icon-button"
+                onClick={(event) => void showCreateMenu(event)}
+                aria-label="Create"
+                title="Create"
+                disabled={actionBusy}
+              >
+                <Plus size={14} aria-hidden />
+              </button>
+            </div>
+          ) : null}
           {hasFolders ? (
             <button
               type="button"
@@ -839,30 +838,6 @@ export function FileTreePanel({
         >
           <GitBranch size={14} aria-hidden />
         </button>
-        {showCreateActions && (
-          <>
-            <button
-              type="button"
-              className="ghost icon-button file-tree-search-action"
-              onClick={() => handleCreateFile("")}
-              aria-label="New file"
-              title="New file"
-              disabled={actionBusy}
-            >
-              <FilePlus size={14} aria-hidden />
-            </button>
-            <button
-              type="button"
-              className="ghost icon-button file-tree-search-action"
-              onClick={() => handleCreateFolder("")}
-              aria-label="New folder"
-              title="New folder"
-              disabled={actionBusy}
-            >
-              <FolderPlus size={14} aria-hidden />
-            </button>
-          </>
-        )}
       </div>
       <div className="file-tree-list">
         {showLoading ? (
