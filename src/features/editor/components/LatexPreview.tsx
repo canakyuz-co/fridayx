@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LatexCompileDiagnostic } from "../../../services/tauri";
 import { latexCompile } from "../../../services/tauri";
 
@@ -25,8 +25,6 @@ export function LatexPreview({ workspaceId, path, source }: LatexPreviewProps) {
   const [log, setLog] = useState<string>("");
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const urlRef = useRef<string | null>(null);
-
-  const sourceKey = useMemo(() => `${path}::${source.length}`, [path, source.length]);
 
   useEffect(() => {
     // Debounce compile to keep typing smooth.
@@ -56,7 +54,7 @@ export function LatexPreview({ workspaceId, path, source }: LatexPreviewProps) {
     }, 450);
 
     return () => window.clearTimeout(handle);
-  }, [workspaceId, path, sourceKey, source]);
+  }, [workspaceId, path, source]);
 
   useEffect(() => {
     return () => {
@@ -116,4 +114,3 @@ export function LatexPreview({ workspaceId, path, source }: LatexPreviewProps) {
     </div>
   );
 }
-

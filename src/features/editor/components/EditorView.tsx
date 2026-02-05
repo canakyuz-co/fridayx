@@ -429,8 +429,8 @@ export function EditorView({
     if (!activeBufferPath) {
       return;
     }
-    setMarkdownView(isMarkdown ? "split" : "code");
-  }, [activeBufferPath, isMarkdown]);
+    setPreviewView(hasPreview ? "split" : "code");
+  }, [activeBufferPath, hasPreview]);
 
   useEffect(() => {
     const editor = editorRef.current;

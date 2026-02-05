@@ -2,11 +2,12 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tauri::State;
 use tokio::sync::Mutex;
-use tokio::task;
+use tokio::{fs, process::Command};
 
 use crate::state::AppState;
 
@@ -159,54 +160,129 @@ fn parse_diagnostics_from_log(log: &str) -> Vec<LatexDiagnostic> {
     out
 }
 
-fn compile_with_tectonic(source: &str, filesystem_root: &Path) -> Result<(Vec<u8>, String), String> {
-    use tectonic::driver::{OutputFormat, ProcessingSessionBuilder};
-    use tectonic::status::NoopStatusBackend;
+#[derive(Clone, Copy, Debug)]
+enum LatexEngine {
+    Tectonic,
+    LatexMkXeLaTeX,
+    XeLaTeX,
+}
 
-    let mut status = NoopStatusBackend::default();
-    let auto_create_config_file = false;
-    let config = tectonic::config::PersistentConfig::open(auto_create_config_file)
-        .map_err(|e| format!("Tectonic config acilamadi: {e}"))?;
+async fn command_exists(cmd: &str, args: &[&str]) -> bool {
+    Command::new(cmd)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .await
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
 
-    let only_cached = false;
-    let bundle = config
-        .default_bundle(only_cached, &mut status)
-        .map_err(|e| format!("Tectonic bundle yuklenemedi: {e}"))?;
+async fn detect_engine() -> Option<LatexEngine> {
+    if command_exists("tectonic", &["--version"]).await {
+        return Some(LatexEngine::Tectonic);
+    }
+    if command_exists("latexmk", &["-v"]).await {
+        return Some(LatexEngine::LatexMkXeLaTeX);
+    }
+    if command_exists("xelatex", &["--version"]).await {
+        return Some(LatexEngine::XeLaTeX);
+    }
+    None
+}
 
-    let format_cache_path = config
-        .format_cache_path()
-        .map_err(|e| format!("Format cache path ayarlanamadi: {e}"))?;
+fn texinputs_env(filesystem_root: &Path) -> (OsString, OsString) {
+    // Allow TeX to resolve \input/\includegraphics from the active file's directory.
+    // The trailing "//" enables recursive search for some engines; ":" terminates the path list.
+    let mut value = OsString::new();
+    value.push(filesystem_root.as_os_str());
+    value.push(OsString::from("//:"));
+    (OsString::from("TEXINPUTS"), value)
+}
 
-    let mut sb = ProcessingSessionBuilder::default();
-    sb.bundle(bundle)
-        .primary_input_buffer(source.as_bytes())
-        .tex_input_name("preview.tex")
-        .filesystem_root(filesystem_root)
-        .format_name("latex")
-        .format_cache_path(format_cache_path)
-        .keep_logs(true)
-        .keep_intermediates(false)
-        .print_stdout(false)
-        .output_format(OutputFormat::Pdf)
-        .do_not_write_output_files();
+async fn compile_with_engine(
+    engine: LatexEngine,
+    source: &str,
+    filesystem_root: &Path,
+) -> Result<(Vec<u8>, String), String> {
+    let outdir = std::env::temp_dir().join(format!("friday-latex-preview-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&outdir)
+        .await
+        .map_err(|e| format!("Temp dizin olusturulamadi: {e}"))?;
 
-    let mut sess = sb
-        .create(&mut status)
-        .map_err(|e| format!("LaTeX oturumu baslatilamadi: {e}"))?;
-    sess.run(&mut status)
-        .map_err(|e| format!("LaTeX derleme basarisiz: {e}"))?;
+    let tex_path = outdir.join("preview.tex");
+    fs::write(&tex_path, source)
+        .await
+        .map_err(|e| format!("LaTeX kaynagi yazilamadi: {e}"))?;
 
-    let mut files = sess.into_file_data();
-    let pdf = files
-        .remove("preview.pdf")
-        .ok_or_else(|| "PDF olusmadi.".to_string())?
-        .data;
-    let log = files
-        .remove("preview.log")
-        .map(|f| String::from_utf8_lossy(&f.data).to_string())
-        .unwrap_or_default();
+    let (env_key, env_value) = texinputs_env(filesystem_root);
 
-    Ok((pdf, log))
+    let mut cmd = match engine {
+        LatexEngine::Tectonic => {
+            // Tectonic: fast, self-contained (if installed).
+            let mut c = Command::new("tectonic");
+            c.arg("-X")
+                .arg("compile")
+                .arg("--outdir")
+                .arg(&outdir)
+                .arg("--synctex")
+                .arg("--keep-logs")
+                .arg(&tex_path);
+            c
+        }
+        LatexEngine::LatexMkXeLaTeX => {
+            let mut c = Command::new("latexmk");
+            c.arg("-xelatex")
+                .arg("-interaction=nonstopmode")
+                .arg("-halt-on-error")
+                .arg("-output-directory")
+                .arg(&outdir)
+                .arg(&tex_path);
+            c
+        }
+        LatexEngine::XeLaTeX => {
+            let mut c = Command::new("xelatex");
+            c.arg("-interaction=nonstopmode")
+                .arg("-halt-on-error")
+                .arg("-output-directory")
+                .arg(&outdir)
+                .arg(&tex_path);
+            c
+        }
+    };
+
+    // Set cwd to the active file's directory so relative paths resolve as expected.
+    cmd.current_dir(filesystem_root);
+    cmd.env(env_key, env_value);
+    cmd.stdin(std::process::Stdio::null());
+
+    let output = tokio::time::timeout(LATEX_COMPILE_TIMEOUT, cmd.output())
+        .await
+        .map_err(|_| "LaTeX derleme timeout (15s).".to_string())?
+        .map_err(|e| format!("LaTeX calistirilamadi: {e}"))?;
+
+    let log_path = outdir.join("preview.log");
+    let log = fs::read_to_string(&log_path).await.unwrap_or_else(|_| {
+        // Fallback: some engines only return stderr.
+        String::from_utf8_lossy(&output.stderr).to_string()
+    });
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let _ = fs::remove_dir_all(&outdir).await;
+        return Err(format!(
+            "LaTeX derleme basarisiz.\n\nSTDERR:\n{stderr}\n\nLOG:\n{log}"
+        ));
+    }
+
+    let pdf_path = outdir.join("preview.pdf");
+    let pdf_bytes = fs::read(&pdf_path)
+        .await
+        .map_err(|e| format!("PDF okunamadi: {e}"))?;
+
+    let _ = fs::remove_dir_all(&outdir).await;
+    Ok((pdf_bytes, log))
 }
 
 #[tauri::command]
@@ -235,19 +311,13 @@ pub(crate) async fn latex_compile(
         (workspace_root, filesystem_root)
     };
 
-    let source = req.source.clone();
-    let compile_task = task::spawn_blocking(move || {
-        // filesystem_root is scoped under workspace_root by resolve_filesystem_root().
-        let _ = workspace_root; // keep ownership explicit for future hardening.
-        compile_with_tectonic(&source, &filesystem_root)
-    });
+    let _ = workspace_root; // reserved for future hardening (e.g. stricter whitelists).
 
-    let compile_result = tokio::time::timeout(LATEX_COMPILE_TIMEOUT, compile_task)
+    let engine = detect_engine()
         .await
-        .map_err(|_| "LaTeX derleme timeout (15s).".to_string())?
-        .map_err(|_| "LaTeX derleme gorevi basarisiz.".to_string())?;
+        .ok_or_else(|| "LaTeX motoru bulunamadi. \"tectonic\" veya \"latexmk\"/\"xelatex\" kurulu olmali.".to_string())?;
 
-    let (pdf_bytes, log) = compile_result?;
+    let (pdf_bytes, log) = compile_with_engine(engine, &req.source, &filesystem_root).await?;
     let diagnostics = parse_diagnostics_from_log(&log);
 
     let pdf_base64 = base64::engine::general_purpose::STANDARD.encode(pdf_bytes);
@@ -264,4 +334,37 @@ pub(crate) async fn latex_compile(
         .put(cache_key, response.clone());
 
     Ok(response)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_basic_tex_error_with_line() {
+        let log = r#"
+! Undefined control sequence.
+l.12 \invalidcommand
+            {}
+"#;
+        let diags = parse_diagnostics_from_log(log);
+        assert_eq!(diags.len(), 1);
+        assert_eq!(diags[0].level, "error");
+        assert_eq!(diags[0].line, Some(12));
+        assert!(diags[0].message.contains("Undefined control sequence"));
+    }
+
+    #[test]
+    fn resolves_root_to_file_dir_and_blocks_escape() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("docs")).expect("mkdir docs");
+
+        let ok = resolve_filesystem_root(root, "docs/main.tex").expect("ok root");
+        assert!(ok.ends_with("docs"));
+
+        // Absolute paths should not be allowed to override workspace scoping.
+        let err = resolve_filesystem_root(root, "/etc/passwd").unwrap_err();
+        assert!(err.to_lowercase().contains("guvensiz") || err.to_lowercase().contains("workspace"));
+    }
 }
