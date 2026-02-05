@@ -16,20 +16,19 @@ const emptyState: GitHubIssuesState = {
   error: null,
 };
 
-export function useGitHubIssues(
-  activeWorkspace: WorkspaceInfo | null,
+export function useGitHubIssuesByWorkspaceId(
+  workspaceId: string | null,
   enabled: boolean,
 ) {
   const [state, setState] = useState<GitHubIssuesState>(emptyState);
   const requestIdRef = useRef(0);
-  const workspaceIdRef = useRef<string | null>(activeWorkspace?.id ?? null);
+  const workspaceIdRef = useRef<string | null>(workspaceId);
 
   const refresh = useCallback(async () => {
-    if (!activeWorkspace) {
+    if (!workspaceId) {
       setState(emptyState);
       return;
     }
-    const workspaceId = activeWorkspace.id;
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
@@ -62,16 +61,15 @@ export function useGitHubIssues(
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [activeWorkspace]);
+  }, [workspaceId]);
 
   useEffect(() => {
-    const workspaceId = activeWorkspace?.id ?? null;
     if (workspaceIdRef.current !== workspaceId) {
       workspaceIdRef.current = workspaceId;
       requestIdRef.current += 1;
       setState(emptyState);
     }
-  }, [activeWorkspace?.id]);
+  }, [workspaceId]);
 
   useEffect(() => {
     if (!enabled) {
@@ -87,4 +85,11 @@ export function useGitHubIssues(
     error: state.error,
     refresh,
   };
+}
+
+export function useGitHubIssues(
+  activeWorkspace: WorkspaceInfo | null,
+  enabled: boolean,
+) {
+  return useGitHubIssuesByWorkspaceId(activeWorkspace?.id ?? null, enabled);
 }

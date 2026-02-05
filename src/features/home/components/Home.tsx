@@ -4,20 +4,19 @@ import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import { Markdown } from "../../messages/components/Markdown";
 import type {
   LocalUsageSnapshot,
-  GitHubIssue,
   TaskEntry,
   TaskStatus,
   TaskView,
 } from "../../../types";
 import { formatRelativeTime } from "../../../utils/time";
 import {
-  getGitHubIssues,
   type McpServerConfigEntry,
   listConfiguredMcpServers,
   listMcpServerStatus,
   mcpServerOauthLogin,
   mcpServerReload,
 } from "../../../services/tauri";
+import { useGitHubIssuesByWorkspaceId } from "../../git/hooks/useGitHubIssues";
 
 type ExternalRef = {
   label: string;
@@ -150,10 +149,7 @@ export function Home({
   const [taskWorkspaceDraft, setTaskWorkspaceDraft] = useState<string>("");
   const [taskQuery, setTaskQuery] = useState("");
   const [taskSort, setTaskSort] = useState<"updated" | "created" | "title">("updated");
-  const [githubIssuesWorkspaceId, setGitHubIssuesWorkspaceId] = useState<string | null>(null);
-  const [githubIssues, setGitHubIssues] = useState<GitHubIssue[]>([]);
-  const [githubIssuesLoading, setGitHubIssuesLoading] = useState(false);
-  const [githubIssuesError, setGitHubIssuesError] = useState<string | null>(null);
+  const [showGitHubIssueImport, setShowGitHubIssueImport] = useState(false);
   const [githubIssueDraft, setGitHubIssueDraft] = useState("");
   const [mcpWorkspaceId, setMcpWorkspaceId] = useState<string | null>(null);
   const [mcpConfiguredServers, setMcpConfiguredServers] = useState<McpServerConfigEntry[]>([]);
@@ -254,9 +250,7 @@ export function Home({
     setTaskTitle("");
     setTaskContent("");
     setTaskWorkspaceDraft("");
-    setGitHubIssuesWorkspaceId(null);
-    setGitHubIssues([]);
-    setGitHubIssuesError(null);
+    setShowGitHubIssueImport(false);
     setGitHubIssueDraft("");
   };
 
@@ -268,28 +262,24 @@ export function Home({
     return trimmed.length > 0 ? trimmed : null;
   };
 
+  const taskComposerWorkspaceId = getTaskComposerWorkspaceId();
+  const {
+    issues: githubIssues,
+    isLoading: githubIssuesLoading,
+    error: githubIssuesError,
+    refresh: refreshGitHubIssues,
+  } = useGitHubIssuesByWorkspaceId(
+    isTaskComposerOpen ? taskComposerWorkspaceId : null,
+    false,
+  );
+
   const handleLoadGitHubIssues = async () => {
-    const workspaceId = getTaskComposerWorkspaceId();
-    if (!workspaceId) {
+    if (!taskComposerWorkspaceId) {
       return;
     }
-    if (githubIssuesLoading) {
-      return;
-    }
-    setGitHubIssuesLoading(true);
-    setGitHubIssuesError(null);
+    setShowGitHubIssueImport(true);
     setGitHubIssueDraft("");
-    try {
-      const response = await getGitHubIssues(workspaceId);
-      setGitHubIssuesWorkspaceId(workspaceId);
-      setGitHubIssues(response.issues ?? []);
-    } catch (error) {
-      setGitHubIssuesWorkspaceId(workspaceId);
-      setGitHubIssues([]);
-      setGitHubIssuesError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setGitHubIssuesLoading(false);
-    }
+    await refreshGitHubIssues();
   };
 
   const parseMcpStatusResponse = (response: unknown) => {
@@ -355,10 +345,7 @@ export function Home({
     setTaskTitle("");
     setTaskContent("");
     setTaskWorkspaceDraft("");
-    setGitHubIssuesWorkspaceId(null);
-    setGitHubIssues([]);
-    setGitHubIssuesLoading(false);
-    setGitHubIssuesError(null);
+    setShowGitHubIssueImport(false);
     setGitHubIssueDraft("");
     setMcpWorkspaceId(null);
     setMcpConfiguredServers([]);
@@ -369,7 +356,6 @@ export function Home({
 
   // Best-effort: refresh MCP info for the current task-composer workspace.
   // (We don't require this for task creation; it's only for Linear MCP UX.)
-  const taskComposerWorkspaceId = getTaskComposerWorkspaceId();
   useEffect(() => {
     if (!isTaskComposerOpen) {
       return;
@@ -820,8 +806,7 @@ export function Home({
                   </button>
                   {mcpError && <span className="home-tasks-error">{mcpError}</span>}
                 </div>
-                {githubIssues.length > 0 &&
-                  githubIssuesWorkspaceId === getTaskComposerWorkspaceId() && (
+                {showGitHubIssueImport && githubIssues.length > 0 && (
                     <select
                       className="home-tasks-input"
                       value={githubIssueDraft}
