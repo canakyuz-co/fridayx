@@ -1,4 +1,607 @@
-# Fridex Agent Guide
+# Friday Agent Guide
+
+> **Amaç:** Proje hedeflerini, mimari ilkeleri öğretmek; üretimde DRY, KISS, YAGNI + algoritmik mükemmellik uygulat.  
+> **Ton:** Resmi, net, pratik. **Polyrepo** yaklaşımı.
+
+---
+
+## 0) Kullanım Talimatı
+
+- **Algoritmik düşünce önce:** Zaman/uzay karmaşıklığını analiz et (Big-O), optimal çözüm öner.
+- **Önce düşün:** Kompleks işlerde 6–10 maddelik tasarım + karmaşıklık özeti ver.
+- **Minimal diff:** Sadece gerekli satırları değiştir.
+- **Self-review:** Her üretim sonunda tek paragraf (lint, edge case, performans, güvenlik, **karmaşıklık analizi**).
+- **Güvenlik:** PII maskeleme, log kısıntısı, gizli anahtar yönetimi.
+- **En basit OPTIMAL çözüm:** Gereksiz soyutlamadan kaçın ama performansı feda etme.
+- **Git:** Her anlamlı değişiklik sonrası otomatik commit; `--no-verify` kullanma ve mesajları daima Türkçe, açıklayıcı yaz.
+
+### ⚠️ YASAKLAR
+
+- ❌ Mock/test data (gerçek DB kullan)
+- ❌ Unit test obsesyonu
+- ❌ Two-pass yaklaşımı
+- ❌ Aşırı test (sadece kritik mantık)
+- ❌ Test-first
+- ❌ Brute-force çözümler (O(n²) yerine O(n log n) varsa)
+- ❌ Gereksiz nested loops
+- ❌ Global state mutation
+- ❌ Side-effect'li fonksiyonlar (gerekmedikçe)
+
+---
+
+## 1) Proje Bağlamı
+
+- **Hedef:** Multi-tenant SaaS platformu
+- **Mimari:** Edge (Cloudflare) → Origin (AWS)
+- **Kısıtlar:** P95 <100ms, GDPR uyumlu
+
+---
+
+## 2) İlkeler
+
+- **DRY:** ≥3 tekrar sonrası soyutla
+- **KISS:** En basit çalışan OPTIMAL çözüm (basit ≠ yavaş)
+- **YAGNI:** Bugün gerekmeyen esneklik ekleme
+- **Performans:** P95 bütçesi, bundle boyutu, **algoritmik verimlilik**
+- **Güvenlik:** Şema doğrulama, RBAC/ABAC, gizli yönetim
+- **Observability:** Log + metric + trace
+- **Dayanıklılık:** Timeout, retry, circuit breaker
+- **A11y:** WCAG 2.1 AA
+- **i18n:** Harici kaynaklar
+- **Secrets:** KMS/Secrets Manager
+
+---
+
+## 3) Algoritmik Mükemmellik
+
+### 3.1) Karmaşıklık Analizi (Zorunlu)
+
+Her fonksiyon için:
+- **Time complexity:** O(?), worst/average/best case
+- **Space complexity:** O(?), auxiliary space
+- **Trade-off:** Neden bu çözüm? Alternatifler?
+
+```typescript
+// ❌ Kötü: O(n²) nested loop
+function findDuplicates(arr: number[]): number[] {
+  const dupes: number[] = [];
+  for (let i = 0; i < arr.length; i++) {
+    for (let j = i + 1; j < arr.length; j++) {
+      if (arr[i] === arr[j]) dupes.push(arr[i]);
+    }
+  }
+  return dupes;
+}
+
+// ✅ İyi: O(n) hash set
+function findDuplicates(arr: number[]): number[] {
+  const seen = new Set<number>();
+  const dupes = new Set<number>();
+  for (const num of arr) {
+    if (seen.has(num)) dupes.add(num);
+    seen.add(num);
+  }
+  return Array.from(dupes);
+}
+// Time: O(n), Space: O(n)
+```
+
+### 3.2) Veri Yapısı Seçimi
+
+Doğru veri yapısını seç:
+- **Array:** Sıralı erişim, cache locality
+- **Set/Map:** O(1) lookup, uniqueness
+- **Heap:** Priority queue, O(log n) insert/extract
+- **Trie:** Prefix search, O(m) where m = key length
+- **Graph:** İlişkisel veri, BFS/DFS
+
+```typescript
+// ❌ Kötü: Array'de search O(n)
+const users: User[] = [...];
+const user = users.find(u => u.id === targetId); // O(n)
+
+// ✅ İyi: Map ile O(1) lookup
+const usersById = new Map<string, User>(
+  users.map(u => [u.id, u])
+);
+const user = usersById.get(targetId); // O(1)
+```
+
+### 3.3) Fonksiyonel Saflık (Pure Functions)
+
+```typescript
+// ❌ Kötü: Side-effect, mutasyon
+let total = 0;
+function addToTotal(value: number): void {
+  total += value; // Global state mutation
+}
+
+// ✅ İyi: Pure, immutable
+function add(a: number, b: number): number {
+  return a + b; // Deterministic, testable
+}
+
+// ✅ İyi: Immutable update
+function updateUser(user: User, updates: Partial<User>): User {
+  return { ...user, ...updates }; // Yeni obje döner
+}
+```
+
+### 3.4) Erken Çıkış (Early Return)
+
+```typescript
+// ❌ Kötü: Nested if
+function processOrder(order: Order): Result {
+  if (order.isValid) {
+    if (order.isPaid) {
+      if (order.hasStock) {
+        return shipOrder(order);
+      } else {
+        return { error: 'No stock' };
+      }
+    } else {
+      return { error: 'Not paid' };
+    }
+  } else {
+    return { error: 'Invalid' };
+  }
+}
+
+// ✅ İyi: Guard clauses
+function processOrder(order: Order): Result {
+  if (!order.isValid) return { error: 'Invalid' };
+  if (!order.isPaid) return { error: 'Not paid' };
+  if (!order.hasStock) return { error: 'No stock' };
+  
+  return shipOrder(order);
+}
+```
+
+### 3.5) Lazy Evaluation
+
+```typescript
+// ❌ Kötü: Tüm liste işlenir
+const results = items
+  .map(expensiveTransform)    // Hepsi işlenir
+  .filter(isValid)
+  .slice(0, 10);                // Sadece 10 gerekli
+
+// ✅ İyi: Generator ile lazy
+function* processItems(items: Item[]) {
+  for (const item of items) {
+    const transformed = expensiveTransform(item);
+    if (isValid(transformed)) {
+      yield transformed;
+    }
+  }
+}
+
+const results = Array.from(
+  take(processItems(items), 10)
+); // Sadece 10 için işlem yapar
+```
+
+### 3.6) Memoization (Gerektiğinde)
+
+```typescript
+// ❌ Kötü: Repeated expensive computation
+function fibonacci(n: number): number {
+  if (n <= 1) return n;
+  return fibonacci(n - 1) + fibonacci(n - 2); // O(2^n)
+}
+
+// ✅ İyi: Memoized
+const fibCache = new Map<number, number>();
+function fibonacci(n: number): number {
+  if (n <= 1) return n;
+  if (fibCache.has(n)) return fibCache.get(n)!;
+  
+  const result = fibonacci(n - 1) + fibonacci(n - 2);
+  fibCache.set(n, result);
+  return result; // O(n)
+}
+
+// ✅ Daha İyi: Iterative DP
+function fibonacci(n: number): number {
+  if (n <= 1) return n;
+  let prev = 0, curr = 1;
+  for (let i = 2; i <= n; i++) {
+    [prev, curr] = [curr, prev + curr];
+  }
+  return curr; // O(n), O(1) space
+}
+```
+
+### 3.7) Batch Operations
+
+```typescript
+// ❌ Kötü: N+1 query
+async function getUsersWithOrders(userIds: string[]) {
+  const users = [];
+  for (const id of userIds) {
+    const user = await db.user.findUnique({ where: { id } });
+    const orders = await db.order.findMany({ where: { userId: id } });
+    users.push({ ...user, orders });
+  }
+  return users; // N+1 queries
+}
+
+// ✅ İyi: Batch query
+async function getUsersWithOrders(userIds: string[]) {
+  const [users, orders] = await Promise.all([
+    db.user.findMany({ where: { id: { in: userIds } } }),
+    db.order.findMany({ where: { userId: { in: userIds } } })
+  ]);
+  
+  const ordersMap = orders.reduce((acc, order) => {
+    (acc[order.userId] ??= []).push(order);
+    return acc;
+  }, {} as Record<string, Order[]>);
+  
+  return users.map(user => ({
+    ...user,
+    orders: ordersMap[user.id] ?? []
+  })); // 2 queries toplam
+}
+```
+
+### 3.8) Naming Conventions (Algoritmik Netlik)
+
+```typescript
+// ❌ Kötü: Belirsiz isimler
+function proc(d: any): any {
+  const r = [];
+  for (let i = 0; i < d.length; i++) {
+    if (d[i] > 0) r.push(d[i] * 2);
+  }
+  return r;
+}
+
+// ✅ İyi: Anlamlı, açıklayıcı
+function doublePositiveNumbers(numbers: number[]): number[] {
+  return numbers
+    .filter(n => n > 0)
+    .map(n => n * 2);
+}
+```
+
+### 3.9) Single Responsibility
+
+```typescript
+// ❌ Kötü: God function
+function processUserData(data: any) {
+  // Validation
+  if (!data.email) throw new Error('Invalid');
+  
+  // Transformation
+  const user = {
+    email: data.email.toLowerCase(),
+    name: data.name.trim()
+  };
+  
+  // Business logic
+  if (user.email.includes('admin')) {
+    user.role = 'admin';
+  }
+  
+  // Persistence
+  db.save(user);
+  
+  // Notification
+  sendEmail(user.email, 'Welcome');
+  
+  return user;
+}
+
+// ✅ İyi: Separated concerns
+function validateUserData(data: unknown): UserInput {
+  const schema = z.object({
+    email: z.string().email(),
+    name: z.string().min(1)
+  });
+  return schema.parse(data);
+}
+
+function normalizeUser(input: UserInput): User {
+  return {
+    email: input.email.toLowerCase(),
+    name: input.name.trim()
+  };
+}
+
+function assignRole(user: User): User {
+  return {
+    ...user,
+    role: user.email.includes('admin') ? 'admin' : 'user'
+  };
+}
+
+async function createUser(data: unknown): Promise<User> {
+  const input = validateUserData(data);
+  const normalized = normalizeUser(input);
+  const withRole = assignRole(normalized);
+  
+  const saved = await db.user.create(withRole);
+  await sendWelcomeEmail(saved.email);
+  
+  return saved;
+}
+// Her fonksiyon tek sorumluluk, test edilebilir, compose edilebilir
+```
+
+### 3.10) Tip Güvenliği (Algoritma Doğruluğu)
+
+```typescript
+// ❌ Kötü: any, runtime hata riski
+function merge(a: any, b: any): any {
+  return { ...a, ...b };
+}
+
+// ✅ İyi: Generic, type-safe
+function merge<T extends object, U extends object>(
+  a: T,
+  b: U
+): T & U {
+  return { ...a, ...b };
+}
+
+// ✅ Daha İyi: Discriminated union
+type Result<T, E = Error> =
+  | { success: true; data: T }
+  | { success: false; error: E };
+
+function divide(a: number, b: number): Result<number> {
+  if (b === 0) {
+    return { success: false, error: new Error('Division by zero') };
+  }
+  return { success: true, data: a / b };
+}
+
+// Kullanım: Compile-time safe
+const result = divide(10, 2);
+if (result.success) {
+  console.log(result.data); // Type: number
+} else {
+  console.error(result.error); // Type: Error
+}
+```
+
+---
+
+## 4) Polyrepo
+
+- Her servis ayrı repo
+- Ortak kod küçük paketler
+- Template'ler ile tutarlılık
+- Bağımsız versiyonlama + CHANGELOG
+
+---
+
+## 5) Multi-Tenant + RBAC/ABAC
+
+- **Tenant izolasyonu:** Postgres RLS (`tenant_id` zorunlu)
+- **Context:** `tenant_id`, `subject_id`, `roles`, `attributes` zorunlu
+- **RBAC:** Minimal roller, least privilege
+- **ABAC:** OPA/Cedar/Casbin policy-as-code
+- **Çapraz tenant yasak:** Audit log'da `tenant_id` + `decision_id`
+- **Cache:** Key'lere `tenant_id` ön eki
+
+---
+
+## 6) Kod Stili
+
+- **Dil:** TypeScript strict mode
+- **Yorumlar:** NEDEN'i açıkla + karmaşıklık analizi
+- **Hatalar:** `application/problem+json`
+- **API:** Dar yüzey, versiyonlu
+- **Bağımlılık:** Version pinning, scan
+- **Fonksiyonlar:** Max 20 satır, tek sorumluluk
+- **Cyclomatic complexity:** <10
+- **Nesting depth:** Max 3 seviye
+
+---
+
+## 7) Docker
+
+- Multi-stage build
+- Üretim: distroless/slim, non-root, read-only FS
+- HEALTHCHECK, ulimits
+- SBOM (Syft) + imza (cosign)
+- Trivy tarama, kritik blok
+- CPU/mem limit zorunlu
+
+---
+
+## 8) Cloudflare + AWS
+
+**Cloudflare:** WAF, rate limit, Turnstile, cache, Workers  
+**AWS:** IAM least privilege, VPC, SSM/Secrets, KMS, CloudTrail  
+**Observability:** CloudWatch/X-Ray, correlation ID  
+**Storage:** S3 encrypted, versioned  
+**Deploy:** Blue/green, auto rollback
+
+---
+
+## 9) Observability
+
+- **Log:** Structured, PII masked, `tenant_id`
+- **Metrics:** Error/latency/throughput, tenant + version tags
+- **Trace:** External calls, DB, cache
+- **Chaos:** Timeout, outage scenarios
+- **Performance:** P50/P95/P99, slow query alerts
+
+---
+
+## 10) Test
+
+- **Piramit:** Unit > Integration > E2E
+- **Bug → test:** Regresyon zorunlu
+- **Contract:** Servisler arası
+- **Deterministik:** Flaky yasak
+- **Risk odaklı:** Kritik yollar
+- **Edge cases:** Null, empty, boundary values
+- **Algorithmic:** Karmaşıklık assertion'ları
+
+```typescript
+// ✅ Karmaşıklık testi
+describe('findDuplicates', () => {
+  it('should be O(n) time complexity', () => {
+    const sizes = [1000, 2000, 4000, 8000];
+    const times: number[] = [];
+    
+    for (const size of sizes) {
+      const arr = Array.from({ length: size }, (_, i) => i % 100);
+      const start = performance.now();
+      findDuplicates(arr);
+      times.push(performance.now() - start);
+    }
+    
+    // Linear growth check (tolerance ±30%)
+    const ratio1 = times[1] / times[0];
+    const ratio2 = times[2] / times[1];
+    expect(ratio2).toBeCloseTo(ratio1, 0.3);
+  });
+});
+```
+
+---
+
+## 11) Stack Guardrails
+
+### TypeScript
+- `strict: true`, runtime schema (Zod)
+- Discriminated union, exhaustiveness
+- **No `any`**, prefer `unknown` + narrowing
+- Generics > type assertions
+
+### Node.js (Express/NestJS/Fastify)
+- Controller → Service → Repo
+- Schema validation, `problem+json`
+- Helmet, CORS, rate limit, JWT
+- Pino + OpenTelemetry
+- **N+1 killer:** DataLoader/batch
+- Async/await > callbacks
+- Stream for large data
+
+### Python (FastAPI/Django)
+- `pyright`/`mypy`, Pydantic v2
+- Async DB, dependency injection
+- `uv`/`pip-tools`, multi-stage Docker
+- List comprehension > loops (when readable)
+- Generator for memory efficiency
+
+### Go
+- Error wrap `%w`, context zorunlu
+- `go mod tidy`, interface tüketici tarafında
+- chi/gin, timeouts, pprof
+- Goroutine + channel, defer cleanup
+- Slice pre-allocation
+
+### Rust
+- `clippy` + `rustfmt`, `Result` + `?`
+- axum/actix, tower middleware
+- `serde`, `sqlx`/`sea-orm`
+- Zero-copy where possible
+- Iterator chains > loops
+
+---
+
+## 12) DB Guardrails
+
+- Küçük backward-compat migrations
+- Constraints, soft-delete policy
+- **Index strategy:** Covering index, partial index
+- **Query optimization:** EXPLAIN ANALYZE
+- N+1 engel, transaction sınırları
+- `tenant_id` + RLS, audit
+- Connection pooling
+
+---
+
+## 13) Prompt Kısayolları
+
+**Algoritmik çözüm**
+```
+Problem analizi yap:
+1. Input/output tanımla
+2. Edge cases listele
+3. Brute-force O(?)
+4. Optimal çözüm O(?)
+5. Trade-off'lar
+6. Implementation + karmaşıklık yorumu
+```
+
+**Tasarım → Kod**
+```
+8-10 madde tasarım + karmaşıklık özeti.
+Onay sonrası minimal diff + test + self-review.
+Karmaşıklık analizi ekle (time/space).
+```
+
+**Refactor**
+```
+Mevcut kod karmaşıklığını analiz et.
+Optimize edilebilir kısımları belirt.
+Pure functions, immutability, early return uygula.
+Cyclomatic complexity <10, nesting <3.
+```
+
+**Multi-tenant**
+```
+tenant_id + subject_id + roles + attributes context.
+OPA/Cedar kararı, deny-default, RLS enforcement.
+Batch operations for multi-tenant queries.
+```
+
+**Performance**
+```
+Profiling yap (CPU/memory/IO).
+Hot paths belirle, optimize et.
+Caching strategy (Redis/local).
+Database query optimization.
+```
+
+---
+
+## 14) Self-Review
+
+1. ✓ **Algorithmic:** Time/space complexity optimal? Trade-offs açık?
+2. ✓ **Pure functions:** Side-effect minimal? Immutable data?
+3. ✓ **Early return:** Guard clauses? Nesting <3?
+4. ✓ **Naming:** Açıklayıcı? Consistent?
+5. ✓ **Single responsibility:** Her fonksiyon <20 satır?
+6. ✓ **Type safety:** No `any`, generic doğru kullanılmış?
+7. ✓ Lint & type-check
+8. ✓ Edge cases (null, empty, boundary)
+9. ✓ Performance (P95/P99, bundle, query)
+10. ✓ Schema validation
+11. ✓ Security & PII (masking, secrets, CSP)
+12. ✓ Multi-tenant (`tenant_id`, RLS, batch)
+13. ✓ RBAC/ABAC (policy test, deny-default)
+14. ✓ Observability (log/metric/trace)
+15. ✓ Tests (unit + edge cases + complexity)
+16. ✓ Docker (size, non-root, SBOM, scan)
+17. ✓ Deploy (canary, rollback)
+18. ✓ Docs (README, CHANGELOG, complexity notes)
+19. ✓ Minimal diff
+
+---
+
+## 15) Bakım
+
+- **Polyrepo:** SemVer, auto CHANGELOG
+- **Template:** CI, linter, Dockerfile sync
+- **Dependencies:** Renovate/Dependabot, auto PR
+- **Deprecation:** Bildirim, geçiş, plan
+- **Policy sync:** CI ile dağıt
+- **Postmortem:** Eylem takip, backlog
+- **Performance audit:** Quarterly profiling
+- **Code review:** Algorithmic complexity check
+- **Audit:** 3 ayda gözden geçir, yılda revizyon
+
+--- project-doc ---
+
+## Fridex Agent Guide
 
 All docs must canonical, no past commentary, only live state.
 
