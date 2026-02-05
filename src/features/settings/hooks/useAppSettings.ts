@@ -3,6 +3,7 @@ import type { AppSettings } from "../../../types";
 import {
   getAppSettings,
   listOtherAiModels,
+  listOtherAiModelsCli,
   runCodexDoctor,
   updateAppSettings,
 } from "../../../services/tauri";
@@ -317,6 +318,22 @@ export function useAppSettings() {
             models = await listOtherAiModels(providerType, apiKey);
           } catch {
             models = fallback.length > 0 ? fallback : existingModels;
+          }
+        } else if (
+          providerType === "gemini" &&
+          (provider.command ?? "").trim().length > 0
+        ) {
+          // Gemini CLI can list models without an API key (it may rely on local auth).
+          try {
+            models = await listOtherAiModelsCli(
+              providerType,
+              provider.command!.trim(),
+              provider.env ?? null,
+            );
+          } catch {
+            if (existingModels.length === 0 && fallback.length > 0) {
+              models = fallback;
+            }
           }
         } else if (existingModels.length === 0 && fallback.length > 0) {
           models = fallback;

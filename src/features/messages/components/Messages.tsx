@@ -508,6 +508,9 @@ function toolIconForSummary(
   item: Extract<ConversationItem, { kind: "tool" }>,
   summary: ToolSummary,
 ) {
+  if (item.toolType === "trace") {
+    return Brain;
+  }
   if (item.toolType === "commandExecution") {
     return Terminal;
   }

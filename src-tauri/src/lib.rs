@@ -111,6 +111,7 @@ pub fn run() {
             claude_api::send_claude_message_sync,
             claude_cli::send_claude_cli_message,
             gemini_api::send_gemini_message_sync,
+            gemini_cli::send_gemini_cli_message,
             gemini_cli::send_gemini_cli_message_sync,
             settings::get_app_settings,
             settings::update_app_settings,

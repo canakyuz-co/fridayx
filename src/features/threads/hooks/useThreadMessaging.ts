@@ -18,6 +18,7 @@ import {
   sendClaudeMessage,
   sendClaudeCliMessage,
   sendClaudeMessageSync,
+  sendGeminiCliMessage,
   sendGeminiCliMessageSync,
   sendGeminiMessageSync,
   acpStartSession,
@@ -101,6 +102,31 @@ type PlanJsonPayload = {
 };
 
 const PLAN_MODE_ID = "plan";
+
+function upsertTraceToolItem(
+  dispatch: Dispatch<ThreadAction>,
+  workspaceId: string,
+  threadId: string,
+  itemId: string,
+  title: string,
+  detail: string,
+  status: "in_progress" | "completed" | "failed",
+) {
+  dispatch({
+    type: "upsertItem",
+    workspaceId,
+    threadId,
+    item: {
+      id: itemId,
+      kind: "tool",
+      toolType: "trace",
+      title,
+      detail,
+      status,
+      output: "",
+    } as ConversationItem,
+  });
+}
 
 function extractPlanJson(text: string): PlanJsonPayload | null {
   const start = text.indexOf("{");
@@ -657,6 +683,23 @@ export function useThreadMessaging({
           if (useCli) {
             // Use Claude CLI
             let accumulatedText = "";
+            const traceItemId = `trace-${assistantMessageId}`;
+            const traceStartedAt = Date.now();
+            upsertTraceToolItem(
+              dispatch,
+              workspace.id,
+              threadId,
+              traceItemId,
+              "Trace: Claude",
+              `CLI · ${modelName}`,
+              "in_progress",
+            );
+            dispatch({
+              type: "appendToolOutput",
+              threadId,
+              itemId: traceItemId,
+              delta: `Started ${formatRelativeTime(traceStartedAt)}.\n`,
+            });
             const promptText = isPlanMode
               ? buildPlanPrompt(finalText, 0)
               : buildOtherAiPrompt(recentHistory, finalText);
@@ -675,6 +718,12 @@ export function useThreadMessaging({
                     source: "client",
                     label: "claude-cli/init",
                     payload: { sessionId, model },
+                  });
+                  dispatch({
+                    type: "appendToolOutput",
+                    threadId,
+                    itemId: traceItemId,
+                    delta: `Init · model=${model ?? modelName} session=${sessionId ?? "n/a"}\n`,
                   });
                 },
                 onContent: (text) => {
@@ -696,6 +745,32 @@ export function useThreadMessaging({
                   }
                 },
                 onComplete: (_text, usage) => {
+                  if (usage) {
+                    dispatch({
+                      type: "appendToolOutput",
+                      threadId,
+                      itemId: traceItemId,
+                      delta: `Complete · in=${usage.inputTokens} out=${usage.outputTokens} cost=$${usage.totalCostUsd.toFixed(
+                        4,
+                      )}\n`,
+                    });
+                  } else {
+                    dispatch({
+                      type: "appendToolOutput",
+                      threadId,
+                      itemId: traceItemId,
+                      delta: "Complete.\n",
+                    });
+                  }
+                  upsertTraceToolItem(
+                    dispatch,
+                    workspace.id,
+                    threadId,
+                    traceItemId,
+                    "Trace: Claude",
+                    `CLI · ${modelName} · ${Date.now() - traceStartedAt}ms`,
+                    "completed",
+                  );
                   if (usage) {
                     onClaudeUsage?.({
                       inputTokens: usage.inputTokens,
@@ -740,6 +815,21 @@ export function useThreadMessaging({
                   safeMessageActivity();
                 },
                 onError: (error) => {
+                  upsertTraceToolItem(
+                    dispatch,
+                    workspace.id,
+                    threadId,
+                    traceItemId,
+                    "Trace: Claude",
+                    `CLI · ${modelName}`,
+                    "failed",
+                  );
+                  dispatch({
+                    type: "appendToolOutput",
+                    threadId,
+                    itemId: traceItemId,
+                    delta: `Error · ${error}\n`,
+                  });
                   markProcessing(threadId, false);
                   pushThreadErrorMessage(threadId, error);
                   safeMessageActivity();
@@ -948,20 +1038,120 @@ export function useThreadMessaging({
           const promptText = isPlanMode
             ? buildPlanPrompt(finalText, 0)
             : buildOtherAiPrompt(recentHistory, finalText);
-          const response = useCli
-            ? await sendGeminiCliMessageSync(
-                provider.command!,
-                provider.args ?? null,
-                promptText,
-                modelName,
-                workspace.path,
-                provider.env ?? null,
-              )
-            : await sendGeminiMessageSync(
-                provider.apiKey!,
-                modelName,
-                promptText,
-              );
+          if (useCli) {
+            let accumulatedText = "";
+            const traceItemId = `trace-${assistantMessageId}`;
+            const traceStartedAt = Date.now();
+            upsertTraceToolItem(
+              dispatch,
+              workspace.id,
+              threadId,
+              traceItemId,
+              "Trace: Gemini",
+              `CLI · ${modelName}`,
+              "in_progress",
+            );
+            dispatch({
+              type: "appendToolOutput",
+              threadId,
+              itemId: traceItemId,
+              delta: `Started ${formatRelativeTime(traceStartedAt)}.\n`,
+            });
+
+            await sendGeminiCliMessage(
+              provider.command!,
+              provider.args ?? null,
+              promptText,
+              modelName,
+              workspace.path,
+              provider.env ?? null,
+              {
+                onInit: (model) => {
+                  dispatch({
+                    type: "appendToolOutput",
+                    threadId,
+                    itemId: traceItemId,
+                    delta: `Init · model=${model ?? modelName}\n`,
+                  });
+                },
+                onContent: (delta) => {
+                  accumulatedText += delta;
+                  dispatch({
+                    type: "upsertItem",
+                    workspaceId: workspace.id,
+                    threadId,
+                    item: {
+                      id: assistantMessageId,
+                      kind: "message",
+                      role: "assistant",
+                      text: accumulatedText,
+                    },
+                    hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+                  });
+                  safeMessageActivity();
+                },
+                onComplete: (text) => {
+                  const finalText = text.trim() || accumulatedText.trim();
+                  dispatch({
+                    type: "upsertItem",
+                    workspaceId: workspace.id,
+                    threadId,
+                    item: {
+                      id: assistantMessageId,
+                      kind: "message",
+                      role: "assistant",
+                      text: finalText,
+                    },
+                    hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+                  });
+                  dispatch({
+                    type: "appendToolOutput",
+                    threadId,
+                    itemId: traceItemId,
+                    delta: "Complete.\n",
+                  });
+                  upsertTraceToolItem(
+                    dispatch,
+                    workspace.id,
+                    threadId,
+                    traceItemId,
+                    "Trace: Gemini",
+                    `CLI · ${modelName} · ${Date.now() - traceStartedAt}ms`,
+                    "completed",
+                  );
+                  markProcessing(threadId, false);
+                  safeMessageActivity();
+                },
+                onError: (error) => {
+                  upsertTraceToolItem(
+                    dispatch,
+                    workspace.id,
+                    threadId,
+                    traceItemId,
+                    "Trace: Gemini",
+                    `CLI · ${modelName}`,
+                    "failed",
+                  );
+                  dispatch({
+                    type: "appendToolOutput",
+                    threadId,
+                    itemId: traceItemId,
+                    delta: `Error · ${error}\n`,
+                  });
+                  markProcessing(threadId, false);
+                  pushThreadErrorMessage(threadId, error);
+                  safeMessageActivity();
+                },
+              },
+            );
+            return;
+          }
+
+          const response = await sendGeminiMessageSync(
+            provider.apiKey!,
+            modelName,
+            promptText,
+          );
           dispatch({
             type: "upsertItem",
             workspaceId: workspace.id,

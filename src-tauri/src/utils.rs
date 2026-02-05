@@ -86,9 +86,9 @@ pub(crate) fn git_env_path() -> String {
 }
 
 pub(crate) fn tools_env_path() -> String {
-    let mut paths: Vec<PathBuf> = env::var_os("PATH")
-        .map(|value| env::split_paths(&value).collect())
-        .unwrap_or_default();
+  let mut paths: Vec<PathBuf> = env::var_os("PATH")
+    .map(|value| env::split_paths(&value).collect())
+    .unwrap_or_default();
 
     let defaults: &[&str] = if cfg!(windows) {
         &["C:\\Windows\\System32"]
@@ -104,27 +104,54 @@ pub(crate) fn tools_env_path() -> String {
         ]
     };
 
-    for candidate in defaults {
-        let path = PathBuf::from(candidate);
-        if !paths.contains(&path) {
-            paths.push(path);
-        }
+  for candidate in defaults {
+    let path = PathBuf::from(candidate);
+    if !paths.contains(&path) {
+      paths.push(path);
     }
+  }
 
-    // NVM installs Node under ~/.nvm/versions/node/<version>/bin. GUI apps often miss this PATH.
-    if !cfg!(windows) {
-        if let Some(home) = env::var_os("HOME").filter(|value| !value.is_empty()) {
-            let base = PathBuf::from(home).join(".nvm/versions/node");
-            if let Ok(entries) = std::fs::read_dir(&base) {
-                for entry in entries.flatten() {
-                    let bin_dir = entry.path().join("bin");
-                    if bin_dir.join("node").is_file() && !paths.contains(&bin_dir) {
-                        paths.push(bin_dir);
-                    }
-                }
-            }
+  // GUI apps often start with a minimal PATH; make a best-effort attempt to include Node bins from
+  // popular version managers (NVM/Volta/asdf/mise/fnm) so Node-backed CLIs work reliably.
+  if !cfg!(windows) {
+    if let Some(home) = env::var_os("HOME").filter(|value| !value.is_empty()) {
+      let home = PathBuf::from(home);
+
+      let push_if_node = |paths: &mut Vec<PathBuf>, dir: PathBuf| {
+        if dir.join("node").is_file() && !paths.contains(&dir) {
+          paths.push(dir);
         }
+      };
+
+      // NVM: ~/.nvm/versions/node/<version>/bin
+      let nvm_base = home.join(".nvm/versions/node");
+      if let Ok(entries) = std::fs::read_dir(&nvm_base) {
+        for entry in entries.flatten() {
+          push_if_node(&mut paths, entry.path().join("bin"));
+        }
+      }
+
+      // Volta: ~/.volta/bin
+      push_if_node(&mut paths, home.join(".volta/bin"));
+
+      // asdf: ~/.asdf/shims
+      push_if_node(&mut paths, home.join(".asdf/shims"));
+
+      // mise: ~/.local/share/mise/shims
+      push_if_node(&mut paths, home.join(".local/share/mise/shims"));
+
+      // fnm: ~/.fnm/node-versions/<version>/installation/bin
+      let fnm_base = home.join(".fnm/node-versions");
+      if let Ok(entries) = std::fs::read_dir(&fnm_base) {
+        for entry in entries.flatten() {
+          push_if_node(
+            &mut paths,
+            entry.path().join("installation/bin"),
+          );
+        }
+      }
     }
+  }
 
     let joined = env::join_paths(paths).unwrap_or_else(|_| OsString::new());
     joined.to_string_lossy().to_string()

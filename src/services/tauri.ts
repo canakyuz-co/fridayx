@@ -1095,6 +1095,63 @@ export async function sendGeminiCliMessageSync(
   });
 }
 
+export type GeminiCliEvent = {
+  eventType: string;
+  content: string | null;
+  error: string | null;
+  model: string | null;
+};
+
+export type GeminiCliEventHandler = {
+  onInit?: (model: string | null) => void;
+  onContent?: (delta: string) => void;
+  onComplete?: (text: string) => void;
+  onError?: (error: string) => void;
+};
+
+export async function sendGeminiCliMessage(
+  command: string,
+  args: string | null,
+  prompt: string,
+  model: string | null,
+  cwd: string | null,
+  env: Record<string, string> | null,
+  handlers: GeminiCliEventHandler,
+): Promise<void> {
+  const channel = new Channel<GeminiCliEvent>();
+
+  channel.onmessage = (event) => {
+    switch (event.eventType) {
+      case "init":
+        handlers.onInit?.(event.model);
+        break;
+      case "content":
+        if (event.content) {
+          handlers.onContent?.(event.content);
+        }
+        break;
+      case "complete":
+        handlers.onComplete?.(event.content ?? "");
+        break;
+      case "error":
+        if (event.error) {
+          handlers.onError?.(event.error);
+        }
+        break;
+    }
+  };
+
+  return invoke("send_gemini_cli_message", {
+    command,
+    args,
+    prompt,
+    model,
+    cwd,
+    env,
+    onEvent: channel,
+  });
+}
+
 // Claude CLI types
 export type ClaudeCliUsage = {
   inputTokens: number;
