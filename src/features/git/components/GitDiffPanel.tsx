@@ -26,6 +26,7 @@ import X from "lucide-react/dist/esm/icons/x";
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { formatRelativeTime } from "../../../utils/time";
 import { PanelTabs, type PanelTabId } from "../../layout/components/PanelTabs";
+import { formatGitCommandReport } from "../../../utils/gitCommandReport";
 
 type GitDiffPanelProps = {
   workspaceId?: string | null;
@@ -121,8 +122,14 @@ type GitDiffPanelProps = {
   syncError?: string | null;
   commitReport?: GitCommandReport | null;
   pushReport?: GitCommandReport | null;
+  pullReport?: GitCommandReport | null;
+  fetchReport?: GitCommandReport | null;
   onFixGitError?: (payload: {
-    operation: "commit" | "push";
+    operation: "commit" | "push" | "pull" | "fetch";
+    report: GitCommandReport;
+  }) => void | Promise<void>;
+  onShareGitError?: (payload: {
+    operation: "commit" | "push" | "pull" | "fetch";
     report: GitCommandReport;
   }) => void | Promise<void>;
   // For showing push button when there are commits to push
@@ -286,6 +293,13 @@ type SidebarErrorProps = {
     disabled?: boolean;
     loading?: boolean;
   } | null;
+  secondaryAction?: {
+    label: string;
+    onAction: () => void | Promise<void>;
+    disabled?: boolean;
+    loading?: boolean;
+  } | null;
+  details?: string | null;
   onDismiss: () => void;
 };
 
@@ -293,27 +307,60 @@ function SidebarError({
   variant = "diff",
   message,
   action,
+  secondaryAction,
+  details = null,
   onDismiss,
 }: SidebarErrorProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   return (
     <div className={`sidebar-error sidebar-error-${variant}`}>
       <div className="sidebar-error-body">
         <div className={variant === "commit" ? "commit-message-error" : "diff-error"}>
           {message}
         </div>
-        {action && (
-          <button
-            type="button"
-            className="ghost sidebar-error-action"
-            onClick={() => void action.onAction()}
-            disabled={action.disabled || action.loading}
-          >
-            {action.loading && (
-              <span className="commit-button-spinner" aria-hidden />
+        {(action || secondaryAction || details) && (
+          <div className="sidebar-error-actions">
+            {action && (
+              <button
+                type="button"
+                className="ghost sidebar-error-action"
+                onClick={() => void action.onAction()}
+                disabled={action.disabled || action.loading}
+              >
+                {action.loading && (
+                  <span className="commit-button-spinner" aria-hidden />
+                )}
+                <span>{action.label}</span>
+              </button>
             )}
-            <span>{action.label}</span>
-          </button>
+            {secondaryAction && (
+              <button
+                type="button"
+                className="ghost sidebar-error-action"
+                onClick={() => void secondaryAction.onAction()}
+                disabled={secondaryAction.disabled || secondaryAction.loading}
+              >
+                {secondaryAction.loading && (
+                  <span className="commit-button-spinner" aria-hidden />
+                )}
+                <span>{secondaryAction.label}</span>
+              </button>
+            )}
+            {details && (
+              <button
+                type="button"
+                className="ghost sidebar-error-action"
+                onClick={() => setDetailsOpen((prev) => !prev)}
+                aria-pressed={detailsOpen}
+              >
+                <span>{detailsOpen ? "Detayi gizle" : "Detay"}</span>
+              </button>
+            )}
+          </div>
         )}
+        {details && detailsOpen ? (
+          <pre className="sidebar-error-details">{details}</pre>
+        ) : null}
       </div>
       <button
         type="button"
@@ -708,7 +755,10 @@ export function GitDiffPanel({
   syncError = null,
   commitReport = null,
   pushReport = null,
+  pullReport = null,
+  fetchReport = null,
   onFixGitError,
+  onShareGitError,
   commitsAhead = 0,
 }: GitDiffPanelProps) {
   const [dismissedErrorSignatures, setDismissedErrorSignatures] = useState<Set<string>>(
@@ -866,6 +916,21 @@ export function GitDiffPanel({
       onAction: handleFixCommitError,
     };
   }, [commitError, commitReport, onFixGitError, handleFixCommitError]);
+  const handleShareCommitError = useCallback(() => {
+    if (!commitReport || !onShareGitError) {
+      return;
+    }
+    void onShareGitError({ operation: "commit", report: commitReport });
+  }, [commitReport, onShareGitError]);
+  const commitShareAction = useMemo(() => {
+    if (!commitError || !commitReport || !onShareGitError) {
+      return null;
+    }
+    return {
+      label: "Sohbete gonder",
+      onAction: handleShareCommitError,
+    };
+  }, [commitError, commitReport, onShareGitError, handleShareCommitError]);
 
   const handleFixPushError = useCallback(() => {
     if (!pushReport || !onFixGitError) {
@@ -889,6 +954,71 @@ export function GitDiffPanel({
     pushReport,
     handleFixPushError,
   ]);
+  const handleSharePushError = useCallback(() => {
+    if (!pushReport || !onShareGitError) {
+      return;
+    }
+    void onShareGitError({ operation: "push", report: pushReport });
+  }, [onShareGitError, pushReport]);
+  const pushShareAction = useMemo(() => {
+    if (!pushError || !pushReport || !onShareGitError) {
+      return null;
+    }
+    return {
+      label: "Sohbete gonder",
+      onAction: handleSharePushError,
+    };
+  }, [onShareGitError, pushError, pushReport, handleSharePushError]);
+
+  const handleFixPullError = useCallback(() => {
+    if (!pullReport || !onFixGitError) {
+      return;
+    }
+    void onFixGitError({ operation: "pull", report: pullReport });
+  }, [onFixGitError, pullReport]);
+  const pullFixAction = useMemo(() => {
+    if (!pullError || !pullReport || !onFixGitError) {
+      return null;
+    }
+    return { label: "Duzelt", onAction: handleFixPullError };
+  }, [pullError, pullReport, onFixGitError, handleFixPullError]);
+  const handleSharePullError = useCallback(() => {
+    if (!pullReport || !onShareGitError) {
+      return;
+    }
+    void onShareGitError({ operation: "pull", report: pullReport });
+  }, [onShareGitError, pullReport]);
+  const pullShareAction = useMemo(() => {
+    if (!pullError || !pullReport || !onShareGitError) {
+      return null;
+    }
+    return { label: "Sohbete gonder", onAction: handleSharePullError };
+  }, [pullError, pullReport, onShareGitError, handleSharePullError]);
+
+  const handleFixFetchError = useCallback(() => {
+    if (!fetchReport || !onFixGitError) {
+      return;
+    }
+    void onFixGitError({ operation: "fetch", report: fetchReport });
+  }, [onFixGitError, fetchReport]);
+  const fetchFixAction = useMemo(() => {
+    if (!fetchError || !fetchReport || !onFixGitError) {
+      return null;
+    }
+    return { label: "Duzelt", onAction: handleFixFetchError };
+  }, [fetchError, fetchReport, onFixGitError, handleFixFetchError]);
+  const handleShareFetchError = useCallback(() => {
+    if (!fetchReport || !onShareGitError) {
+      return;
+    }
+    void onShareGitError({ operation: "fetch", report: fetchReport });
+  }, [onShareGitError, fetchReport]);
+  const fetchShareAction = useMemo(() => {
+    if (!fetchError || !fetchReport || !onShareGitError) {
+      return null;
+    }
+    return { label: "Sohbete gonder", onAction: handleShareFetchError };
+  }, [fetchError, fetchReport, onShareGitError, handleShareFetchError]);
   const githubBaseUrl = useMemo(() => {
     if (!gitRemoteUrl) {
       return null;
@@ -1131,6 +1261,8 @@ export function GitDiffPanel({
       key: string;
       message: string | null | undefined;
       action?: SidebarErrorProps["action"];
+      secondaryAction?: SidebarErrorProps["secondaryAction"];
+      details?: string | null;
     }> =
       mode === "diff"
         ? [
@@ -1138,10 +1270,30 @@ export function GitDiffPanel({
               key: "push",
               message: pushErrorMessage,
               action: pushErrorAction ?? pushFixAction,
+              secondaryAction: pushShareAction,
+              details: pushReport ? formatGitCommandReport(pushReport) : null,
             },
-            { key: "pull", message: pullError },
-            { key: "fetch", message: fetchError },
-            { key: "commit", message: commitError, action: commitErrorAction },
+            {
+              key: "pull",
+              message: pullError,
+              action: pullFixAction,
+              secondaryAction: pullShareAction,
+              details: pullReport ? formatGitCommandReport(pullReport) : null,
+            },
+            {
+              key: "fetch",
+              message: fetchError,
+              action: fetchFixAction,
+              secondaryAction: fetchShareAction,
+              details: fetchReport ? formatGitCommandReport(fetchReport) : null,
+            },
+            {
+              key: "commit",
+              message: commitError,
+              action: commitErrorAction,
+              secondaryAction: commitShareAction,
+              details: commitReport ? formatGitCommandReport(commitReport) : null,
+            },
             { key: "sync", message: syncError },
             { key: "commitMessage", message: commitMessageError },
             { key: "git", message: error },
@@ -1163,17 +1315,27 @@ export function GitDiffPanel({
   }, [
     commitError,
     commitErrorAction,
+    commitReport,
+    commitShareAction,
     commitMessageError,
     error,
     fetchError,
+    fetchFixAction,
+    fetchReport,
+    fetchShareAction,
     gitRootScanError,
     issuesError,
     logError,
     pullRequestsError,
     pullError,
+    pullFixAction,
+    pullReport,
+    pullShareAction,
     pushErrorMessage,
     pushErrorAction,
     pushFixAction,
+    pushReport,
+    pushShareAction,
     syncError,
     worktreeApplyError,
     errorScope,
@@ -1751,6 +1913,8 @@ export function GitDiffPanel({
         <SidebarError
           message={sidebarError.message}
           action={sidebarError.action ?? null}
+          secondaryAction={sidebarError.secondaryAction ?? null}
+          details={sidebarError.details ?? null}
           onDismiss={() =>
             setDismissedErrorSignatures((prev) => {
               if (prev.has(sidebarError.signature)) {

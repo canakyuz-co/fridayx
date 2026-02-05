@@ -308,6 +308,14 @@ async fn fetch_with_default_remote(repo_root: &Path) -> Result<(), String> {
     run_git_command(repo_root, &["fetch", "--prune"]).await
 }
 
+async fn fetch_with_default_remote_report(repo_root: &Path) -> Result<GitCommandReport, String> {
+    let upstream = upstream_remote_and_branch(repo_root)?;
+    if let Some((remote, _)) = upstream {
+        return run_git_command_report(repo_root, &["fetch", "--prune", remote.as_str()]).await;
+    }
+    run_git_command_report(repo_root, &["fetch", "--prune"]).await
+}
+
 async fn pull_with_default_strategy(repo_root: &Path) -> Result<(), String> {
     fn autostash_unsupported(lower: &str) -> bool {
         lower.contains("unknown option") && lower.contains("autostash")
@@ -350,6 +358,46 @@ async fn pull_with_default_strategy(repo_root: &Path) -> Result<(), String> {
             }
         }
     }
+}
+
+async fn pull_with_default_strategy_report(repo_root: &Path) -> Result<GitCommandReport, String> {
+    fn autostash_unsupported(lower: &str) -> bool {
+        lower.contains("unknown option") && lower.contains("autostash")
+    }
+
+    fn needs_reconcile_strategy(lower: &str) -> bool {
+        lower.contains("need to specify how to reconcile divergent branches")
+            || lower.contains("you have divergent branches")
+    }
+
+    let mut report = run_git_command_report(repo_root, &["pull", "--autostash"]).await?;
+    if report.ok {
+        return Ok(report);
+    }
+    let combined_lower = format!("{}\n{}", report.stderr, report.stdout).to_lowercase();
+    if autostash_unsupported(&combined_lower) {
+        report = run_git_command_report(repo_root, &["pull"]).await?;
+        if report.ok {
+            return Ok(report);
+        }
+        let lower = format!("{}\n{}", report.stderr, report.stdout).to_lowercase();
+        if needs_reconcile_strategy(&lower) {
+            report = run_git_command_report(repo_root, &["pull", "--no-rebase"]).await?;
+        }
+        return Ok(report);
+    }
+    if needs_reconcile_strategy(&combined_lower) {
+        report = run_git_command_report(repo_root, &["pull", "--no-rebase", "--autostash"]).await?;
+        if report.ok {
+            return Ok(report);
+        }
+        let lower = format!("{}\n{}", report.stderr, report.stdout).to_lowercase();
+        if autostash_unsupported(&lower) {
+            report = run_git_command_report(repo_root, &["pull", "--no-rebase"]).await?;
+        }
+        return Ok(report);
+    }
+    Ok(report)
 }
 
 fn status_for_index(status: Status) -> Option<&'static str> {
@@ -883,6 +931,36 @@ pub(crate) async fn push_git_detailed(
             .await;
     }
     run_git_command_report(&repo_root, &["push"]).await
+}
+
+#[tauri::command]
+pub(crate) async fn pull_git_detailed(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<GitCommandReport, String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+
+    let repo_root = resolve_git_root(&entry)?;
+    pull_with_default_strategy_report(&repo_root).await
+}
+
+#[tauri::command]
+pub(crate) async fn fetch_git_detailed(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<GitCommandReport, String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+
+    let repo_root = resolve_git_root(&entry)?;
+    fetch_with_default_remote_report(&repo_root).await
 }
 
 #[tauri::command]

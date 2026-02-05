@@ -1353,6 +1353,8 @@ function MainApp() {
     syncError,
     commitReport,
     pushReport,
+    pullReport,
+    fetchReport,
     onCommitMessageChange: handleCommitMessageChange,
     onGenerateCommitMessage: handleGenerateCommitMessage,
     onCommit: handleCommit,
@@ -1372,7 +1374,10 @@ function MainApp() {
   });
 
   const handleFixGitError = useCallback(
-    async (payload: { operation: "commit" | "push"; report: GitCommandReport }) => {
+    async (payload: {
+      operation: "commit" | "push" | "pull" | "fetch";
+      report: GitCommandReport;
+    }) => {
       const { operation, report } = payload;
       const sections: string[] = [
         `Git ${operation} failed while running from Fridex.`,
@@ -1381,6 +1386,34 @@ function MainApp() {
         "1) Identify the root cause from the output (husky/lefthook hooks, lint-staged, commitlint, etc).",
         "2) Propose the minimal code/config changes to fix it (with a patch).",
         "3) List the exact commands to verify the fix (lint/typecheck/tests if relevant), then retry the git command.",
+        "",
+        `Command: ${report.command}`,
+        `Exit code: ${typeof report.exitCode === "number" ? report.exitCode : "unknown"}`,
+        `Duration: ${Math.round(report.durationMs)}ms`,
+      ];
+
+      const stderr = report.stderr?.trim();
+      if (stderr) {
+        sections.push("", "STDERR:", "```text", stderr, "```");
+      }
+      const stdout = report.stdout?.trim();
+      if (stdout) {
+        sections.push("", "STDOUT:", "```text", stdout, "```");
+      }
+
+      await sendUserMessage(sections.join("\n"), []);
+    },
+    [sendUserMessage],
+  );
+
+  const handleShareGitError = useCallback(
+    async (payload: {
+      operation: "commit" | "push" | "pull" | "fetch";
+      report: GitCommandReport;
+    }) => {
+      const { operation, report } = payload;
+      const sections: string[] = [
+        `Git ${operation} output (from Fridex):`,
         "",
         `Command: ${report.command}`,
         `Exit code: ${typeof report.exitCode === "number" ? report.exitCode : "unknown"}`,
@@ -2162,7 +2195,10 @@ function MainApp() {
     syncError,
     commitReport,
     pushReport,
+    pullReport,
+    fetchReport,
     onFixGitError: handleFixGitError,
+    onShareGitError: handleShareGitError,
     commitsAhead: gitLogAhead,
     onSendPrompt: handleSendPrompt,
     onSendPromptToNewAgent: handleSendPromptToNewAgent,

@@ -375,6 +375,12 @@
   flex: 1;
 }
 
+.sidebar-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .sidebar-error .diff-error,
 .sidebar-error .commit-message-error {
   min-width: 0;
@@ -390,6 +396,22 @@
   padding: 4px 10px;
   font-size: 12px;
   border-radius: 8px;
+}
+
+.sidebar-error-details {
+  margin: 2px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border-muted);
+  background: color-mix(in srgb, var(--surface-control) 65%, black 35%);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .sidebar-error-dismiss {

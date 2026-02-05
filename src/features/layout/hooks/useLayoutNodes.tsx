@@ -343,8 +343,14 @@ type LayoutNodesOptions = {
   syncError?: string | null;
   commitReport?: GitCommandReport | null;
   pushReport?: GitCommandReport | null;
+  pullReport?: GitCommandReport | null;
+  fetchReport?: GitCommandReport | null;
   onFixGitError?: (payload: {
-    operation: "commit" | "push";
+    operation: "commit" | "push" | "pull" | "fetch";
+    report: GitCommandReport;
+  }) => void | Promise<void>;
+  onShareGitError?: (payload: {
+    operation: "commit" | "push" | "pull" | "fetch";
     report: GitCommandReport;
   }) => void | Promise<void>;
   commitsAhead?: number;
@@ -904,7 +910,10 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         syncError={options.syncError}
         commitReport={options.commitReport ?? null}
         pushReport={options.pushReport ?? null}
+        pullReport={options.pullReport ?? null}
+        fetchReport={options.fetchReport ?? null}
         onFixGitError={options.onFixGitError}
+        onShareGitError={options.onShareGitError}
         commitsAhead={options.commitsAhead}
       />
     );

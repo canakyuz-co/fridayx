@@ -3,13 +3,14 @@ import type { GitCommandReport, WorkspaceInfo } from "../../../types";
 import {
   commitGitDetailed,
   generateCommitMessage,
-  fetchGit,
-  pullGit,
+  fetchGitDetailed,
+  pullGitDetailed,
   pushGitDetailed,
   stageGitAll,
 } from "../../../services/tauri";
 import { shouldApplyCommitMessage } from "../../../utils/commitMessage";
 import { useGitStatus } from "../../git/hooks/useGitStatus";
+import { detectGitHookSource } from "../../../utils/gitCommandReport";
 
 type GitStatusState = ReturnType<typeof useGitStatus>["status"];
 
@@ -38,6 +39,8 @@ type GitCommitController = {
   syncError: string | null;
   commitReport: GitCommandReport | null;
   pushReport: GitCommandReport | null;
+  pullReport: GitCommandReport | null;
+  fetchReport: GitCommandReport | null;
   hasWorktreeChanges: boolean;
   onCommitMessageChange: (value: string) => void;
   onGenerateCommitMessage: () => Promise<void>;
@@ -75,14 +78,17 @@ export function useGitCommitController({
   const [syncError, setSyncError] = useState<string | null>(null);
   const [commitReport, setCommitReport] = useState<GitCommandReport | null>(null);
   const [pushReport, setPushReport] = useState<GitCommandReport | null>(null);
+  const [pullReport, setPullReport] = useState<GitCommandReport | null>(null);
+  const [fetchReport, setFetchReport] = useState<GitCommandReport | null>(null);
 
   const reportToErrorMessage = useCallback((report: GitCommandReport) => {
     const stderr = report.stderr?.trim();
     const stdout = report.stdout?.trim();
     const detail = stderr || stdout || "Git command failed.";
+    const hook = detectGitHookSource(report);
     const code =
       typeof report.exitCode === "number" ? ` (exit ${report.exitCode})` : "";
-    return `${detail}${code}`;
+    return `${hook ? `[${hook}] ` : ""}${detail}${code}`;
   }, []);
 
   const hasWorktreeChanges = useMemo(() => {
@@ -137,6 +143,8 @@ export function useGitCommitController({
     setCommitMessageLoading(false);
     setCommitReport(null);
     setPushReport(null);
+    setPullReport(null);
+    setFetchReport(null);
   }, [activeWorkspaceId]);
 
   const handleCommit = useCallback(async () => {
@@ -273,7 +281,13 @@ export function useGitCommitController({
       commitSucceeded = true;
       setCommitMessage("");
       setCommitLoading(false);
-      await pullGit(activeWorkspace.id);
+      const pullReport = await pullGitDetailed(activeWorkspace.id);
+      if (!pullReport.ok) {
+        setPullReport(pullReport);
+        setPullError(reportToErrorMessage(pullReport));
+        setSyncError("Pull failed during sync.");
+        return;
+      }
       const pushReport = await pushGitDetailed(activeWorkspace.id);
       if (!pushReport.ok) {
         setPushReport(pushReport);
@@ -312,8 +326,14 @@ export function useGitCommitController({
     }
     setPullLoading(true);
     setPullError(null);
+    setPullReport(null);
     try {
-      await pullGit(activeWorkspace.id);
+      const report = await pullGitDetailed(activeWorkspace.id);
+      if (!report.ok) {
+        setPullReport(report);
+        setPullError(reportToErrorMessage(report));
+        return;
+      }
       setPushError(null);
       setPushReport(null);
       refreshGitStatus();
@@ -323,7 +343,13 @@ export function useGitCommitController({
     } finally {
       setPullLoading(false);
     }
-  }, [activeWorkspace, pullLoading, refreshGitLog, refreshGitStatus]);
+  }, [
+    activeWorkspace,
+    pullLoading,
+    refreshGitLog,
+    refreshGitStatus,
+    reportToErrorMessage,
+  ]);
 
   const handlePush = useCallback(async () => {
     if (!activeWorkspace || pushLoading) {
@@ -362,7 +388,13 @@ export function useGitCommitController({
     setFetchLoading(true);
     setFetchError(null);
     try {
-      await fetchGit(activeWorkspace.id);
+      setFetchReport(null);
+      const report = await fetchGitDetailed(activeWorkspace.id);
+      if (!report.ok) {
+        setFetchReport(report);
+        setFetchError(reportToErrorMessage(report));
+        return;
+      }
       refreshGitStatus();
       refreshGitLog?.();
     } catch (error) {
@@ -370,7 +402,13 @@ export function useGitCommitController({
     } finally {
       setFetchLoading(false);
     }
-  }, [activeWorkspace, fetchLoading, refreshGitLog, refreshGitStatus]);
+  }, [
+    activeWorkspace,
+    fetchLoading,
+    refreshGitLog,
+    refreshGitStatus,
+    reportToErrorMessage,
+  ]);
 
   const handleSync = useCallback(async () => {
     if (!activeWorkspace || syncLoading) {
@@ -381,7 +419,15 @@ export function useGitCommitController({
     setPushError(null);
     setPushReport(null);
     try {
-      await pullGit(activeWorkspace.id);
+      setPullError(null);
+      setPullReport(null);
+      const pullReport = await pullGitDetailed(activeWorkspace.id);
+      if (!pullReport.ok) {
+        setPullReport(pullReport);
+        setPullError(reportToErrorMessage(pullReport));
+        setSyncError("Pull failed during sync.");
+        return;
+      }
       const report = await pushGitDetailed(activeWorkspace.id);
       if (!report.ok) {
         setPushReport(report);
@@ -422,6 +468,8 @@ export function useGitCommitController({
     syncError,
     commitReport,
     pushReport,
+    pullReport,
+    fetchReport,
     hasWorktreeChanges,
     onCommitMessageChange: handleCommitMessageChange,
     onGenerateCommitMessage: handleGenerateCommitMessage,

@@ -416,8 +416,16 @@ export async function pullGit(workspaceId: string): Promise<void> {
   return invoke("pull_git", { workspaceId });
 }
 
+export async function pullGitDetailed(workspaceId: string): Promise<GitCommandReport> {
+  return invoke<GitCommandReport>("pull_git_detailed", { workspaceId });
+}
+
 export async function fetchGit(workspaceId: string): Promise<void> {
   return invoke("fetch_git", { workspaceId });
+}
+
+export async function fetchGitDetailed(workspaceId: string): Promise<GitCommandReport> {
+  return invoke<GitCommandReport>("fetch_git_detailed", { workspaceId });
 }
 
 export async function syncGit(workspaceId: string): Promise<void> {
