@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import { Markdown } from "../../messages/components/Markdown";
@@ -10,7 +10,14 @@ import type {
   TaskView,
 } from "../../../types";
 import { formatRelativeTime } from "../../../utils/time";
-import { getGitHubIssues } from "../../../services/tauri";
+import {
+  getGitHubIssues,
+  type McpServerConfigEntry,
+  listConfiguredMcpServers,
+  listMcpServerStatus,
+  mcpServerOauthLogin,
+  mcpServerReload,
+} from "../../../services/tauri";
 
 type ExternalRef = {
   label: string;
@@ -148,12 +155,48 @@ export function Home({
   const [githubIssuesLoading, setGitHubIssuesLoading] = useState(false);
   const [githubIssuesError, setGitHubIssuesError] = useState<string | null>(null);
   const [githubIssueDraft, setGitHubIssueDraft] = useState("");
+  const [mcpWorkspaceId, setMcpWorkspaceId] = useState<string | null>(null);
+  const [mcpConfiguredServers, setMcpConfiguredServers] = useState<McpServerConfigEntry[]>([]);
+  const [mcpStatusServers, setMcpStatusServers] = useState<Array<Record<string, unknown>>>([]);
+  const [mcpLoading, setMcpLoading] = useState(false);
+  const [mcpError, setMcpError] = useState<string | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const canCreateTask = taskTitle.trim().length > 0;
   const canSaveEdit = editTitle.trim().length > 0;
+
+  const mcpLinearConfigured = useMemo(() => {
+    return (
+      mcpConfiguredServers.find(
+        (entry) => entry.name.trim().toLowerCase() === "linear",
+      ) ?? null
+    );
+  }, [mcpConfiguredServers]);
+
+  const mcpLinearStatus = useMemo(() => {
+    return (
+      mcpStatusServers.find(
+        (entry) => String(entry?.name ?? "").trim().toLowerCase() === "linear",
+      ) ?? null
+    );
+  }, [mcpStatusServers]);
+
+  const mcpLinearEnabled = mcpLinearConfigured?.enabled ?? false;
+  const mcpLinearAuthLabel = useMemo(() => {
+    if (!mcpLinearStatus) {
+      return "";
+    }
+    const authRaw = mcpLinearStatus["authStatus"] ?? mcpLinearStatus["auth_status"];
+    if (typeof authRaw === "string") {
+      return authRaw;
+    }
+    if (authRaw && typeof authRaw === "object" && "status" in authRaw) {
+      return String((authRaw as { status?: unknown }).status ?? "");
+    }
+    return "";
+  }, [mcpLinearStatus]);
 
   const taskWorkspaceLabelById = useMemo(() => {
     const map = new Map<string, string>();
@@ -249,6 +292,64 @@ export function Home({
     }
   };
 
+  const parseMcpStatusResponse = (response: unknown) => {
+    const raw = response as Record<string, unknown> | null;
+    const result = (raw?.result ?? raw) as Record<string, unknown> | null;
+    if (Array.isArray(result?.data)) {
+      return result?.data as Array<Record<string, unknown>>;
+    }
+    return [];
+  };
+
+  const loadMcpForWorkspace = async (workspaceId: string) => {
+    if (mcpLoading) {
+      return;
+    }
+    setMcpLoading(true);
+    setMcpError(null);
+    try {
+      const [configured, statusResponse] = await Promise.all([
+        listConfiguredMcpServers(workspaceId),
+        listMcpServerStatus(workspaceId, null, null),
+      ]);
+      setMcpWorkspaceId(workspaceId);
+      setMcpConfiguredServers(configured);
+      setMcpStatusServers(parseMcpStatusResponse(statusResponse));
+    } catch (error) {
+      setMcpWorkspaceId(workspaceId);
+      setMcpConfiguredServers([]);
+      setMcpStatusServers([]);
+      setMcpError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMcpLoading(false);
+    }
+  };
+
+  const handleLinearOauthLogin = async () => {
+    const workspaceId = getTaskComposerWorkspaceId();
+    if (!workspaceId) {
+      return;
+    }
+    try {
+      await mcpServerOauthLogin(workspaceId, "linear");
+    } catch (error) {
+      setMcpError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const handleMcpReload = async () => {
+    const workspaceId = getTaskComposerWorkspaceId();
+    if (!workspaceId) {
+      return;
+    }
+    try {
+      await mcpServerReload(workspaceId);
+      await loadMcpForWorkspace(workspaceId);
+    } catch (error) {
+      setMcpError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const handleCloseTaskComposer = () => {
     setTaskComposerOpen(false);
     setTaskTitle("");
@@ -259,7 +360,29 @@ export function Home({
     setGitHubIssuesLoading(false);
     setGitHubIssuesError(null);
     setGitHubIssueDraft("");
+    setMcpWorkspaceId(null);
+    setMcpConfiguredServers([]);
+    setMcpStatusServers([]);
+    setMcpLoading(false);
+    setMcpError(null);
   };
+
+  // Best-effort: refresh MCP info for the current task-composer workspace.
+  // (We don't require this for task creation; it's only for Linear MCP UX.)
+  const taskComposerWorkspaceId = getTaskComposerWorkspaceId();
+  useEffect(() => {
+    if (!isTaskComposerOpen) {
+      return;
+    }
+    if (!taskComposerWorkspaceId) {
+      return;
+    }
+    if (mcpWorkspaceId === taskComposerWorkspaceId) {
+      return;
+    }
+    void loadMcpForWorkspace(taskComposerWorkspaceId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTaskComposerOpen, taskComposerWorkspaceId, mcpWorkspaceId]);
 
   const handleEditTaskStart = (task: TaskEntry) => {
     setEditingTaskId(task.id);
@@ -644,6 +767,58 @@ export function Home({
                   {githubIssuesError && (
                     <span className="home-tasks-error">{githubIssuesError}</span>
                   )}
+                </div>
+                <div className="home-tasks-import">
+                  <span className="home-tasks-inline-label">
+                    Linear (MCP):{" "}
+                    {getTaskComposerWorkspaceId()
+                      ? mcpLoading && mcpWorkspaceId !== getTaskComposerWorkspaceId()
+                        ? "loading…"
+                        : !mcpLinearConfigured
+                          ? "not configured"
+                          : mcpLinearEnabled
+                            ? mcpLinearAuthLabel
+                              ? `enabled (auth: ${mcpLinearAuthLabel})`
+                              : "enabled"
+                            : "disabled"
+                      : "select a project"}
+                  </span>
+                  <button
+                    type="button"
+                    className="home-tasks-inline-button"
+                    onClick={() => void handleLinearOauthLogin()}
+                    disabled={!getTaskComposerWorkspaceId() || !mcpLinearEnabled}
+                    title={
+                      mcpLinearEnabled
+                        ? "Start Linear OAuth login via MCP."
+                        : "Enable the linear MCP server first."
+                    }
+                  >
+                    Login
+                  </button>
+                  <button
+                    type="button"
+                    className="home-tasks-inline-button"
+                    onClick={() => void handleMcpReload()}
+                    disabled={!getTaskComposerWorkspaceId()}
+                  >
+                    Reload
+                  </button>
+                  <button
+                    type="button"
+                    className="home-tasks-inline-button"
+                    onClick={() => {
+                      const workspaceId = getTaskComposerWorkspaceId();
+                      if (!workspaceId) {
+                        return;
+                      }
+                      void loadMcpForWorkspace(workspaceId);
+                    }}
+                    disabled={!getTaskComposerWorkspaceId()}
+                  >
+                    Refresh
+                  </button>
+                  {mcpError && <span className="home-tasks-error">{mcpError}</span>}
                 </div>
                 {githubIssues.length > 0 &&
                   githubIssuesWorkspaceId === getTaskComposerWorkspaceId() && (
