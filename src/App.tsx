@@ -2036,8 +2036,8 @@ function MainApp() {
     tasksWorkspaceId,
     tasksWorkspaceOptions,
     onTasksWorkspaceChange: setTasksWorkspaceId,
-    onTaskCreate: async ({ title, content }) => {
-      await createTask({ title, content, workspaceId: tasksWorkspaceId });
+    onTaskCreate: async ({ title, content, workspaceId }) => {
+      await createTask({ title, content, workspaceId: workspaceId ?? tasksWorkspaceId });
     },
     onTaskUpdate: updateTask,
     onTaskDelete: deleteTask,

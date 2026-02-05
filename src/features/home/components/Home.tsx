@@ -54,7 +54,11 @@ type HomeProps = {
   tasksWorkspaceId: string | null;
   tasksWorkspaceOptions: TaskWorkspaceOption[];
   onTasksWorkspaceChange: (workspaceId: string | null) => void;
-  onTaskCreate: (input: { title: string; content: string }) => Promise<void>;
+  onTaskCreate: (input: {
+    title: string;
+    content: string;
+    workspaceId?: string | null;
+  }) => Promise<void>;
   onTaskUpdate: (input: {
     id: string;
     title: string;
@@ -97,6 +101,9 @@ export function Home({
   const [isTaskComposerOpen, setTaskComposerOpen] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskContent, setTaskContent] = useState("");
+  const [taskWorkspaceDraft, setTaskWorkspaceDraft] = useState<string>("");
+  const [taskQuery, setTaskQuery] = useState("");
+  const [taskSort, setTaskSort] = useState<"updated" | "created" | "title">("updated");
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
@@ -104,31 +111,71 @@ export function Home({
   const canCreateTask = taskTitle.trim().length > 0;
   const canSaveEdit = editTitle.trim().length > 0;
 
+  const taskWorkspaceLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    tasksWorkspaceOptions.forEach((option) => {
+      if (!option.id) {
+        return;
+      }
+      map.set(option.id, option.label);
+    });
+    return map;
+  }, [tasksWorkspaceOptions]);
+
+  const visibleTasks = useMemo(() => {
+    const query = taskQuery.trim().toLowerCase();
+    const filtered = query
+      ? tasks.filter((task) => {
+          const title = task.title.toLowerCase();
+          const content = (task.content ?? "").toLowerCase();
+          return title.includes(query) || content.includes(query);
+        })
+      : tasks;
+
+    const sorted = [...filtered];
+    if (taskSort === "title") {
+      sorted.sort((a, b) => a.title.localeCompare(b.title));
+      return sorted;
+    }
+    if (taskSort === "created") {
+      sorted.sort((a, b) => b.createdAt - a.createdAt);
+      return sorted;
+    }
+    // Default: updated desc.
+    sorted.sort((a, b) => b.updatedAt - a.updatedAt);
+    return sorted;
+  }, [taskQuery, taskSort, tasks]);
+
   const tasksByStatus = useMemo(() => {
     const grouped: Record<TaskStatus, TaskEntry[]> = {
       todo: [],
       doing: [],
       done: [],
     };
-    tasks.forEach((task) => {
+    visibleTasks.forEach((task) => {
       grouped[task.status].push(task);
     });
     return grouped;
-  }, [tasks]);
+  }, [visibleTasks]);
 
   const handleCreateTask = async () => {
     if (!canCreateTask) {
       return;
     }
-    await onTaskCreate({ title: taskTitle, content: taskContent });
+    const workspaceId =
+      tasksWorkspaceId ??
+      (taskWorkspaceDraft.trim().length > 0 ? taskWorkspaceDraft.trim() : null);
+    await onTaskCreate({ title: taskTitle, content: taskContent, workspaceId });
     setTaskTitle("");
     setTaskContent("");
+    setTaskWorkspaceDraft("");
   };
 
   const handleCloseTaskComposer = () => {
     setTaskComposerOpen(false);
     setTaskTitle("");
     setTaskContent("");
+    setTaskWorkspaceDraft("");
   };
 
   const handleEditTaskStart = (task: TaskEntry) => {
@@ -286,7 +333,7 @@ export function Home({
     : null;
   const showUsageSkeleton = isLoadingLocalUsage && !localUsageSnapshot;
   const showUsageEmpty = !isLoadingLocalUsage && !localUsageSnapshot;
-  const showTasksEmpty = !isLoadingTasks && tasks.length === 0;
+  const showTasksEmpty = !isLoadingTasks && visibleTasks.length === 0;
 
   return (
     <div className="home">
@@ -447,6 +494,29 @@ export function Home({
                     ))}
                   </select>
                 </div>
+                <div className="home-usage-select-wrap">
+                  <input
+                    className="home-usage-select home-tasks-search"
+                    value={taskQuery}
+                    onChange={(event) => setTaskQuery(event.target.value)}
+                    placeholder="Search tasks…"
+                    aria-label="Search tasks"
+                  />
+                </div>
+                <div className="home-usage-select-wrap">
+                  <select
+                    className="home-usage-select"
+                    value={taskSort}
+                    onChange={(event) =>
+                      setTaskSort(event.target.value as typeof taskSort)
+                    }
+                    aria-label="Sort tasks"
+                  >
+                    <option value="updated">Sort: updated</option>
+                    <option value="created">Sort: created</option>
+                    <option value="title">Sort: title</option>
+                  </select>
+                </div>
                 <button
                   className="home-tasks-add-button"
                   type="button"
@@ -462,6 +532,23 @@ export function Home({
             </div>
             {isTaskComposerOpen && (
               <div className="home-tasks-composer">
+                {!tasksWorkspaceId && (
+                  <select
+                    className="home-tasks-input"
+                    value={taskWorkspaceDraft}
+                    onChange={(event) => setTaskWorkspaceDraft(event.target.value)}
+                    aria-label="Task project"
+                  >
+                    <option value="">No project (global)</option>
+                    {tasksWorkspaceOptions
+                      .filter((option) => option.id)
+                      .map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                  </select>
+                )}
                 <input
                   className="home-tasks-input"
                   type="text"
@@ -509,7 +596,7 @@ export function Home({
               </div>
             ) : tasksView === "checklist" ? (
               <div className="home-tasks-list">
-                {tasks.map((task) => (
+                {visibleTasks.map((task) => (
                   <div className="home-tasks-item" key={task.id}>
                     <div className="home-tasks-row">
                       <label className="home-tasks-checkbox">
@@ -553,16 +640,27 @@ export function Home({
                       </div>
                     </div>
                     <div className="home-tasks-meta">
-                      {task.status === "doing" && (
-                        <span className="home-tasks-status">Doing</span>
+                      <span className={`home-tasks-status home-tasks-status--${task.status}`}>
+                        {task.status === "todo"
+                          ? "To do"
+                          : task.status === "doing"
+                            ? "Doing"
+                            : "Done"}
+                      </span>
+                      {!tasksWorkspaceId && (
+                        <span className="home-tasks-project">
+                          {task.workspaceId
+                            ? taskWorkspaceLabelById.get(task.workspaceId) ?? "Unknown project"
+                            : "Global"}
+                        </span>
                       )}
-                      {task.content && expandedTasks.has(task.id) && (
-                        <Markdown
-                          value={task.content}
-                          className="home-tasks-content"
-                        />
-                      )}
+                      <span className="home-tasks-updated">
+                        Updated {formatRelativeTime(task.updatedAt)}
+                      </span>
                     </div>
+                    {task.content && expandedTasks.has(task.id) && (
+                      <Markdown value={task.content} className="home-tasks-content" />
+                    )}
                     {editingTaskId === task.id && (
                       <div className="home-tasks-edit">
                         <input
@@ -606,11 +704,11 @@ export function Home({
                 {(["todo", "doing", "done"] as TaskStatus[]).map((status) => (
                   <div className="home-tasks-column" key={status}>
                     <div className="home-tasks-column-title">
-                      {status === "todo"
+                      {(status === "todo"
                         ? "To do"
                         : status === "doing"
-                        ? "Doing"
-                        : "Done"}
+                          ? "Doing"
+                          : "Done") + ` (${tasksByStatus[status].length})`}
                     </div>
                     <div className="home-tasks-column-list">
                       {tasksByStatus[status].map((task) => (
@@ -627,6 +725,18 @@ export function Home({
                                 <ChevronDown size={14} />
                               </button>
                             )}
+                          </div>
+                          <div className="home-tasks-meta">
+                            {!tasksWorkspaceId && (
+                              <span className="home-tasks-project">
+                                {task.workspaceId
+                                  ? taskWorkspaceLabelById.get(task.workspaceId) ?? "Unknown project"
+                                  : "Global"}
+                              </span>
+                            )}
+                            <span className="home-tasks-updated">
+                              Updated {formatRelativeTime(task.updatedAt)}
+                            </span>
                           </div>
                           {task.content && expandedTasks.has(task.id) && (
                             <Markdown

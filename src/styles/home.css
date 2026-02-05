@@ -465,6 +465,11 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+.home-tasks-search {
+  min-width: 180px;
 }
 
 .home-tasks-composer {
@@ -608,6 +613,19 @@
   flex-wrap: wrap;
 }
 
+.home-tasks-project {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(0, 0, 0, 0.12);
+  color: var(--text-stronger);
+  font-size: 11px;
+}
+
+.home-tasks-updated {
+  color: var(--text-faint);
+}
+
 .home-tasks-status {
   padding: 2px 8px;
   border-radius: 999px;
@@ -616,6 +634,20 @@
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.home-tasks-status--todo {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.home-tasks-status--doing {
+  background: rgba(90, 200, 255, 0.14);
+  border: 1px solid rgba(90, 200, 255, 0.28);
+}
+
+.home-tasks-status--done {
+  background: rgba(110, 240, 170, 0.14);
+  border: 1px solid rgba(110, 240, 170, 0.26);
 }
 
 .home-tasks-content {

@@ -213,7 +213,11 @@ type LayoutNodesOptions = {
   tasksWorkspaceId: string | null;
   tasksWorkspaceOptions: Array<{ id: string; label: string }>;
   onTasksWorkspaceChange: (workspaceId: string | null) => void;
-  onTaskCreate: (input: { title: string; content: string }) => Promise<void>;
+  onTaskCreate: (input: {
+    title: string;
+    content: string;
+    workspaceId?: string | null;
+  }) => Promise<void>;
   onTaskUpdate: (input: { id: string; title: string; content: string }) => Promise<void>;
   onTaskDelete: (id: string) => void | Promise<void>;
   onTaskStatusChange: (id: string, status: TaskStatus) => Promise<void>;
