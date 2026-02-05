@@ -646,80 +646,84 @@ export function Home({
             <div className="home-section-header">
               <div className="home-section-title">Tasks</div>
               <div className="home-tasks-controls">
-                <div
-                  className="home-usage-toggle"
-                  role="group"
-                  aria-label="Task view"
-                >
+                <div className="home-tasks-controls-left">
+                  <div
+                    className="home-usage-toggle"
+                    role="group"
+                    aria-label="Task view"
+                  >
+                    <button
+                      className={`home-usage-toggle-button${
+                        tasksView === "checklist" ? " is-active" : ""
+                      }`}
+                      type="button"
+                      onClick={() => onTasksViewChange("checklist")}
+                    >
+                      Checklist
+                    </button>
+                    <button
+                      className={`home-usage-toggle-button${
+                        tasksView === "kanban" ? " is-active" : ""
+                      }`}
+                      type="button"
+                      onClick={() => onTasksViewChange("kanban")}
+                    >
+                      Kanban
+                    </button>
+                  </div>
+                  <div className="home-usage-select-wrap">
+                    <select
+                      className="home-usage-select"
+                      value={tasksWorkspaceId ?? ""}
+                      onChange={(event) =>
+                        onTasksWorkspaceChange(event.target.value || null)
+                      }
+                      aria-label="Filter tasks by project"
+                    >
+                      {tasksWorkspaceOptions.map((option) => (
+                        <option key={option.id || "all"} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="home-usage-select-wrap">
+                    <select
+                      className="home-usage-select"
+                      value={taskSort}
+                      onChange={(event) =>
+                        setTaskSort(event.target.value as typeof taskSort)
+                      }
+                      aria-label="Sort tasks"
+                    >
+                      <option value="updated">Sort: updated</option>
+                      <option value="created">Sort: created</option>
+                      <option value="title">Sort: title</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="home-tasks-controls-right">
+                  <div className="home-usage-select-wrap home-tasks-search-wrap">
+                    <input
+                      className="home-usage-select home-tasks-search"
+                      value={taskQuery}
+                      onChange={(event) => setTaskQuery(event.target.value)}
+                      placeholder="Search tasks…"
+                      aria-label="Search tasks"
+                    />
+                  </div>
                   <button
-                    className={`home-usage-toggle-button${
-                      tasksView === "checklist" ? " is-active" : ""
-                    }`}
+                    className="home-tasks-add-button"
                     type="button"
-                    onClick={() => onTasksViewChange("checklist")}
+                    onClick={() =>
+                      setTaskComposerOpen((current) => !current)
+                    }
+                    aria-expanded={isTaskComposerOpen}
+                    aria-label="Add task"
                   >
-                    Checklist
-                  </button>
-                  <button
-                    className={`home-usage-toggle-button${
-                      tasksView === "kanban" ? " is-active" : ""
-                    }`}
-                    type="button"
-                    onClick={() => onTasksViewChange("kanban")}
-                  >
-                    Kanban
+                    +
                   </button>
                 </div>
-                <div className="home-usage-select-wrap">
-                  <select
-                    className="home-usage-select"
-                    value={tasksWorkspaceId ?? ""}
-                    onChange={(event) =>
-                      onTasksWorkspaceChange(event.target.value || null)
-                    }
-                    aria-label="Filter tasks by project"
-                  >
-                    {tasksWorkspaceOptions.map((option) => (
-                      <option key={option.id || "all"} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="home-usage-select-wrap">
-                  <input
-                    className="home-usage-select home-tasks-search"
-                    value={taskQuery}
-                    onChange={(event) => setTaskQuery(event.target.value)}
-                    placeholder="Search tasks…"
-                    aria-label="Search tasks"
-                  />
-                </div>
-                <div className="home-usage-select-wrap">
-                  <select
-                    className="home-usage-select"
-                    value={taskSort}
-                    onChange={(event) =>
-                      setTaskSort(event.target.value as typeof taskSort)
-                    }
-                    aria-label="Sort tasks"
-                  >
-                    <option value="updated">Sort: updated</option>
-                    <option value="created">Sort: created</option>
-                    <option value="title">Sort: title</option>
-                  </select>
-                </div>
-                <button
-                  className="home-tasks-add-button"
-                  type="button"
-                  onClick={() =>
-                    setTaskComposerOpen((current) => !current)
-                  }
-                  aria-expanded={isTaskComposerOpen}
-                  aria-label="Add task"
-                >
-                  +
-                </button>
               </div>
             </div>
             {isTaskComposerOpen && (
