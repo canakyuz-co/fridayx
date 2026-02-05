@@ -4,11 +4,13 @@ import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import { Markdown } from "../../messages/components/Markdown";
 import type {
   LocalUsageSnapshot,
+  GitHubIssue,
   TaskEntry,
   TaskStatus,
   TaskView,
 } from "../../../types";
 import { formatRelativeTime } from "../../../utils/time";
+import { getGitHubIssues } from "../../../services/tauri";
 
 type LatestAgentRun = {
   message: string;
@@ -104,6 +106,11 @@ export function Home({
   const [taskWorkspaceDraft, setTaskWorkspaceDraft] = useState<string>("");
   const [taskQuery, setTaskQuery] = useState("");
   const [taskSort, setTaskSort] = useState<"updated" | "created" | "title">("updated");
+  const [githubIssuesWorkspaceId, setGitHubIssuesWorkspaceId] = useState<string | null>(null);
+  const [githubIssues, setGitHubIssues] = useState<GitHubIssue[]>([]);
+  const [githubIssuesLoading, setGitHubIssuesLoading] = useState(false);
+  const [githubIssuesError, setGitHubIssuesError] = useState<string | null>(null);
+  const [githubIssueDraft, setGitHubIssueDraft] = useState("");
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
@@ -162,13 +169,47 @@ export function Home({
     if (!canCreateTask) {
       return;
     }
-    const workspaceId =
-      tasksWorkspaceId ??
-      (taskWorkspaceDraft.trim().length > 0 ? taskWorkspaceDraft.trim() : null);
+    const workspaceId = getTaskComposerWorkspaceId();
     await onTaskCreate({ title: taskTitle, content: taskContent, workspaceId });
     setTaskTitle("");
     setTaskContent("");
     setTaskWorkspaceDraft("");
+    setGitHubIssuesWorkspaceId(null);
+    setGitHubIssues([]);
+    setGitHubIssuesError(null);
+    setGitHubIssueDraft("");
+  };
+
+  const getTaskComposerWorkspaceId = () => {
+    if (tasksWorkspaceId) {
+      return tasksWorkspaceId;
+    }
+    const trimmed = taskWorkspaceDraft.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  };
+
+  const handleLoadGitHubIssues = async () => {
+    const workspaceId = getTaskComposerWorkspaceId();
+    if (!workspaceId) {
+      return;
+    }
+    if (githubIssuesLoading) {
+      return;
+    }
+    setGitHubIssuesLoading(true);
+    setGitHubIssuesError(null);
+    setGitHubIssueDraft("");
+    try {
+      const response = await getGitHubIssues(workspaceId);
+      setGitHubIssuesWorkspaceId(workspaceId);
+      setGitHubIssues(response.issues ?? []);
+    } catch (error) {
+      setGitHubIssuesWorkspaceId(workspaceId);
+      setGitHubIssues([]);
+      setGitHubIssuesError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setGitHubIssuesLoading(false);
+    }
   };
 
   const handleCloseTaskComposer = () => {
@@ -176,6 +217,11 @@ export function Home({
     setTaskTitle("");
     setTaskContent("");
     setTaskWorkspaceDraft("");
+    setGitHubIssuesWorkspaceId(null);
+    setGitHubIssues([]);
+    setGitHubIssuesLoading(false);
+    setGitHubIssuesError(null);
+    setGitHubIssueDraft("");
   };
 
   const handleEditTaskStart = (task: TaskEntry) => {
@@ -549,6 +595,53 @@ export function Home({
                       ))}
                   </select>
                 )}
+                <div className="home-tasks-import">
+                  <button
+                    type="button"
+                    className="home-tasks-inline-button"
+                    onClick={() => void handleLoadGitHubIssues()}
+                    disabled={!getTaskComposerWorkspaceId() || githubIssuesLoading}
+                  >
+                    {githubIssuesLoading ? "Loading GitHub issues…" : "Import from GitHub issues"}
+                  </button>
+                  {githubIssuesError && (
+                    <span className="home-tasks-error">{githubIssuesError}</span>
+                  )}
+                </div>
+                {githubIssues.length > 0 &&
+                  githubIssuesWorkspaceId === getTaskComposerWorkspaceId() && (
+                    <select
+                      className="home-tasks-input"
+                      value={githubIssueDraft}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setGitHubIssueDraft(value);
+                        const issue = githubIssues.find(
+                          (entry) => String(entry.number) === value,
+                        );
+                        if (!issue) {
+                          return;
+                        }
+                        setTaskTitle(issue.title);
+                        setTaskContent((prev) => {
+                          const linkLine = `GitHub: ${issue.url}`;
+                          if (prev.includes(issue.url)) {
+                            return prev;
+                          }
+                          const trimmed = prev.trim();
+                          return trimmed ? `${linkLine}\n\n${trimmed}` : linkLine;
+                        });
+                      }}
+                      aria-label="Select GitHub issue"
+                    >
+                      <option value="">Select an issue…</option>
+                      {githubIssues.map((issue) => (
+                        <option key={issue.url} value={String(issue.number)}>
+                          #{issue.number} {issue.title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 <input
                   className="home-tasks-input"
                   type="text"

@@ -504,6 +504,12 @@
   gap: 12px;
 }
 
+.home-tasks-import {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .home-tasks-inline-button {
   border: none;
   background: transparent;
