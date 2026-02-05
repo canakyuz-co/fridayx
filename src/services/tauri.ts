@@ -620,12 +620,19 @@ export type WorkspaceSearchResult = {
   matchText?: string | null;
 };
 
+export type WorkspaceTextSearchOptions = {
+  matchCase?: boolean;
+  wholeWord?: boolean;
+  useRegex?: boolean;
+};
+
 export async function searchWorkspaceFiles(
   workspaceId: string,
   query: string,
   includeGlobs: string[],
   excludeGlobs: string[],
   maxResults: number,
+  options?: WorkspaceTextSearchOptions,
 ): Promise<WorkspaceSearchResult[]> {
   return invoke<WorkspaceSearchResult[]>("search_workspace_files", {
     workspaceId,
@@ -633,6 +640,9 @@ export async function searchWorkspaceFiles(
     includeGlobs,
     excludeGlobs,
     maxResults,
+    matchCase: options?.matchCase ?? false,
+    wholeWord: options?.wholeWord ?? false,
+    isRegex: options?.useRegex ?? false,
   });
 }
 

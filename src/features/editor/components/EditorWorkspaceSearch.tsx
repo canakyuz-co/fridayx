@@ -38,11 +38,19 @@ type WorkspaceSearchAction = {
   onSelect: () => void;
 };
 
+type TextSearchOptions = {
+  matchCase: boolean;
+  wholeWord: boolean;
+  useRegex: boolean;
+};
+
 type EditorWorkspaceSearchProps = {
   isOpen: boolean;
   activeTab: WorkspaceSearchTab;
   onTabChange: (tab: WorkspaceSearchTab) => void;
   query: string;
+  textSearchOptions: TextSearchOptions;
+  onTextSearchOptionsChange: (next: TextSearchOptions) => void;
   results: WorkspaceSearchResult[];
   fileResults: string[];
   classResults: WorkspaceSymbolResult[];
@@ -86,6 +94,8 @@ export function EditorWorkspaceSearch({
   activeTab,
   onTabChange,
   query,
+  textSearchOptions,
+  onTextSearchOptionsChange,
   results,
   fileResults,
   classResults,
@@ -103,6 +113,7 @@ export function EditorWorkspaceSearch({
   onSelectSymbol,
 }: EditorWorkspaceSearchProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const showTextOptions = activeTab === "all" || activeTab === "text";
 
   const summary = useMemo(() => {
     if (!query.trim()) {
@@ -203,6 +214,58 @@ export function EditorWorkspaceSearch({
               placeholder="Type / to see commands"
             />
           </div>
+          {showTextOptions ? (
+            <div className="editor-workspace-search__toggles" aria-label="Search options">
+              <button
+                type="button"
+                className={`editor-workspace-search__toggle${
+                  textSearchOptions.matchCase ? " is-active" : ""
+                }`}
+                onClick={() =>
+                  onTextSearchOptionsChange({
+                    ...textSearchOptions,
+                    matchCase: !textSearchOptions.matchCase,
+                  })
+                }
+                aria-pressed={textSearchOptions.matchCase}
+                title="Match case"
+              >
+                Aa
+              </button>
+              <button
+                type="button"
+                className={`editor-workspace-search__toggle${
+                  textSearchOptions.wholeWord ? " is-active" : ""
+                }`}
+                onClick={() =>
+                  onTextSearchOptionsChange({
+                    ...textSearchOptions,
+                    wholeWord: !textSearchOptions.wholeWord,
+                  })
+                }
+                aria-pressed={textSearchOptions.wholeWord}
+                title="Whole word"
+              >
+                W
+              </button>
+              <button
+                type="button"
+                className={`editor-workspace-search__toggle${
+                  textSearchOptions.useRegex ? " is-active" : ""
+                }`}
+                onClick={() =>
+                  onTextSearchOptionsChange({
+                    ...textSearchOptions,
+                    useRegex: !textSearchOptions.useRegex,
+                  })
+                }
+                aria-pressed={textSearchOptions.useRegex}
+                title="Use regex"
+              >
+                .*
+              </button>
+            </div>
+          ) : null}
         </div>
         <div className="editor-workspace-search__summary">{summary}</div>
         <div className="editor-workspace-search__results">

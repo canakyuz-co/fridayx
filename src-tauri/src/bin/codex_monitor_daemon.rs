@@ -545,16 +545,32 @@ impl DaemonState {
         include_globs: Vec<String>,
         exclude_globs: Vec<String>,
         max_results: u32,
+        match_case: bool,
+        whole_word: bool,
+        is_regex: bool,
     ) -> Result<Vec<WorkspaceSearchResult>, String> {
+        let options = workspaces_core::WorkspaceSearchOptions {
+            match_case,
+            whole_word,
+            is_regex,
+        };
         workspaces_core::search_workspace_files_core(
             &self.workspaces,
             &workspace_id,
             &query,
             &include_globs,
             &exclude_globs,
+            options,
             max_results as usize,
-            |root, query, include_globs, exclude_globs, max_results| {
-                search_workspace_files_inner(root, query, include_globs, exclude_globs, max_results)
+            |root, query, include_globs, exclude_globs, options, max_results| {
+                search_workspace_files_inner(
+                    root,
+                    query,
+                    include_globs,
+                    exclude_globs,
+                    options,
+                    max_results,
+                )
             },
         )
         .await
@@ -908,6 +924,7 @@ fn search_workspace_files_inner(
     query: &str,
     include_globs: &[String],
     exclude_globs: &[String],
+    options: workspaces_core::WorkspaceSearchOptions,
     max_results: usize,
 ) -> Result<Vec<WorkspaceSearchResult>, String> {
     let mut cmd = std::process::Command::new("rg");
@@ -918,6 +935,11 @@ fn search_workspace_files_inner(
         .arg("--column")
         .arg("--color")
         .arg("never");
+    if options.match_case {
+        cmd.arg("--case-sensitive");
+    } else {
+        cmd.arg("--smart-case");
+    }
     for pattern in include_globs {
         if !pattern.trim().is_empty() {
             cmd.arg("--glob").arg(pattern);
@@ -929,7 +951,26 @@ fn search_workspace_files_inner(
             cmd.arg("--glob").arg(format!("!{trimmed}"));
         }
     }
-    cmd.arg(query);
+    let trimmed_query = query.trim();
+    if trimmed_query.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let query_has_whitespace = trimmed_query.chars().any(|ch| ch.is_whitespace());
+    let wants_whole_word = options.whole_word && !query_has_whitespace;
+    let pattern = if options.is_regex {
+        if wants_whole_word {
+            format!(r"\b(?:{trimmed_query})\b")
+        } else {
+            trimmed_query.to_string()
+        }
+    } else if wants_whole_word {
+        format!(r"\b{}\b", escape_rg_regex(trimmed_query))
+    } else {
+        cmd.arg("--fixed-strings");
+        trimmed_query.to_string()
+    };
+    cmd.arg(pattern);
     let output = cmd
         .output()
         .map_err(|err| format!("Failed to run rg: {err}"))?;
@@ -1007,6 +1048,20 @@ fn search_workspace_files_inner(
     }
 
     Ok(results)
+}
+
+fn escape_rg_regex(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for ch in input.chars() {
+        match ch {
+            '.' | '^' | '$' | '*' | '+' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '|' | '\\' => {
+                out.push('\\');
+                out.push(ch);
+            }
+            _ => out.push(ch),
+        }
+    }
+    out
 }
 
 const MAX_WORKSPACE_FILE_BYTES: u64 = 400_000;
@@ -1572,6 +1627,13 @@ fn parse_optional_u32(value: &Value, key: &str) -> Option<u32> {
     }
 }
 
+fn parse_optional_bool(value: &Value, key: &str) -> Option<bool> {
+    match value {
+        Value::Object(map) => map.get(key).and_then(|value| value.as_bool()),
+        _ => None,
+    }
+}
+
 fn parse_optional_string_array(value: &Value, key: &str) -> Option<Vec<String>> {
     match value {
         Value::Object(map) => map.get(key).and_then(|value| value.as_array()).map(|items| {
@@ -1735,6 +1797,9 @@ async fn handle_rpc_request(
             let exclude_globs = parse_optional_string_array(&params, "excludeGlobs")
                 .unwrap_or_default();
             let max_results = parse_optional_u32(&params, "maxResults").unwrap_or(200);
+            let match_case = parse_optional_bool(&params, "matchCase").unwrap_or(false);
+            let whole_word = parse_optional_bool(&params, "wholeWord").unwrap_or(false);
+            let is_regex = parse_optional_bool(&params, "isRegex").unwrap_or(false);
             let results = state
                 .search_workspace_files(
                     workspace_id,
@@ -1742,6 +1807,9 @@ async fn handle_rpc_request(
                     include_globs,
                     exclude_globs,
                     max_results,
+                    match_case,
+                    whole_word,
+                    is_regex,
                 )
                 .await?;
             serde_json::to_value(results).map_err(|err| err.to_string())

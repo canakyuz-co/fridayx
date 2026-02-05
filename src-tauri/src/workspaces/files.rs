@@ -242,6 +242,7 @@ pub(crate) fn search_workspace_files_inner(
     query: &str,
     include_globs: &[String],
     exclude_globs: &[String],
+    options: crate::shared::workspaces_core::WorkspaceSearchOptions,
     max_results: usize,
 ) -> Result<Vec<WorkspaceSearchResult>, String> {
     let mut cmd = Command::new("rg");
@@ -252,6 +253,11 @@ pub(crate) fn search_workspace_files_inner(
         .arg("--column")
         .arg("--color")
         .arg("never");
+    if options.match_case {
+        cmd.arg("--case-sensitive");
+    } else {
+        cmd.arg("--smart-case");
+    }
     for pattern in include_globs {
         if !pattern.trim().is_empty() {
             cmd.arg("--glob").arg(pattern);
@@ -263,7 +269,27 @@ pub(crate) fn search_workspace_files_inner(
             cmd.arg("--glob").arg(format!("!{trimmed}"));
         }
     }
-    cmd.arg(query);
+    let trimmed_query = query.trim();
+    if trimmed_query.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let query_has_whitespace = trimmed_query.chars().any(|ch| ch.is_whitespace());
+    let wants_whole_word = options.whole_word && !query_has_whitespace;
+    let pattern = if options.is_regex {
+        if wants_whole_word {
+            format!(r"\b(?:{trimmed_query})\b")
+        } else {
+            trimmed_query.to_string()
+        }
+    } else if wants_whole_word {
+        // Word boundary search requires regex; escape user input to keep this safe and predictable.
+        format!(r"\b{}\b", escape_rg_regex(trimmed_query))
+    } else {
+        cmd.arg("--fixed-strings");
+        trimmed_query.to_string()
+    };
+    cmd.arg(pattern);
     let output = cmd
         .output()
         .map_err(|err| format!("Failed to run rg: {err}"))?;
@@ -341,4 +367,18 @@ pub(crate) fn search_workspace_files_inner(
     }
 
     Ok(results)
+}
+
+fn escape_rg_regex(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for ch in input.chars() {
+        match ch {
+            '.' | '^' | '$' | '*' | '+' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '|' | '\\' => {
+                out.push('\\');
+                out.push(ch);
+            }
+            _ => out.push(ch),
+        }
+    }
+    out
 }

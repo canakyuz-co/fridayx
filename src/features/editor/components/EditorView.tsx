@@ -11,7 +11,11 @@ import { Markdown } from "../../messages/components/Markdown";
 import { EditorCommandPalette } from "./EditorCommandPalette";
 import { EditorWorkspaceSearch } from "./EditorWorkspaceSearch";
 import type { EditorKeymap, LaunchScriptEntry } from "../../../types";
-import { lspRequest, searchWorkspaceFiles } from "../../../services/tauri";
+import {
+  lspRequest,
+  searchWorkspaceFiles,
+  type WorkspaceTextSearchOptions,
+} from "../../../services/tauri";
 import { languageFromPath } from "../../../utils/syntax";
 
 import "monaco-editor/esm/vs/language/css/monaco.contribution";
@@ -46,6 +50,8 @@ type WorkspaceSearchResult = {
   lineText: string;
   matchText?: string | null;
 };
+
+type WorkspaceTextSearchOptionsState = Required<WorkspaceTextSearchOptions>;
 
 type WorkspaceSymbolResult = {
   name: string;
@@ -164,6 +170,12 @@ export function EditorView({
   const [workspaceSearchExclude, _setWorkspaceSearchExclude] = useState(
     "node_modules/**, dist/**, .git/**",
   );
+  const [workspaceTextSearchOptions, setWorkspaceTextSearchOptions] =
+    useState<WorkspaceTextSearchOptionsState>({
+      matchCase: false,
+      wholeWord: false,
+      useRegex: false,
+    });
   const [workspaceSearchResults, setWorkspaceSearchResults] = useState<
     WorkspaceSearchResult[]
   >([]);
@@ -469,6 +481,9 @@ export function EditorView({
     if (!workspaceSearchOpen || !workspaceId) {
       return;
     }
+    if (workspaceSearchTab !== "all" && workspaceSearchTab !== "text") {
+      return;
+    }
     const trimmed = workspaceSearchQuery.trim();
     if (!trimmed) {
       setWorkspaceSearchResults([]);
@@ -491,6 +506,7 @@ export function EditorView({
         includeGlobs,
         excludeGlobs,
         200,
+        workspaceTextSearchOptions,
       )
         .then((results) => {
           setWorkspaceSearchResults(results);
@@ -513,6 +529,8 @@ export function EditorView({
     workspaceSearchInclude,
     workspaceSearchOpen,
     workspaceSearchQuery,
+    workspaceSearchTab,
+    workspaceTextSearchOptions,
   ]);
 
   const workspaceSearchActions = useMemo<WorkspaceSearchAction[]>(() => {
@@ -976,6 +994,8 @@ export function EditorView({
         activeTab={workspaceSearchTab}
         onTabChange={setWorkspaceSearchTab}
         query={workspaceSearchQuery}
+        textSearchOptions={workspaceTextSearchOptions}
+        onTextSearchOptionsChange={setWorkspaceTextSearchOptions}
         results={workspaceSearchResults}
         fileResults={workspaceSearchFileResults}
         classResults={workspaceClassResults}

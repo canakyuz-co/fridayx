@@ -1100,20 +1100,38 @@ where
     read_file(&root, path)
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct WorkspaceSearchOptions {
+    pub(crate) match_case: bool,
+    pub(crate) whole_word: bool,
+    pub(crate) is_regex: bool,
+}
+
+impl Default for WorkspaceSearchOptions {
+    fn default() -> Self {
+        Self {
+            match_case: false,
+            whole_word: false,
+            is_regex: false,
+        }
+    }
+}
+
 pub(crate) async fn search_workspace_files_core<F, T>(
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     workspace_id: &str,
     query: &str,
     include_globs: &[String],
     exclude_globs: &[String],
+    options: WorkspaceSearchOptions,
     max_results: usize,
     search_files: F,
 ) -> Result<T, String>
 where
-    F: Fn(&PathBuf, &str, &[String], &[String], usize) -> Result<T, String>,
+    F: Fn(&PathBuf, &str, &[String], &[String], WorkspaceSearchOptions, usize) -> Result<T, String>,
 {
     let root = resolve_workspace_root(workspaces, workspace_id).await?;
-    search_files(&root, query, include_globs, exclude_globs, max_results)
+    search_files(&root, query, include_globs, exclude_globs, options, max_results)
 }
 
 pub(crate) async fn create_workspace_file_core<F>(

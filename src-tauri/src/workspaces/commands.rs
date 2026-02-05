@@ -126,6 +126,9 @@ pub(crate) async fn search_workspace_files(
     include_globs: Vec<String>,
     exclude_globs: Vec<String>,
     max_results: u32,
+    match_case: bool,
+    whole_word: bool,
+    is_regex: bool,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Vec<WorkspaceSearchResult>, String> {
@@ -140,21 +143,37 @@ pub(crate) async fn search_workspace_files(
                 "includeGlobs": include_globs,
                 "excludeGlobs": exclude_globs,
                 "maxResults": max_results,
+                "matchCase": match_case,
+                "wholeWord": whole_word,
+                "isRegex": is_regex,
             }),
         )
         .await?;
         return serde_json::from_value(response).map_err(|err| err.to_string());
     }
 
+    let options = workspaces_core::WorkspaceSearchOptions {
+        match_case,
+        whole_word,
+        is_regex,
+    };
     workspaces_core::search_workspace_files_core(
         &state.workspaces,
         &workspace_id,
         &query,
         &include_globs,
         &exclude_globs,
+        options,
         max_results as usize,
-        |root, query, include_globs, exclude_globs, max_results| {
-            search_workspace_files_inner(root, query, include_globs, exclude_globs, max_results)
+        |root, query, include_globs, exclude_globs, options, max_results| {
+            search_workspace_files_inner(
+                root,
+                query,
+                include_globs,
+                exclude_globs,
+                options,
+                max_results,
+            )
         },
     )
     .await
