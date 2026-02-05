@@ -5,6 +5,7 @@ import type {
   CodexDoctorResult,
   DictationModelStatus,
   DictationSessionState,
+  GitCommandReport,
   LocalUsageSnapshot,
   TaskEntry,
   TaskStatus,
@@ -396,8 +397,19 @@ export async function commitGit(
   return invoke("commit_git", { workspaceId, message });
 }
 
+export async function commitGitDetailed(
+  workspaceId: string,
+  message: string,
+): Promise<GitCommandReport> {
+  return invoke<GitCommandReport>("commit_git_detailed", { workspaceId, message });
+}
+
 export async function pushGit(workspaceId: string): Promise<void> {
   return invoke("push_git", { workspaceId });
+}
+
+export async function pushGitDetailed(workspaceId: string): Promise<GitCommandReport> {
+  return invoke<GitCommandReport>("push_git_detailed", { workspaceId });
 }
 
 export async function pullGit(workspaceId: string): Promise<void> {

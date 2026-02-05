@@ -110,6 +110,7 @@ import type {
   AccessMode,
   ClaudeUsageSnapshot,
   ComposerEditorSettings,
+  GitCommandReport,
   ModelOption,
   OtherAiProvider,
   RateLimitSnapshot,
@@ -1350,6 +1351,8 @@ function MainApp() {
     fetchError,
     pushError,
     syncError,
+    commitReport,
+    pushReport,
     onCommitMessageChange: handleCommitMessageChange,
     onGenerateCommitMessage: handleGenerateCommitMessage,
     onCommit: handleCommit,
@@ -1367,6 +1370,36 @@ function MainApp() {
     refreshGitStatus,
     refreshGitLog,
   });
+
+  const handleFixGitError = useCallback(
+    async (payload: { operation: "commit" | "push"; report: GitCommandReport }) => {
+      const { operation, report } = payload;
+      const sections: string[] = [
+        `Git ${operation} failed while running from Fridex.`,
+        "",
+        "Please:",
+        "1) Identify the root cause from the output (husky/lefthook hooks, lint-staged, commitlint, etc).",
+        "2) Propose the minimal code/config changes to fix it (with a patch).",
+        "3) List the exact commands to verify the fix (lint/typecheck/tests if relevant), then retry the git command.",
+        "",
+        `Command: ${report.command}`,
+        `Exit code: ${typeof report.exitCode === "number" ? report.exitCode : "unknown"}`,
+        `Duration: ${Math.round(report.durationMs)}ms`,
+      ];
+
+      const stderr = report.stderr?.trim();
+      if (stderr) {
+        sections.push("", "STDERR:", "```text", stderr, "```");
+      }
+      const stdout = report.stdout?.trim();
+      if (stdout) {
+        sections.push("", "STDOUT:", "```text", stdout, "```");
+      }
+
+      await sendUserMessage(sections.join("\n"), []);
+    },
+    [sendUserMessage],
+  );
 
   const handleSendPromptToNewAgent = useCallback(
     async (text: string) => {
@@ -2127,6 +2160,9 @@ function MainApp() {
     fetchError,
     pushError,
     syncError,
+    commitReport,
+    pushReport,
+    onFixGitError: handleFixGitError,
     commitsAhead: gitLogAhead,
     onSendPrompt: handleSendPrompt,
     onSendPromptToNewAgent: handleSendPromptToNewAgent,

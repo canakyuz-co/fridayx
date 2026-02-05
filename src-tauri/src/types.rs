@@ -30,6 +30,17 @@ pub(crate) struct GitFileStatus {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GitCommandReport {
+    pub(crate) ok: bool,
+    pub(crate) command: String,
+    pub(crate) exit_code: Option<i32>,
+    pub(crate) duration_ms: u64,
+    pub(crate) stdout: String,
+    pub(crate) stderr: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct GitFileDiff {
     pub(crate) path: String,
     pub(crate) diff: String,

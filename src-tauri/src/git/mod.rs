@@ -13,14 +13,15 @@ use crate::git_utils::{
 };
 use crate::state::AppState;
 use crate::types::{
-    BranchInfo, GitCommitDiff, GitFileDiff, GitFileStatus, GitHubIssue, GitHubIssuesResponse,
-    GitHubPullRequest, GitHubPullRequestComment, GitHubPullRequestDiff,
+    BranchInfo, GitCommandReport, GitCommitDiff, GitFileDiff, GitFileStatus, GitHubIssue,
+    GitHubIssuesResponse, GitHubPullRequest, GitHubPullRequestComment, GitHubPullRequestDiff,
     GitHubPullRequestsResponse, GitLogResponse,
 };
 use crate::utils::{git_env_path, normalize_git_path, resolve_git_binary};
 
 const INDEX_SKIP_WORKTREE_FLAG: u16 = 0x4000;
 const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
+const MAX_GIT_OUTPUT_BYTES: usize = 80 * 1024;
 
 fn encode_image_base64(data: &[u8]) -> Option<String> {
     if data.len() > MAX_IMAGE_BYTES {
@@ -70,6 +71,119 @@ async fn run_git_command(repo_root: &Path, args: &[&str]) -> Result<(), String> 
         return Err("Git command failed.".to_string());
     }
     Err(detail.to_string())
+}
+
+fn truncate_utf8(value: &str, max_bytes: usize) -> String {
+    if value.len() <= max_bytes {
+        return value.to_string();
+    }
+    let mut end = max_bytes;
+    while end > 0 && !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    let mut out = value[..end].to_string();
+    out.push_str("\n…(truncated)");
+    out
+}
+
+fn mask_secrets(value: &str) -> String {
+    // Best-effort masking to avoid leaking tokens into UI/chat logs.
+    // Time: O(L), Space: O(L) where L is the string length.
+    fn is_token_char(ch: char) -> bool {
+        ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '=')
+    }
+
+    fn mask_prefix(mut input: String, prefix: &str) -> String {
+        let mut idx = 0;
+        while let Some(pos) = input[idx..].find(prefix) {
+            let start = idx + pos;
+            if !input.is_char_boundary(start) {
+                idx = start + 1;
+                continue;
+            }
+            let after_prefix = start + prefix.len();
+            if !input.is_char_boundary(after_prefix) {
+                idx = after_prefix;
+                continue;
+            }
+            let mut end = after_prefix;
+            for (offset, ch) in input[after_prefix..].char_indices() {
+                if !is_token_char(ch) {
+                    break;
+                }
+                end = after_prefix + offset + ch.len_utf8();
+            }
+            if end > after_prefix {
+                input.replace_range(start..end, "<redacted>");
+                idx = start + "<redacted>".len();
+            } else {
+                idx = after_prefix;
+            }
+            if idx >= input.len() {
+                break;
+            }
+        }
+        input
+    }
+
+    let mut out = value.to_string();
+    for prefix in ["ghp_", "github_pat_", "sk-", "rk-", "pk_live_", "pk_test_"] {
+        out = mask_prefix(out, prefix);
+    }
+    out
+}
+
+fn format_git_command(args: &[&str]) -> String {
+    // Redact user-provided message bodies and other common sensitive args.
+    // Time: O(n), Space: O(n) where n is args length.
+    let mut rendered: Vec<String> = Vec::with_capacity(args.len());
+    let mut redact_next = false;
+    for arg in args {
+        if redact_next {
+            rendered.push("<redacted>".to_string());
+            redact_next = false;
+            continue;
+        }
+        if *arg == "-m" || *arg == "--message" {
+            rendered.push(arg.to_string());
+            redact_next = true;
+            continue;
+        }
+        rendered.push(arg.to_string());
+    }
+    if redact_next {
+        rendered.push("<redacted>".to_string());
+    }
+    format!("git {}", rendered.join(" "))
+}
+
+async fn run_git_command_report(repo_root: &Path, args: &[&str]) -> Result<GitCommandReport, String> {
+    // Time: dominated by git subprocess runtime; output processing is O(L).
+    // Space: O(L) bounded by MAX_GIT_OUTPUT_BYTES.
+    let started = std::time::Instant::now();
+    let git_bin = resolve_git_binary().map_err(|e| format!("Failed to run git: {e}"))?;
+    let output = tokio_command(git_bin)
+        .args(args)
+        .current_dir(repo_root)
+        .env("PATH", git_env_path())
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run git: {e}"))?;
+
+    let duration_ms = started.elapsed().as_millis() as u64;
+    let stdout_raw = String::from_utf8_lossy(&output.stdout);
+    let stderr_raw = String::from_utf8_lossy(&output.stderr);
+    let stdout = truncate_utf8(&mask_secrets(stdout_raw.trim_end()), MAX_GIT_OUTPUT_BYTES);
+    let stderr = truncate_utf8(&mask_secrets(stderr_raw.trim_end()), MAX_GIT_OUTPUT_BYTES);
+
+    Ok(GitCommandReport {
+        ok: output.status.success(),
+        command: format_git_command(args),
+        exit_code: output.status.code(),
+        duration_ms,
+        stdout,
+        stderr,
+    })
 }
 
 fn action_paths_for_file(repo_root: &Path, path: &str) -> Vec<String> {
@@ -719,6 +833,22 @@ pub(crate) async fn commit_git(
 }
 
 #[tauri::command]
+pub(crate) async fn commit_git_detailed(
+    workspace_id: String,
+    message: String,
+    state: State<'_, AppState>,
+) -> Result<GitCommandReport, String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+
+    let repo_root = resolve_git_root(&entry)?;
+    run_git_command_report(&repo_root, &["commit", "-m", &message]).await
+}
+
+#[tauri::command]
 pub(crate) async fn push_git(
     workspace_id: String,
     state: State<'_, AppState>,
@@ -731,6 +861,28 @@ pub(crate) async fn push_git(
 
     let repo_root = resolve_git_root(&entry)?;
     push_with_upstream(&repo_root).await
+}
+
+#[tauri::command]
+pub(crate) async fn push_git_detailed(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<GitCommandReport, String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+
+    let repo_root = resolve_git_root(&entry)?;
+    let upstream = upstream_remote_and_branch(&repo_root)?;
+    if let Some((remote, branch)) = upstream {
+        let _ = run_git_command(&repo_root, &["fetch", "--prune", remote.as_str()]).await;
+        let refspec = format!("HEAD:{branch}");
+        return run_git_command_report(&repo_root, &["push", remote.as_str(), refspec.as_str()])
+            .await;
+    }
+    run_git_command_report(&repo_root, &["push"]).await
 }
 
 #[tauri::command]

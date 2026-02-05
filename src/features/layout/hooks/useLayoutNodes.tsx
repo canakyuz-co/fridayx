@@ -34,6 +34,7 @@ import type {
   DebugEntry,
   DictationSessionState,
   DictationTranscript,
+  GitCommandReport,
   GitFileStatus,
   GitHubIssue,
   GitHubPullRequestComment,
@@ -340,6 +341,12 @@ type LayoutNodesOptions = {
   fetchError?: string | null;
   pushError?: string | null;
   syncError?: string | null;
+  commitReport?: GitCommandReport | null;
+  pushReport?: GitCommandReport | null;
+  onFixGitError?: (payload: {
+    operation: "commit" | "push";
+    report: GitCommandReport;
+  }) => void | Promise<void>;
   commitsAhead?: number;
   onSendPrompt: (text: string) => void | Promise<void>;
   onSendPromptToNewAgent: (text: string) => void | Promise<void>;
@@ -895,6 +902,9 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         fetchError={options.fetchError}
         pushError={options.pushError}
         syncError={options.syncError}
+        commitReport={options.commitReport ?? null}
+        pushReport={options.pushReport ?? null}
+        onFixGitError={options.onFixGitError}
         commitsAhead={options.commitsAhead}
       />
     );

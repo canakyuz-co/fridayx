@@ -1,4 +1,9 @@
-import type { GitHubIssue, GitHubPullRequest, GitLogEntry } from "../../../types";
+import type {
+  GitCommandReport,
+  GitHubIssue,
+  GitHubPullRequest,
+  GitLogEntry,
+} from "../../../types";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
@@ -114,6 +119,12 @@ type GitDiffPanelProps = {
   fetchError?: string | null;
   pushError?: string | null;
   syncError?: string | null;
+  commitReport?: GitCommandReport | null;
+  pushReport?: GitCommandReport | null;
+  onFixGitError?: (payload: {
+    operation: "commit" | "push";
+    report: GitCommandReport;
+  }) => void | Promise<void>;
   // For showing push button when there are commits to push
   commitsAhead?: number;
 };
@@ -695,6 +706,9 @@ export function GitDiffPanel({
   fetchError = null,
   pushError = null,
   syncError = null,
+  commitReport = null,
+  pushReport = null,
+  onFixGitError,
   commitsAhead = 0,
 }: GitDiffPanelProps) {
   const [dismissedErrorSignatures, setDismissedErrorSignatures] = useState<Set<string>>(
@@ -836,6 +850,45 @@ export function GitDiffPanel({
       loading: _syncLoading,
     };
   }, [pushNeedsSync, _onSync, _syncLoading, handleSyncFromError]);
+
+  const handleFixCommitError = useCallback(() => {
+    if (!commitReport || !onFixGitError) {
+      return;
+    }
+    void onFixGitError({ operation: "commit", report: commitReport });
+  }, [commitReport, onFixGitError]);
+  const commitErrorAction = useMemo(() => {
+    if (!commitError || !commitReport || !onFixGitError) {
+      return null;
+    }
+    return {
+      label: "Duzelt",
+      onAction: handleFixCommitError,
+    };
+  }, [commitError, commitReport, onFixGitError, handleFixCommitError]);
+
+  const handleFixPushError = useCallback(() => {
+    if (!pushReport || !onFixGitError) {
+      return;
+    }
+    void onFixGitError({ operation: "push", report: pushReport });
+  }, [onFixGitError, pushReport]);
+  const pushFixAction = useMemo(() => {
+    if (!pushError || pushNeedsSync || pushErrorAction || !pushReport || !onFixGitError) {
+      return null;
+    }
+    return {
+      label: "Duzelt",
+      onAction: handleFixPushError,
+    };
+  }, [
+    onFixGitError,
+    pushError,
+    pushErrorAction,
+    pushNeedsSync,
+    pushReport,
+    handleFixPushError,
+  ]);
   const githubBaseUrl = useMemo(() => {
     if (!gitRemoteUrl) {
       return null;
@@ -1081,10 +1134,14 @@ export function GitDiffPanel({
     }> =
       mode === "diff"
         ? [
-            { key: "push", message: pushErrorMessage, action: pushErrorAction },
+            {
+              key: "push",
+              message: pushErrorMessage,
+              action: pushErrorAction ?? pushFixAction,
+            },
             { key: "pull", message: pullError },
             { key: "fetch", message: fetchError },
-            { key: "commit", message: commitError },
+            { key: "commit", message: commitError, action: commitErrorAction },
             { key: "sync", message: syncError },
             { key: "commitMessage", message: commitMessageError },
             { key: "git", message: error },
@@ -1105,6 +1162,7 @@ export function GitDiffPanel({
       }));
   }, [
     commitError,
+    commitErrorAction,
     commitMessageError,
     error,
     fetchError,
@@ -1115,6 +1173,7 @@ export function GitDiffPanel({
     pullError,
     pushErrorMessage,
     pushErrorAction,
+    pushFixAction,
     syncError,
     worktreeApplyError,
     errorScope,

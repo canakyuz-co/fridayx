@@ -332,6 +332,15 @@ export type GitLogResponse = {
   upstream: string | null;
 };
 
+export type GitCommandReport = {
+  ok: boolean;
+  command: string;
+  exitCode?: number | null;
+  durationMs: number;
+  stdout: string;
+  stderr: string;
+};
+
 export type GitHubIssue = {
   number: number;
   title: string;
