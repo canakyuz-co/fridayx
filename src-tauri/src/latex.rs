@@ -1,4 +1,5 @@
 use base64::Engine;
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
@@ -7,13 +8,23 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tauri::State;
 use tokio::sync::Mutex;
-use tokio::{fs, process::Command};
+use tokio::{fs, io::AsyncWriteExt, process::Command};
 
 use crate::state::AppState;
 
 // Keep the cache small: PDF blobs are large and compilation is relatively slow.
 const LATEX_CACHE_CAPACITY: usize = 8;
 const LATEX_COMPILE_TIMEOUT: Duration = Duration::from_secs(15);
+
+const TECTONIC_VERSION: &str = "0.15.0";
+const TECTONIC_URL_AARCH64_APPLE_DARWIN: &str = "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/tectonic-0.15.0-aarch64-apple-darwin.tar.gz";
+const TECTONIC_URL_X86_64_APPLE_DARWIN: &str = "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/tectonic-0.15.0-x86_64-apple-darwin.tar.gz";
+
+// sha256(archive). Keep pinned so we can verify downloads.
+const TECTONIC_SHA256_AARCH64_APPLE_DARWIN: &str =
+    "24bd46566fa30d41101848405e9cbc4645edb92d8f857c9d21262174fb70cd33";
+const TECTONIC_SHA256_X86_64_APPLE_DARWIN: &str =
+    "dd42576eaa4c0df58c243dd78b7b864d9deb405ffdfcdadd1b79a31faceab747";
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct LatexCompileRequest {
@@ -71,9 +82,15 @@ impl LatexCompileCache {
 }
 
 static LATEX_CACHE: std::sync::OnceLock<Mutex<LatexCompileCache>> = std::sync::OnceLock::new();
+static LATEX_ENGINE_INSTALL_LOCK: std::sync::OnceLock<Mutex<()>> =
+    std::sync::OnceLock::new();
 
 fn cache() -> &'static Mutex<LatexCompileCache> {
     LATEX_CACHE.get_or_init(|| Mutex::new(LatexCompileCache::default()))
+}
+
+fn engine_install_lock() -> &'static Mutex<()> {
+    LATEX_ENGINE_INSTALL_LOCK.get_or_init(|| Mutex::new(()))
 }
 
 fn sha256_hex(input: &str) -> String {
@@ -109,6 +126,14 @@ fn resolve_filesystem_root(
     }
 
     Ok(file_dir)
+}
+
+fn app_data_dir(state: &State<'_, AppState>) -> Result<PathBuf, String> {
+    state
+        .settings_path
+        .parent()
+        .map(|path| path.to_path_buf())
+        .ok_or_else(|| "Unable to resolve app data dir.".to_string())
 }
 
 fn parse_diagnostics_from_log(log: &str) -> Vec<LatexDiagnostic> {
@@ -161,10 +186,16 @@ fn parse_diagnostics_from_log(log: &str) -> Vec<LatexDiagnostic> {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum LatexEngine {
+enum LatexEngineKind {
     Tectonic,
     LatexMkXeLaTeX,
     XeLaTeX,
+}
+
+#[derive(Clone, Debug)]
+struct LatexEngine {
+    kind: LatexEngineKind,
+    command: OsString,
 }
 
 async fn command_exists(cmd: &str, args: &[&str]) -> bool {
@@ -179,15 +210,24 @@ async fn command_exists(cmd: &str, args: &[&str]) -> bool {
         .unwrap_or(false)
 }
 
-async fn detect_engine() -> Option<LatexEngine> {
+async fn detect_engine_on_path() -> Option<LatexEngine> {
     if command_exists("tectonic", &["--version"]).await {
-        return Some(LatexEngine::Tectonic);
+        return Some(LatexEngine {
+            kind: LatexEngineKind::Tectonic,
+            command: OsString::from("tectonic"),
+        });
     }
     if command_exists("latexmk", &["-v"]).await {
-        return Some(LatexEngine::LatexMkXeLaTeX);
+        return Some(LatexEngine {
+            kind: LatexEngineKind::LatexMkXeLaTeX,
+            command: OsString::from("latexmk"),
+        });
     }
     if command_exists("xelatex", &["--version"]).await {
-        return Some(LatexEngine::XeLaTeX);
+        return Some(LatexEngine {
+            kind: LatexEngineKind::XeLaTeX,
+            command: OsString::from("xelatex"),
+        });
     }
     None
 }
@@ -199,6 +239,152 @@ fn texinputs_env(filesystem_root: &Path) -> (OsString, OsString) {
     value.push(filesystem_root.as_os_str());
     value.push(OsString::from("//:"));
     (OsString::from("TEXINPUTS"), value)
+}
+
+fn bundled_tectonic_path(state: &State<'_, AppState>) -> Result<PathBuf, String> {
+    let data_dir = app_data_dir(state)?;
+    let arch = std::env::consts::ARCH;
+    let os = std::env::consts::OS;
+
+    // For now we only auto-install on macOS, where the app primarily targets.
+    if os != "macos" {
+        return Err("Auto-install yalnizca macOS icin aktif.".to_string());
+    }
+
+    let target = match arch {
+        "aarch64" => "aarch64-apple-darwin",
+        "x86_64" => "x86_64-apple-darwin",
+        other => return Err(format!("Desteklenmeyen mimari: {other}")),
+    };
+
+    Ok(data_dir
+        .join("tools")
+        .join("latex")
+        .join("tectonic")
+        .join(TECTONIC_VERSION)
+        .join(target)
+        .join("tectonic"))
+}
+
+fn bundled_tectonic_download_spec() -> Option<(&'static str, &'static str)> {
+    if std::env::consts::OS != "macos" {
+        return None;
+    }
+    match std::env::consts::ARCH {
+        "aarch64" => Some((
+            TECTONIC_URL_AARCH64_APPLE_DARWIN,
+            TECTONIC_SHA256_AARCH64_APPLE_DARWIN,
+        )),
+        "x86_64" => Some((
+            TECTONIC_URL_X86_64_APPLE_DARWIN,
+            TECTONIC_SHA256_X86_64_APPLE_DARWIN,
+        )),
+        _ => None,
+    }
+}
+
+async fn ensure_bundled_tectonic(state: &State<'_, AppState>) -> Result<Option<LatexEngine>, String> {
+    let Some((url, expected_sha)) = bundled_tectonic_download_spec() else {
+        return Ok(None);
+    };
+
+    let exe_path = bundled_tectonic_path(state)?;
+    if exe_path.exists() {
+        return Ok(Some(LatexEngine {
+            kind: LatexEngineKind::Tectonic,
+            command: exe_path.into_os_string(),
+        }));
+    }
+
+    // Serialize installation: avoids parallel downloads/extract races.
+    let _guard = engine_install_lock().lock().await;
+    if exe_path.exists() {
+        return Ok(Some(LatexEngine {
+            kind: LatexEngineKind::Tectonic,
+            command: exe_path.into_os_string(),
+        }));
+    }
+
+    let install_dir = exe_path
+        .parent()
+        .ok_or_else(|| "Install path gecersiz.".to_string())?;
+    fs::create_dir_all(install_dir)
+        .await
+        .map_err(|e| format!("Install dizini olusturulamadi: {e}"))?;
+
+    let tmp_archive = install_dir.join("tectonic.tmp.tar.gz");
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Tectonic indirilemedi: {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!("Tectonic indirilemedi (HTTP {}).", resp.status()));
+    }
+
+    let mut file = fs::File::create(&tmp_archive)
+        .await
+        .map_err(|e| format!("Temp arsiv yazilamadi: {e}"))?;
+
+    let mut stream = resp.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let bytes = chunk.map_err(|e| format!("Indirme akisi hatasi: {e}"))?;
+        file.write_all(&bytes)
+            .await
+            .map_err(|e| format!("Temp arsiv yazilamadi: {e}"))?;
+    }
+    file.flush()
+        .await
+        .map_err(|e| format!("Temp arsiv flush hatasi: {e}"))?;
+
+    // Verify sha256.
+    let archive_bytes = fs::read(&tmp_archive)
+        .await
+        .map_err(|e| format!("Temp arsiv okunamadi: {e}"))?;
+    let mut hasher = Sha256::new();
+    hasher.update(&archive_bytes);
+    let digest = hasher.finalize();
+    let mut got = String::with_capacity(digest.len() * 2);
+    for b in digest {
+        got.push_str(&format!("{:02x}", b));
+    }
+    if got != expected_sha {
+        let _ = fs::remove_file(&tmp_archive).await;
+        return Err("Tectonic checksum dogrulanamadi.".to_string());
+    }
+
+    // Extract tar.gz (blocking).
+    let install_dir = install_dir.to_path_buf();
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
+        let mut gz = flate2::read::GzDecoder::new(archive_bytes.as_slice());
+        let mut archive = tar::Archive::new(&mut gz);
+        archive
+            .unpack(&install_dir)
+            .map_err(|e| format!("Arsiv acilamadi: {e}"))?;
+        Ok(())
+    })
+    .await
+    .map_err(|_| "Arsiv acma gorevi basarisiz.".to_string())??;
+
+    let _ = fs::remove_file(&tmp_archive).await;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&exe_path)
+            .map_err(|e| format!("Binary metadata okunamadi: {e}"))?
+            .permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&exe_path, perms)
+            .map_err(|e| format!("Binary permission ayarlanamadi: {e}"))?;
+    }
+
+    Ok(Some(LatexEngine {
+        kind: LatexEngineKind::Tectonic,
+        command: exe_path.into_os_string(),
+    }))
 }
 
 async fn compile_with_engine(
@@ -218,10 +404,10 @@ async fn compile_with_engine(
 
     let (env_key, env_value) = texinputs_env(filesystem_root);
 
-    let mut cmd = match engine {
-        LatexEngine::Tectonic => {
+    let mut cmd = match engine.kind {
+        LatexEngineKind::Tectonic => {
             // Tectonic: fast, self-contained (if installed).
-            let mut c = Command::new("tectonic");
+            let mut c = Command::new(&engine.command);
             c.arg("-X")
                 .arg("compile")
                 .arg("--outdir")
@@ -231,8 +417,8 @@ async fn compile_with_engine(
                 .arg(&tex_path);
             c
         }
-        LatexEngine::LatexMkXeLaTeX => {
-            let mut c = Command::new("latexmk");
+        LatexEngineKind::LatexMkXeLaTeX => {
+            let mut c = Command::new(&engine.command);
             c.arg("-xelatex")
                 .arg("-interaction=nonstopmode")
                 .arg("-halt-on-error")
@@ -241,8 +427,8 @@ async fn compile_with_engine(
                 .arg(&tex_path);
             c
         }
-        LatexEngine::XeLaTeX => {
-            let mut c = Command::new("xelatex");
+        LatexEngineKind::XeLaTeX => {
+            let mut c = Command::new(&engine.command);
             c.arg("-interaction=nonstopmode")
                 .arg("-halt-on-error")
                 .arg("-output-directory")
@@ -313,9 +499,16 @@ pub(crate) async fn latex_compile(
 
     let _ = workspace_root; // reserved for future hardening (e.g. stricter whitelists).
 
-    let engine = detect_engine()
-        .await
-        .ok_or_else(|| "LaTeX motoru bulunamadi. \"tectonic\" veya \"latexmk\"/\"xelatex\" kurulu olmali.".to_string())?;
+    let engine = if let Some(engine) = detect_engine_on_path().await {
+        engine
+    } else if let Some(engine) = ensure_bundled_tectonic(&state).await? {
+        engine
+    } else {
+        return Err(
+            "LaTeX motoru bulunamadi. \"tectonic\" veya \"latexmk\"/\"xelatex\" kurulu olmali."
+                .to_string(),
+        );
+    };
 
     let (pdf_bytes, log) = compile_with_engine(engine, &req.source, &filesystem_root).await?;
     let diagnostics = parse_diagnostics_from_log(&log);
