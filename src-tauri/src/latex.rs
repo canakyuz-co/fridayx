@@ -14,7 +14,10 @@ use crate::state::AppState;
 
 // Keep the cache small: PDF blobs are large and compilation is relatively slow.
 const LATEX_CACHE_CAPACITY: usize = 8;
-const LATEX_COMPILE_TIMEOUT: Duration = Duration::from_secs(15);
+// First-run compiles may need to download bundles/fonts; keep this generous.
+const LATEX_COMPILE_TIMEOUT: Duration = Duration::from_secs(60);
+const LATEX_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(45);
+const LATEX_INSTALL_TIMEOUT: Duration = Duration::from_secs(90);
 
 const TECTONIC_VERSION: &str = "0.15.0";
 const TECTONIC_URL_AARCH64_APPLE_DARWIN: &str = "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/tectonic-0.15.0-aarch64-apple-darwin.tar.gz";
@@ -298,93 +301,105 @@ async fn ensure_bundled_tectonic(state: &State<'_, AppState>) -> Result<Option<L
 
     // Serialize installation: avoids parallel downloads/extract races.
     let _guard = engine_install_lock().lock().await;
-    if exe_path.exists() {
-        return Ok(Some(LatexEngine {
-            kind: LatexEngineKind::Tectonic,
-            command: exe_path.into_os_string(),
-        }));
-    }
 
-    let install_dir = exe_path
-        .parent()
-        .ok_or_else(|| "Install path gecersiz.".to_string())?;
-    fs::create_dir_all(install_dir)
-        .await
-        .map_err(|e| format!("Install dizini olusturulamadi: {e}"))?;
+    let install_fut = async {
+        if exe_path.exists() {
+            return Ok(Some(LatexEngine {
+                kind: LatexEngineKind::Tectonic,
+                command: exe_path.into_os_string(),
+            }));
+        }
 
-    let tmp_archive = install_dir.join("tectonic.tmp.tar.gz");
+        let install_dir = exe_path
+            .parent()
+            .ok_or_else(|| "Install path gecersiz.".to_string())?;
+        fs::create_dir_all(install_dir)
+            .await
+            .map_err(|e| format!("Install dizini olusturulamadi: {e}"))?;
 
-    let client = reqwest::Client::new();
-    let resp = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| format!("Tectonic indirilemedi: {e}"))?;
-    if !resp.status().is_success() {
-        return Err(format!("Tectonic indirilemedi (HTTP {}).", resp.status()));
-    }
+        let tmp_archive = install_dir.join("tectonic.tmp.tar.gz");
 
-    let mut file = fs::File::create(&tmp_archive)
-        .await
-        .map_err(|e| format!("Temp arsiv yazilamadi: {e}"))?;
+        let client = reqwest::Client::builder()
+            .timeout(LATEX_DOWNLOAD_TIMEOUT)
+            .build()
+            .map_err(|e| format!("HTTP client olusturulamadi: {e}"))?;
 
-    let mut stream = resp.bytes_stream();
-    while let Some(chunk) = stream.next().await {
-        let bytes = chunk.map_err(|e| format!("Indirme akisi hatasi: {e}"))?;
-        file.write_all(&bytes)
+        let resp = client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| format!("Tectonic indirilemedi: {e}"))?;
+        if !resp.status().is_success() {
+            return Err(format!("Tectonic indirilemedi (HTTP {}).", resp.status()));
+        }
+
+        let mut file = fs::File::create(&tmp_archive)
             .await
             .map_err(|e| format!("Temp arsiv yazilamadi: {e}"))?;
-    }
-    file.flush()
-        .await
-        .map_err(|e| format!("Temp arsiv flush hatasi: {e}"))?;
 
-    // Verify sha256.
-    let archive_bytes = fs::read(&tmp_archive)
+        // Stream download and compute sha256 incrementally to avoid holding large buffers.
+        let mut hasher = Sha256::new();
+        let mut stream = resp.bytes_stream();
+        while let Some(chunk) = stream.next().await {
+            let bytes = chunk.map_err(|e| format!("Indirme akisi hatasi: {e}"))?;
+            hasher.update(&bytes);
+            file.write_all(&bytes)
+                .await
+                .map_err(|e| format!("Temp arsiv yazilamadi: {e}"))?;
+        }
+        file.flush()
+            .await
+            .map_err(|e| format!("Temp arsiv flush hatasi: {e}"))?;
+
+        // Verify sha256.
+        let digest = hasher.finalize();
+        let mut got = String::with_capacity(digest.len() * 2);
+        for b in digest {
+            got.push_str(&format!("{:02x}", b));
+        }
+        if got != expected_sha {
+            let _ = fs::remove_file(&tmp_archive).await;
+            return Err("Tectonic checksum dogrulanamadi.".to_string());
+        }
+
+        // Extract tar.gz (blocking).
+        let install_dir = install_dir.to_path_buf();
+        let archive_bytes = fs::read(&tmp_archive)
+            .await
+            .map_err(|e| format!("Temp arsiv okunamadi: {e}"))?;
+        tokio::task::spawn_blocking(move || -> Result<(), String> {
+            let mut gz = flate2::read::GzDecoder::new(archive_bytes.as_slice());
+            let mut archive = tar::Archive::new(&mut gz);
+            archive
+                .unpack(&install_dir)
+                .map_err(|e| format!("Arsiv acilamadi: {e}"))?;
+            Ok(())
+        })
         .await
-        .map_err(|e| format!("Temp arsiv okunamadi: {e}"))?;
-    let mut hasher = Sha256::new();
-    hasher.update(&archive_bytes);
-    let digest = hasher.finalize();
-    let mut got = String::with_capacity(digest.len() * 2);
-    for b in digest {
-        got.push_str(&format!("{:02x}", b));
-    }
-    if got != expected_sha {
+        .map_err(|_| "Arsiv acma gorevi basarisiz.".to_string())??;
+
         let _ = fs::remove_file(&tmp_archive).await;
-        return Err("Tectonic checksum dogrulanamadi.".to_string());
-    }
 
-    // Extract tar.gz (blocking).
-    let install_dir = install_dir.to_path_buf();
-    tokio::task::spawn_blocking(move || -> Result<(), String> {
-        let mut gz = flate2::read::GzDecoder::new(archive_bytes.as_slice());
-        let mut archive = tar::Archive::new(&mut gz);
-        archive
-            .unpack(&install_dir)
-            .map_err(|e| format!("Arsiv acilamadi: {e}"))?;
-        Ok(())
-    })
-    .await
-    .map_err(|_| "Arsiv acma gorevi basarisiz.".to_string())??;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&exe_path)
+                .map_err(|e| format!("Binary metadata okunamadi: {e}"))?
+                .permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&exe_path, perms)
+                .map_err(|e| format!("Binary permission ayarlanamadi: {e}"))?;
+        }
 
-    let _ = fs::remove_file(&tmp_archive).await;
+        Ok(Some(LatexEngine {
+            kind: LatexEngineKind::Tectonic,
+            command: exe_path.into_os_string(),
+        }))
+    };
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = std::fs::metadata(&exe_path)
-            .map_err(|e| format!("Binary metadata okunamadi: {e}"))?
-            .permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(&exe_path, perms)
-            .map_err(|e| format!("Binary permission ayarlanamadi: {e}"))?;
-    }
-
-    Ok(Some(LatexEngine {
-        kind: LatexEngineKind::Tectonic,
-        command: exe_path.into_os_string(),
-    }))
+    tokio::time::timeout(LATEX_INSTALL_TIMEOUT, install_fut)
+        .await
+        .map_err(|_| "LaTeX motor kurulumu timeout.".to_string())?
 }
 
 async fn compile_with_engine(

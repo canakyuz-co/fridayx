@@ -25,15 +25,33 @@ export function LatexPreview({ workspaceId, path, source }: LatexPreviewProps) {
   const [log, setLog] = useState<string>("");
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const urlRef = useRef<string | null>(null);
+  const requestIdRef = useRef(0);
+
+  const formatError = (err: unknown) => {
+    if (err instanceof Error) return err.message;
+    if (typeof err === "string") return err;
+    if (err && typeof err === "object") {
+      const anyErr = err as any;
+      if (typeof anyErr.message === "string") return anyErr.message;
+      try {
+        return JSON.stringify(err);
+      } catch {
+        return String(err);
+      }
+    }
+    return "Derleme hatasi";
+  };
 
   useEffect(() => {
     // Debounce compile to keep typing smooth.
     setStatus("compiling");
     setError(null);
+    const requestId = ++requestIdRef.current;
 
     const handle = window.setTimeout(() => {
       latexCompile(workspaceId, path, source)
         .then((res) => {
+          if (requestId !== requestIdRef.current) return;
           setDiagnostics(res.diagnostics ?? []);
           setLog(res.log ?? "");
 
@@ -46,9 +64,8 @@ export function LatexPreview({ workspaceId, path, source }: LatexPreviewProps) {
           setStatus("ready");
         })
         .catch((err: unknown) => {
-          const message =
-            err instanceof Error ? err.message : typeof err === "string" ? err : "Derleme hatasi";
-          setError(message);
+          if (requestId !== requestIdRef.current) return;
+          setError(formatError(err));
           setStatus("error");
         });
     }, 450);
