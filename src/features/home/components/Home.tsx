@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import Plus from "lucide-react/dist/esm/icons/plus";
+import Pencil from "lucide-react/dist/esm/icons/pencil";
+import Trash2 from "lucide-react/dist/esm/icons/trash-2";
+import X from "lucide-react/dist/esm/icons/x";
 import { Markdown } from "../../messages/components/Markdown";
 import type {
   LocalUsageSnapshot,
@@ -10,13 +13,6 @@ import type {
   TaskView,
 } from "../../../types";
 import { formatRelativeTime } from "../../../utils/time";
-import {
-  type McpServerConfigEntry,
-  listConfiguredMcpServers,
-  listMcpServerStatus,
-  mcpServerOauthLogin,
-  mcpServerReload,
-} from "../../../services/tauri";
 import { useGitHubIssuesByWorkspaceId } from "../../git/hooks/useGitHubIssues";
 
 type ExternalRef = {
@@ -77,6 +73,25 @@ type TaskWorkspaceOption = {
   id: string;
   label: string;
 };
+
+type TaskDialogState =
+  | {
+      mode: "create";
+      workspaceId: string | null;
+      status: TaskStatus;
+      title: string;
+      content: string;
+      showGitHubIssues: boolean;
+    }
+  | {
+      mode: "edit";
+      id: string;
+      workspaceId: string | null;
+      status: TaskStatus;
+      title: string;
+      content: string;
+      showGitHubIssues: boolean;
+    };
 
 type HomeProps = {
   onOpenProject: () => void;
@@ -144,56 +159,13 @@ export function Home({
   onSelectThread,
 }: HomeProps) {
   const [activeTab, setActiveTab] = useState<"tasks" | "usage">("tasks");
-  const [isTaskComposerOpen, setTaskComposerOpen] = useState(false);
-  const [taskTitle, setTaskTitle] = useState("");
-  const [taskContent, setTaskContent] = useState("");
-  const [taskWorkspaceDraft, setTaskWorkspaceDraft] = useState<string>("");
   const [taskQuery, setTaskQuery] = useState("");
   const [taskSort, setTaskSort] = useState<"updated" | "created" | "title">("updated");
-  const [showGitHubIssueImport, setShowGitHubIssueImport] = useState(false);
-  const [githubIssueDraft, setGitHubIssueDraft] = useState("");
-  const [mcpWorkspaceId, setMcpWorkspaceId] = useState<string | null>(null);
-  const [mcpConfiguredServers, setMcpConfiguredServers] = useState<McpServerConfigEntry[]>([]);
-  const [mcpStatusServers, setMcpStatusServers] = useState<Array<Record<string, unknown>>>([]);
-  const [mcpLoading, setMcpLoading] = useState(false);
-  const [mcpError, setMcpError] = useState<string | null>(null);
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editContent, setEditContent] = useState("");
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
-  const canCreateTask = taskTitle.trim().length > 0;
-  const canSaveEdit = editTitle.trim().length > 0;
-
-  const mcpLinearConfigured = useMemo(() => {
-    return (
-      mcpConfiguredServers.find(
-        (entry) => entry.name.trim().toLowerCase() === "linear",
-      ) ?? null
-    );
-  }, [mcpConfiguredServers]);
-
-  const mcpLinearStatus = useMemo(() => {
-    return (
-      mcpStatusServers.find(
-        (entry) => String(entry?.name ?? "").trim().toLowerCase() === "linear",
-      ) ?? null
-    );
-  }, [mcpStatusServers]);
-
-  const mcpLinearEnabled = mcpLinearConfigured?.enabled ?? false;
-  const mcpLinearAuthLabel = useMemo(() => {
-    if (!mcpLinearStatus) {
-      return "";
-    }
-    const authRaw = mcpLinearStatus["authStatus"] ?? mcpLinearStatus["auth_status"];
-    if (typeof authRaw === "string") {
-      return authRaw;
-    }
-    if (authRaw && typeof authRaw === "object" && "status" in authRaw) {
-      return String((authRaw as { status?: unknown }).status ?? "");
-    }
-    return "";
-  }, [mcpLinearStatus]);
+  const [taskDialog, setTaskDialog] = useState<TaskDialogState | null>(null);
+  const [githubIssueDraft, setGitHubIssueDraft] = useState("");
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null);
 
   const taskWorkspaceLabelById = useMemo(() => {
     const map = new Map<string, string>();
@@ -242,145 +214,32 @@ export function Home({
     return grouped;
   }, [visibleTasks]);
 
-  const handleCreateTask = async () => {
-    if (!canCreateTask) {
-      return;
-    }
-    const workspaceId = getTaskComposerWorkspaceId();
-    await onTaskCreate({ title: taskTitle, content: taskContent, workspaceId });
-    setTaskTitle("");
-    setTaskContent("");
-    setTaskWorkspaceDraft("");
-    setShowGitHubIssueImport(false);
-    setGitHubIssueDraft("");
-  };
-
-  const getTaskComposerWorkspaceId = () => {
-    if (tasksWorkspaceId) {
-      return tasksWorkspaceId;
-    }
-    const trimmed = taskWorkspaceDraft.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  };
-
-  const taskComposerWorkspaceId = getTaskComposerWorkspaceId();
+  const taskComposerWorkspaceId = taskDialog?.workspaceId ?? tasksWorkspaceId ?? null;
   const {
     issues: githubIssues,
     isLoading: githubIssuesLoading,
     error: githubIssuesError,
     refresh: refreshGitHubIssues,
   } = useGitHubIssuesByWorkspaceId(
-    isTaskComposerOpen ? taskComposerWorkspaceId : null,
+    taskDialog ? taskComposerWorkspaceId : null,
     false,
   );
 
   const handleLoadGitHubIssues = async () => {
+    if (!taskDialog) {
+      return;
+    }
     if (!taskComposerWorkspaceId) {
       return;
     }
-    setShowGitHubIssueImport(true);
+    setTaskDialog((prev) => (prev ? { ...prev, showGitHubIssues: true } : prev));
     setGitHubIssueDraft("");
     await refreshGitHubIssues();
   };
 
-  const parseMcpStatusResponse = (response: unknown) => {
-    const raw = response as Record<string, unknown> | null;
-    const result = (raw?.result ?? raw) as Record<string, unknown> | null;
-    if (Array.isArray(result?.data)) {
-      return result?.data as Array<Record<string, unknown>>;
-    }
-    return [];
-  };
-
-  const loadMcpForWorkspace = async (workspaceId: string) => {
-    if (mcpLoading) {
-      return;
-    }
-    setMcpLoading(true);
-    setMcpError(null);
-    try {
-      const [configured, statusResponse] = await Promise.all([
-        listConfiguredMcpServers(workspaceId),
-        listMcpServerStatus(workspaceId, null, null),
-      ]);
-      setMcpWorkspaceId(workspaceId);
-      setMcpConfiguredServers(configured);
-      setMcpStatusServers(parseMcpStatusResponse(statusResponse));
-    } catch (error) {
-      setMcpWorkspaceId(workspaceId);
-      setMcpConfiguredServers([]);
-      setMcpStatusServers([]);
-      setMcpError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setMcpLoading(false);
-    }
-  };
-
-  const handleLinearOauthLogin = async () => {
-    const workspaceId = getTaskComposerWorkspaceId();
-    if (!workspaceId) {
-      return;
-    }
-    try {
-      await mcpServerOauthLogin(workspaceId, "linear");
-    } catch (error) {
-      setMcpError(error instanceof Error ? error.message : String(error));
-    }
-  };
-
-  const handleMcpReload = async () => {
-    const workspaceId = getTaskComposerWorkspaceId();
-    if (!workspaceId) {
-      return;
-    }
-    try {
-      await mcpServerReload(workspaceId);
-      await loadMcpForWorkspace(workspaceId);
-    } catch (error) {
-      setMcpError(error instanceof Error ? error.message : String(error));
-    }
-  };
-
-  const handleCloseTaskComposer = () => {
-    setTaskComposerOpen(false);
-    setTaskTitle("");
-    setTaskContent("");
-    setTaskWorkspaceDraft("");
-    setShowGitHubIssueImport(false);
+  const closeTaskDialog = () => {
+    setTaskDialog(null);
     setGitHubIssueDraft("");
-    setMcpWorkspaceId(null);
-    setMcpConfiguredServers([]);
-    setMcpStatusServers([]);
-    setMcpLoading(false);
-    setMcpError(null);
-  };
-
-  // Best-effort: refresh MCP info for the current task-composer workspace.
-  // (We don't require this for task creation; it's only for Linear MCP UX.)
-  useEffect(() => {
-    if (!isTaskComposerOpen) {
-      return;
-    }
-    if (!taskComposerWorkspaceId) {
-      return;
-    }
-    if (mcpWorkspaceId === taskComposerWorkspaceId) {
-      return;
-    }
-    void loadMcpForWorkspace(taskComposerWorkspaceId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTaskComposerOpen, taskComposerWorkspaceId, mcpWorkspaceId]);
-
-  const handleEditTaskStart = (task: TaskEntry) => {
-    setEditingTaskId(task.id);
-    setEditTitle(task.title);
-    setEditContent(task.content ?? "");
-  };
-
-  const handleEditTaskCancel = () => {
-    setEditingTaskId(null);
-    setEditTitle("");
-    setEditContent("");
   };
 
   const toggleTaskExpanded = (taskId: string) => {
@@ -395,16 +254,51 @@ export function Home({
     });
   };
 
-  const handleEditTaskSave = async () => {
-    if (!editingTaskId || !canSaveEdit) {
+  const openCreateTaskDialog = () => {
+    setTaskDialog({
+      mode: "create",
+      workspaceId: tasksWorkspaceId ?? null,
+      status: "todo",
+      title: "",
+      content: "",
+      showGitHubIssues: false,
+    });
+    setGitHubIssueDraft("");
+  };
+
+  const openEditTaskDialog = (task: TaskEntry) => {
+    setTaskDialog({
+      mode: "edit",
+      id: task.id,
+      workspaceId: task.workspaceId ?? null,
+      status: task.status,
+      title: task.title,
+      content: task.content ?? "",
+      showGitHubIssues: false,
+    });
+    setGitHubIssueDraft("");
+  };
+
+  const canSaveTaskDialog = Boolean(taskDialog?.title.trim());
+
+  const saveTaskDialog = async () => {
+    if (!taskDialog || !canSaveTaskDialog) {
       return;
     }
-    await onTaskUpdate({
-      id: editingTaskId,
-      title: editTitle.trim(),
-      content: editContent,
-    });
-    handleEditTaskCancel();
+    const title = taskDialog.title.trim();
+    const content = taskDialog.content;
+    if (taskDialog.mode === "create") {
+      await onTaskCreate({ title, content, workspaceId: taskDialog.workspaceId });
+      closeTaskDialog();
+      return;
+    }
+
+    // Update title/content first; status change is separate.
+    await onTaskUpdate({ id: taskDialog.id, title, content });
+    if (taskDialog.status) {
+      await onTaskStatusChange(taskDialog.id, taskDialog.status);
+    }
+    closeTaskDialog();
   };
   const formatCompactNumber = (value: number | null | undefined) => {
     if (value === null || value === undefined) {
@@ -693,15 +587,15 @@ export function Home({
                       value={taskSort}
                       onChange={(event) =>
                         setTaskSort(event.target.value as typeof taskSort)
-                    }
-                    aria-label="Sort tasks"
-                  >
-                    <option value="updated">Updated</option>
-                    <option value="created">Created</option>
-                    <option value="title">Title</option>
-                  </select>
+                      }
+                      aria-label="Sort tasks"
+                    >
+                      <option value="updated">Updated</option>
+                      <option value="created">Created</option>
+                      <option value="title">Title</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
                 <div className="home-tasks-controls-right">
                   <div className="home-usage-select-wrap home-tasks-search-wrap">
                     <input
@@ -715,10 +609,7 @@ export function Home({
                   <button
                     className="home-tasks-new-button"
                     type="button"
-                    onClick={() =>
-                      setTaskComposerOpen((current) => !current)
-                    }
-                    aria-expanded={isTaskComposerOpen}
+                    onClick={openCreateTaskDialog}
                     aria-label="Add task"
                   >
                     <Plus size={14} aria-hidden />
@@ -727,159 +618,6 @@ export function Home({
                 </div>
               </div>
             </div>
-            {isTaskComposerOpen && (
-              <div className="home-tasks-composer">
-                {!tasksWorkspaceId && (
-                  <select
-                    className="home-tasks-input"
-                    value={taskWorkspaceDraft}
-                    onChange={(event) => setTaskWorkspaceDraft(event.target.value)}
-                    aria-label="Task project"
-                  >
-                    <option value="">No project (global)</option>
-                    {tasksWorkspaceOptions
-                      .filter((option) => option.id)
-                      .map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.label}
-                        </option>
-                      ))}
-                  </select>
-                )}
-                <div className="home-tasks-import">
-                  <button
-                    type="button"
-                    className="home-tasks-inline-button"
-                    onClick={() => void handleLoadGitHubIssues()}
-                    disabled={!getTaskComposerWorkspaceId() || githubIssuesLoading}
-                  >
-                    {githubIssuesLoading ? "Loading GitHub issues…" : "Import from GitHub issues"}
-                  </button>
-                  {githubIssuesError && (
-                    <span className="home-tasks-error">{githubIssuesError}</span>
-                  )}
-                </div>
-                <div className="home-tasks-import">
-                  <span className="home-tasks-inline-label">
-                    Linear (MCP):{" "}
-                    {getTaskComposerWorkspaceId()
-                      ? mcpLoading && mcpWorkspaceId !== getTaskComposerWorkspaceId()
-                        ? "loading…"
-                        : !mcpLinearConfigured
-                          ? "not configured"
-                          : mcpLinearEnabled
-                            ? mcpLinearAuthLabel
-                              ? `enabled (auth: ${mcpLinearAuthLabel})`
-                              : "enabled"
-                            : "disabled"
-                      : "select a project"}
-                  </span>
-                  <button
-                    type="button"
-                    className="home-tasks-inline-button"
-                    onClick={() => void handleLinearOauthLogin()}
-                    disabled={!getTaskComposerWorkspaceId() || !mcpLinearEnabled}
-                    title={
-                      mcpLinearEnabled
-                        ? "Start Linear OAuth login via MCP."
-                        : "Enable the linear MCP server first."
-                    }
-                  >
-                    Login
-                  </button>
-                  <button
-                    type="button"
-                    className="home-tasks-inline-button"
-                    onClick={() => void handleMcpReload()}
-                    disabled={!getTaskComposerWorkspaceId()}
-                  >
-                    Reload
-                  </button>
-                  <button
-                    type="button"
-                    className="home-tasks-inline-button"
-                    onClick={() => {
-                      const workspaceId = getTaskComposerWorkspaceId();
-                      if (!workspaceId) {
-                        return;
-                      }
-                      void loadMcpForWorkspace(workspaceId);
-                    }}
-                    disabled={!getTaskComposerWorkspaceId()}
-                  >
-                    Refresh
-                  </button>
-                  {mcpError && <span className="home-tasks-error">{mcpError}</span>}
-                </div>
-                {showGitHubIssueImport && githubIssues.length > 0 && (
-                    <select
-                      className="home-tasks-input"
-                      value={githubIssueDraft}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        setGitHubIssueDraft(value);
-                        const issue = githubIssues.find(
-                          (entry) => String(entry.number) === value,
-                        );
-                        if (!issue) {
-                          return;
-                        }
-                        setTaskTitle(issue.title);
-                        setTaskContent((prev) => {
-                          const linkLine = `GitHub: ${issue.url}`;
-                          if (prev.includes(issue.url)) {
-                            return prev;
-                          }
-                          const trimmed = prev.trim();
-                          return trimmed ? `${linkLine}\n\n${trimmed}` : linkLine;
-                        });
-                      }}
-                      aria-label="Select GitHub issue"
-                    >
-                      <option value="">Select an issue…</option>
-                      {githubIssues.map((issue) => (
-                        <option key={issue.url} value={String(issue.number)}>
-                          #{issue.number} {issue.title}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                <input
-                  className="home-tasks-input"
-                  type="text"
-                  placeholder="Task title"
-                  value={taskTitle}
-                  onChange={(event) => setTaskTitle(event.target.value)}
-                />
-                <textarea
-                  className="home-tasks-textarea"
-                  placeholder="Task details"
-                  value={taskContent}
-                  onChange={(event) => setTaskContent(event.target.value)}
-                  rows={2}
-                />
-                <div className="home-tasks-actions">
-                  <button
-                    className="home-button"
-                    type="button"
-                    onClick={handleCreateTask}
-                    disabled={!canCreateTask}
-                  >
-                    Add task
-                  </button>
-                  <button
-                    className="home-tasks-inline-button"
-                    type="button"
-                    onClick={handleCloseTaskComposer}
-                  >
-                    Cancel
-                  </button>
-                  {tasksError && (
-                    <span className="home-tasks-error">{tasksError}</span>
-                  )}
-                </div>
-              </div>
-            )}
             {isLoadingTasks ? (
               <div className="home-tasks-loading">Loading tasks...</div>
             ) : showTasksEmpty ? (
@@ -910,17 +648,21 @@ export function Home({
                       <div className="home-tasks-item-actions">
                         <button
                           type="button"
-                          className="home-tasks-action"
-                          onClick={() => handleEditTaskStart(task)}
+                          className="ghost icon-button home-tasks-icon-action"
+                          onClick={() => openEditTaskDialog(task)}
+                          aria-label="Edit task"
+                          title="Edit"
                         >
-                          Edit
+                          <Pencil size={14} aria-hidden />
                         </button>
                         <button
                           type="button"
-                          className="home-tasks-action"
+                          className="ghost icon-button home-tasks-icon-action"
                           onClick={() => onTaskDelete(task.id)}
+                          aria-label="Remove task"
+                          title="Remove"
                         >
-                          Remove
+                          <Trash2 size={14} aria-hidden />
                         </button>
                         {task.content && (
                           <button
@@ -967,48 +709,35 @@ export function Home({
                     {task.content && expandedTasks.has(task.id) && (
                       <Markdown value={task.content} className="home-tasks-content" />
                     )}
-                    {editingTaskId === task.id && (
-                      <div className="home-tasks-edit">
-                        <input
-                          className="home-tasks-input"
-                          type="text"
-                          placeholder="Task title"
-                          value={editTitle}
-                          onChange={(event) => setEditTitle(event.target.value)}
-                        />
-                        <textarea
-                          className="home-tasks-textarea"
-                          placeholder="Task details"
-                          value={editContent}
-                          onChange={(event) => setEditContent(event.target.value)}
-                          rows={2}
-                        />
-                        <div className="home-tasks-actions">
-                          <button
-                            className="home-button"
-                            type="button"
-                            onClick={handleEditTaskSave}
-                            disabled={!canSaveEdit}
-                          >
-                            Save
-                          </button>
-                          <button
-                            className="home-tasks-inline-button"
-                            type="button"
-                            onClick={handleEditTaskCancel}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
             ) : (
               <div className="home-tasks-board">
                 {(["todo", "doing", "done"] as TaskStatus[]).map((status) => (
-                  <div className="home-tasks-column" key={status}>
+                  <div
+                    className={`home-tasks-column${
+                      draggingTaskId && dragOverStatus === status ? " is-drop-target" : ""
+                    }`}
+                    key={status}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setDragOverStatus(status);
+                    }}
+                    onDragLeave={() => {
+                      setDragOverStatus((prev) => (prev === status ? null : prev));
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const taskId = event.dataTransfer.getData("text/plain").trim();
+                      if (!taskId) {
+                        return;
+                      }
+                      void onTaskStatusChange(taskId, status);
+                      setDraggingTaskId(null);
+                      setDragOverStatus(null);
+                    }}
+                  >
                     <div className="home-tasks-column-title">
                       {(status === "todo"
                         ? "To do"
@@ -1018,19 +747,54 @@ export function Home({
                     </div>
                     <div className="home-tasks-column-list">
                       {tasksByStatus[status].map((task) => (
-                        <div className="home-tasks-card" key={task.id}>
+                        <div
+                          className={`home-tasks-card${
+                            draggingTaskId === task.id ? " is-dragging" : ""
+                          }`}
+                          key={task.id}
+                          draggable
+                          onDragStart={(event) => {
+                            event.dataTransfer.setData("text/plain", task.id);
+                            setDraggingTaskId(task.id);
+                            setDragOverStatus(status);
+                          }}
+                          onDragEnd={() => {
+                            setDraggingTaskId(null);
+                            setDragOverStatus(null);
+                          }}
+                        >
                           <div className="home-tasks-card-header">
                             <div className="home-tasks-card-title">{task.title}</div>
-                            {task.content && (
+                            <div className="home-tasks-item-actions">
                               <button
                                 type="button"
-                                className={`home-tasks-expand${expandedTasks.has(task.id) ? " is-expanded" : ""}`}
-                                onClick={() => toggleTaskExpanded(task.id)}
-                                aria-label={expandedTasks.has(task.id) ? "Collapse" : "Expand"}
+                                className="ghost icon-button home-tasks-icon-action"
+                                onClick={() => openEditTaskDialog(task)}
+                                aria-label="Edit task"
+                                title="Edit"
                               >
-                                <ChevronDown size={14} />
+                                <Pencil size={14} aria-hidden />
                               </button>
-                            )}
+                              <button
+                                type="button"
+                                className="ghost icon-button home-tasks-icon-action"
+                                onClick={() => onTaskDelete(task.id)}
+                                aria-label="Remove task"
+                                title="Remove"
+                              >
+                                <Trash2 size={14} aria-hidden />
+                              </button>
+                              {task.content && (
+                                <button
+                                  type="button"
+                                  className={`home-tasks-expand${expandedTasks.has(task.id) ? " is-expanded" : ""}`}
+                                  onClick={() => toggleTaskExpanded(task.id)}
+                                  aria-label={expandedTasks.has(task.id) ? "Collapse" : "Expand"}
+                                >
+                                  <ChevronDown size={14} />
+                                </button>
+                              )}
+                            </div>
                           </div>
                           <div className="home-tasks-meta">
                             {!tasksWorkspaceId && (
@@ -1061,88 +825,6 @@ export function Home({
                               className="home-tasks-card-content"
                             />
                           )}
-                          {editingTaskId === task.id && (
-                            <div className="home-tasks-edit">
-                              <input
-                                className="home-tasks-input"
-                                type="text"
-                                placeholder="Task title"
-                                value={editTitle}
-                                onChange={(event) =>
-                                  setEditTitle(event.target.value)
-                                }
-                              />
-                              <textarea
-                                className="home-tasks-textarea"
-                                placeholder="Task details"
-                                value={editContent}
-                                onChange={(event) =>
-                                  setEditContent(event.target.value)
-                                }
-                                rows={2}
-                              />
-                              <div className="home-tasks-actions">
-                                <button
-                                  className="home-button"
-                                  type="button"
-                                  onClick={handleEditTaskSave}
-                                  disabled={!canSaveEdit}
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  className="home-tasks-inline-button"
-                                  type="button"
-                                  onClick={handleEditTaskCancel}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                          <div className="home-tasks-card-actions">
-                            {status !== "todo" && (
-                              <button
-                                type="button"
-                                className="home-tasks-action"
-                                onClick={() => onTaskStatusChange(task.id, "todo")}
-                              >
-                                To do
-                              </button>
-                            )}
-                            {status !== "doing" && (
-                              <button
-                                type="button"
-                                className="home-tasks-action"
-                                onClick={() => onTaskStatusChange(task.id, "doing")}
-                              >
-                                Doing
-                              </button>
-                            )}
-                            {status !== "done" && (
-                              <button
-                                type="button"
-                                className="home-tasks-action"
-                                onClick={() => onTaskStatusChange(task.id, "done")}
-                              >
-                                Done
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              className="home-tasks-action"
-                              onClick={() => handleEditTaskStart(task)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="home-tasks-action"
-                              onClick={() => onTaskDelete(task.id)}
-                            >
-                              Remove
-                            </button>
-                          </div>
                         </div>
                       ))}
                       {tasksByStatus[status].length === 0 && (
@@ -1151,6 +833,226 @@ export function Home({
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+            {taskDialog && (
+              <div
+                className="home-task-dialog-backdrop"
+                role="presentation"
+                onMouseDown={(event) => {
+                  if (event.target === event.currentTarget) {
+                    closeTaskDialog();
+                  }
+                }}
+              >
+                <div
+                  className="home-task-dialog"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={taskDialog.mode === "create" ? "New task" : "Edit task"}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      closeTaskDialog();
+                      return;
+                    }
+                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                      event.preventDefault();
+                      void saveTaskDialog();
+                    }
+                  }}
+                >
+                  <div className="home-task-dialog-header">
+                    <div className="home-task-dialog-title">
+                      {taskDialog.mode === "create" ? "New task" : "Edit task"}
+                    </div>
+                    <button
+                      type="button"
+                      className="ghost icon-button"
+                      onClick={closeTaskDialog}
+                      aria-label="Close"
+                      title="Close"
+                    >
+                      <X size={14} aria-hidden />
+                    </button>
+                  </div>
+
+                  <div className="home-task-dialog-body">
+                    <div className="home-task-dialog-row">
+                      <div className="home-task-dialog-field">
+                        <div className="home-task-dialog-label">Status</div>
+                        <div className="home-task-dialog-status">
+                          {(["todo", "doing", "done"] as TaskStatus[]).map((status) => (
+                            <button
+                              key={status}
+                              type="button"
+                              className={
+                                taskDialog.status === status
+                                  ? "home-task-dialog-status-button is-active"
+                                  : "home-task-dialog-status-button"
+                              }
+                              onClick={() =>
+                                setTaskDialog((prev) =>
+                                  prev ? { ...prev, status } : prev,
+                                )
+                              }
+                              aria-pressed={taskDialog.status === status}
+                            >
+                              {status === "todo"
+                                ? "To do"
+                                : status === "doing"
+                                  ? "Doing"
+                                  : "Done"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {taskDialog.mode === "create" ? (
+                        <div className="home-task-dialog-field">
+                          <div className="home-task-dialog-label">Project</div>
+                          <select
+                            className="home-task-dialog-select"
+                            value={taskDialog.workspaceId ?? ""}
+                            onChange={(event) => {
+                              const next = event.target.value || null;
+                              setTaskDialog((prev) =>
+                                prev ? { ...prev, workspaceId: next } : prev,
+                              );
+                            }}
+                          >
+                            <option value="">Global</option>
+                            {tasksWorkspaceOptions
+                              .filter((option) => option.id)
+                              .map((option) => (
+                                <option key={option.id} value={option.id}>
+                                  {option.label}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <div className="home-task-dialog-field">
+                          <div className="home-task-dialog-label">Project</div>
+                          <div className="home-task-dialog-static">
+                            {taskDialog.workspaceId
+                              ? taskWorkspaceLabelById.get(taskDialog.workspaceId) ?? "Unknown"
+                              : "Global"}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="home-task-dialog-field">
+                      <div className="home-task-dialog-label">Title</div>
+                      <input
+                        className="home-task-dialog-input"
+                        value={taskDialog.title}
+                        onChange={(event) =>
+                          setTaskDialog((prev) =>
+                            prev ? { ...prev, title: event.target.value } : prev,
+                          )
+                        }
+                        placeholder="What needs to get done?"
+                      />
+                    </div>
+
+                    <div className="home-task-dialog-field">
+                      <div className="home-task-dialog-label">Details</div>
+                      <textarea
+                        className="home-task-dialog-textarea"
+                        value={taskDialog.content}
+                        onChange={(event) =>
+                          setTaskDialog((prev) =>
+                            prev ? { ...prev, content: event.target.value } : prev,
+                          )
+                        }
+                        placeholder="Add context, links, acceptance criteria…"
+                        rows={8}
+                      />
+                    </div>
+
+                    <div className="home-task-dialog-field">
+                      <div className="home-task-dialog-label">GitHub issues</div>
+                      <div className="home-task-dialog-inline">
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={() => void handleLoadGitHubIssues()}
+                          disabled={!taskDialog.workspaceId || githubIssuesLoading}
+                        >
+                          {githubIssuesLoading ? "Loading…" : "Load"}
+                        </button>
+                        {githubIssuesError && (
+                          <span className="home-tasks-error">{githubIssuesError}</span>
+                        )}
+                      </div>
+                      {taskDialog.showGitHubIssues && githubIssues.length > 0 && (
+                        <div className="home-task-dialog-issues">
+                          {githubIssues.map((issue) => (
+                            <button
+                              key={issue.url}
+                              type="button"
+                              className={
+                                githubIssueDraft === String(issue.number)
+                                  ? "home-task-dialog-issue is-active"
+                                  : "home-task-dialog-issue"
+                              }
+                              onClick={() => {
+                                setGitHubIssueDraft(String(issue.number));
+                                setTaskDialog((prev) => {
+                                  if (!prev) {
+                                    return prev;
+                                  }
+                                  const linkLine = `GitHub: ${issue.url}`;
+                                  const nextContent = prev.content.includes(issue.url)
+                                    ? prev.content
+                                    : prev.content.trim().length > 0
+                                      ? `${linkLine}\n\n${prev.content.trim()}`
+                                      : linkLine;
+                                  return {
+                                    ...prev,
+                                    title: issue.title,
+                                    content: nextContent,
+                                  };
+                                });
+                              }}
+                            >
+                              <span className="home-task-dialog-issue-number">
+                                #{issue.number}
+                              </span>
+                              <span className="home-task-dialog-issue-title">
+                                {issue.title}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {!taskDialog.workspaceId && (
+                        <div className="home-task-dialog-hint">
+                          Select a project to load GitHub issues.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="home-task-dialog-actions">
+                    {tasksError && (
+                      <div className="home-tasks-error">{tasksError}</div>
+                    )}
+                    <button type="button" className="ghost" onClick={closeTaskDialog}>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => void saveTaskDialog()}
+                      disabled={!canSaveTaskDialog}
+                    >
+                      {taskDialog.mode === "create" ? "Create" : "Save"}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
