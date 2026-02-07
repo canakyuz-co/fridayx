@@ -5,7 +5,7 @@ import Hash from "lucide-react/dist/esm/icons/hash";
 import Boxes from "lucide-react/dist/esm/icons/boxes";
 import Braces from "lucide-react/dist/esm/icons/braces";
 import X from "lucide-react/dist/esm/icons/x";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type WorkspaceSearchResult = {
   path: string;
@@ -114,6 +114,11 @@ export function EditorWorkspaceSearch({
 }: EditorWorkspaceSearchProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const showTextOptions = activeTab === "all" || activeTab === "text";
+  const [visibleTextCount, setVisibleTextCount] = useState(80);
+  const visibleTextResults = useMemo(
+    () => results.slice(0, visibleTextCount),
+    [results, visibleTextCount],
+  );
 
   const summary = useMemo(() => {
     if (!query.trim()) {
@@ -165,6 +170,20 @@ export function EditorWorkspaceSearch({
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen || results.length <= 80 || visibleTextCount >= results.length) {
+      return;
+    }
+    const handle = window.requestAnimationFrame(() => {
+      setVisibleTextCount((prev) => Math.min(prev + 80, results.length));
+    });
+    return () => window.cancelAnimationFrame(handle);
+  }, [isOpen, results.length, visibleTextCount]);
+
+  useEffect(() => {
+    setVisibleTextCount(80);
+  }, [query, activeTab, results.length]);
 
   if (!isOpen) {
     return null;
@@ -322,7 +341,7 @@ export function EditorWorkspaceSearch({
             </div>
           ) : null}
           {(activeTab === "all" || activeTab === "text") && results.length > 0
-            ? results.map((result) => (
+            ? visibleTextResults.map((result) => (
                 <button
                   key={`${result.path}:${result.line}:${result.column}`}
                   type="button"
@@ -346,6 +365,12 @@ export function EditorWorkspaceSearch({
                 </button>
               ))
             : null}
+          {(activeTab === "all" || activeTab === "text") &&
+          results.length > visibleTextResults.length ? (
+            <div className="editor-workspace-search__empty">
+              Showing {visibleTextResults.length} / {results.length} results...
+            </div>
+          ) : null}
           {(activeTab === "all" || activeTab === "classes") &&
           classResults.length > 0
             ? classResults.map((symbol) => (
