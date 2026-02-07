@@ -21,6 +21,10 @@ import {
   type WorkspaceTextSearchOptions,
 } from "../../../services/tauri";
 import { languageFromPath } from "../../../utils/syntax";
+import {
+  createLatencyTracker,
+  isRustEditorSearchEnabled,
+} from "../utils/perf";
 
 import "monaco-editor/esm/vs/language/css/monaco.contribution";
 import "monaco-editor/esm/vs/language/html/monaco.contribution";
@@ -258,6 +262,24 @@ export function EditorView({
   const [workspaceSearchError, setWorkspaceSearchError] = useState<string | null>(null);
   const [workspaceSearchBufferId, setWorkspaceSearchBufferId] = useState<number | null>(null);
   const [workspaceSearchBufferPath, setWorkspaceSearchBufferPath] = useState<string | null>(null);
+  const lastSearchCommitAtRef = useRef<number | null>(null);
+  const rustEditorSearchEnabled = useMemo(isRustEditorSearchEnabled, []);
+  const recordWorkspaceSearchLatency = useMemo(
+    () => createLatencyTracker("workspace-search"),
+    [],
+  );
+  const recordBufferSearchLatency = useMemo(
+    () => createLatencyTracker("buffer-search"),
+    [],
+  );
+  const recordBufferOpenLatency = useMemo(
+    () => createLatencyTracker("buffer-open"),
+    [],
+  );
+  const recordSearchRenderLatency = useMemo(
+    () => createLatencyTracker("search-results-render"),
+    [],
+  );
   const [workspaceSymbolResults, setWorkspaceSymbolResults] = useState<
     WorkspaceSymbolResult[]
   >([]);
@@ -556,6 +578,9 @@ export function EditorView({
   }, [activeBufferPath, activeBuffer?.content]);
 
   useEffect(() => {
+    if (!rustEditorSearchEnabled) {
+      return;
+    }
     if (!workspaceSearchOpen || workspaceSearchTab !== "text" || !workspaceId || !activePath) {
       if (workspaceSearchBufferId) {
         void editorClose(workspaceSearchBufferId).catch(() => {});
@@ -569,12 +594,14 @@ export function EditorView({
     }
     let cancelled = false;
     const previousBufferId = workspaceSearchBufferId;
+    const startedAt = performance.now();
     void editorOpen(workspaceId, activePath)
       .then((snapshot) => {
         if (cancelled) {
           void editorClose(snapshot.bufferId).catch(() => {});
           return;
         }
+        recordBufferOpenLatency(performance.now() - startedAt);
         setWorkspaceSearchBufferId(snapshot.bufferId);
         setWorkspaceSearchBufferPath(activePath);
         if (previousBufferId && previousBufferId !== snapshot.bufferId) {
@@ -598,6 +625,8 @@ export function EditorView({
     workspaceSearchBufferPath,
     workspaceSearchOpen,
     workspaceSearchTab,
+    rustEditorSearchEnabled,
+    recordBufferOpenLatency,
   ]);
 
   useEffect(() => {
@@ -631,7 +660,9 @@ export function EditorView({
       .filter(Boolean);
     const handle = window.setTimeout(() => {
       setWorkspaceSearchLoading(true);
+      const startedAt = performance.now();
       const request =
+        rustEditorSearchEnabled &&
         workspaceSearchTab === "text" &&
         workspaceSearchBufferId &&
         workspaceSearchBufferPath
@@ -659,6 +690,18 @@ export function EditorView({
             );
       request
         .then((results) => {
+          const elapsed = performance.now() - startedAt;
+          if (
+            rustEditorSearchEnabled &&
+            workspaceSearchTab === "text" &&
+            workspaceSearchBufferId &&
+            workspaceSearchBufferPath
+          ) {
+            recordBufferSearchLatency(elapsed);
+          } else {
+            recordWorkspaceSearchLatency(elapsed);
+          }
+          lastSearchCommitAtRef.current = performance.now();
           setWorkspaceSearchResults(results);
           setWorkspaceSearchError(null);
         })
@@ -683,7 +726,22 @@ export function EditorView({
     workspaceSearchBufferId,
     workspaceSearchBufferPath,
     workspaceTextSearchOptions,
+    rustEditorSearchEnabled,
+    recordBufferSearchLatency,
+    recordWorkspaceSearchLatency,
   ]);
+
+  useEffect(() => {
+    if (!workspaceSearchOpen || lastSearchCommitAtRef.current == null) {
+      return;
+    }
+    const commitAt = lastSearchCommitAtRef.current;
+    const frame = window.requestAnimationFrame(() => {
+      recordSearchRenderLatency(performance.now() - commitAt);
+      lastSearchCommitAtRef.current = null;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [workspaceSearchOpen, workspaceSearchResults, recordSearchRenderLatency]);
 
   const workspaceSearchActions = useMemo<WorkspaceSearchAction[]>(() => {
     const actions: WorkspaceSearchAction[] = [
