@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { Dispatch, MutableRefObject } from "react";
 import * as Sentry from "@sentry/react";
 import type {
@@ -17,6 +17,7 @@ import {
   interruptTurn as interruptTurnService,
   sendClaudeMessage,
   sendClaudeCliMessage,
+  preflightOtherAiModelCli,
   sendClaudeMessageSync,
   sendGeminiCliMessage,
   sendGeminiCliMessageSync,
@@ -357,6 +358,8 @@ export function useThreadMessaging({
   forkThreadForWorkspace,
   updateThreadParent,
 }: UseThreadMessagingOptions) {
+  const cliModelPreflightCacheRef = useRef<Map<string, string>>(new Map());
+
   const sendMessageToThread = useCallback(
     async (
       workspace: WorkspaceInfo,
@@ -699,6 +702,29 @@ export function useThreadMessaging({
           if (useCli) {
             // Use Claude CLI
             let accumulatedText = "";
+            const cacheKey = `${provider.id}:${modelName}`;
+            let cliModel = cliModelPreflightCacheRef.current.get(cacheKey) ?? null;
+            if (!cliModel) {
+              try {
+                cliModel = await preflightOtherAiModelCli(
+                  "claude",
+                  provider.command!,
+                  modelName,
+                  provider.env ?? null,
+                );
+                cliModelPreflightCacheRef.current.set(cacheKey, cliModel);
+              } catch (error) {
+                markProcessing(threadId, false);
+                pushThreadErrorMessage(
+                  threadId,
+                  `Claude model preflight failed for ${modelName}. ${
+                    error instanceof Error ? error.message : String(error)
+                  }`,
+                );
+                safeMessageActivity();
+                return;
+              }
+            }
             const traceItemId = `trace-${assistantMessageId}`;
             const traceStartedAt = Date.now();
             upsertTraceToolItem(
@@ -707,7 +733,7 @@ export function useThreadMessaging({
               threadId,
               traceItemId,
               "Trace: Claude",
-              `CLI · ${modelName}`,
+              `CLI · ${modelName}${cliModel !== modelName ? ` -> ${cliModel}` : ""}`,
               "in_progress",
             );
             dispatch({
@@ -723,7 +749,7 @@ export function useThreadMessaging({
               provider.command!,
               provider.args,
               promptText,
-              modelName,
+              cliModel,
               workspace.path,
               provider.env ?? null,
               {
@@ -831,6 +857,12 @@ export function useThreadMessaging({
                   safeMessageActivity();
                 },
                 onError: (error) => {
+                  if (
+                    error.toLowerCase().includes("selected model") ||
+                    error.toLowerCase().includes("may not have access")
+                  ) {
+                    cliModelPreflightCacheRef.current.delete(cacheKey);
+                  }
                   upsertTraceToolItem(
                     dispatch,
                     workspace.id,

@@ -18,6 +18,10 @@ import {
 } from "../../../utils/fonts";
 import { getFallbackOtherAiModels, normalizeModelList } from "../../../utils/otherAiModels";
 import {
+  discoverOtherAiModels,
+  type OtherAiModelRegistryEntry,
+} from "../../../utils/otherAiProviderEngine";
+import {
   DEFAULT_OPEN_APP_ID,
   DEFAULT_OPEN_APP_TARGETS,
   OPEN_APP_STORAGE_KEY,
@@ -220,6 +224,9 @@ export function useAppSettings() {
   const [otherAiModelsSyncPercent, setOtherAiModelsSyncPercent] = useState<number | null>(
     null,
   );
+  const [otherAiModelRegistryByProvider, setOtherAiModelRegistryByProvider] = useState<
+    Record<string, OtherAiModelRegistryEntry[]>
+  >({});
   const syncInFlightRef = useRef(false);
   const didInitialOtherAiModelsSyncRef = useRef(false);
   const lastAutoRefreshEnabledRef = useRef<boolean | null>(null);
@@ -298,6 +305,7 @@ export function useAppSettings() {
       }
 
       const nextProviders = [...(settings.otherAiProviders ?? [])];
+      const nextRegistry: Record<string, OtherAiModelRegistryEntry[]> = {};
       const total = candidates.length;
       let completed = 0;
       let changed = false;
@@ -311,71 +319,19 @@ export function useAppSettings() {
         const providerType = provider.provider.trim().toLowerCase();
         const apiKey = (provider.apiKey ?? "").trim();
         const cliCommand = (provider.command ?? "").trim();
-        const canUseCli = cliCommand.length > 0;
-        const prefersCli = (provider.protocol ?? "").trim().toLowerCase() === "cli";
-
-        const fallback = getFallbackOtherAiModels(providerType);
-        const existingModels = Array.isArray(provider.models) ? provider.models : [];
-        let models = existingModels;
-
-        // Prefer CLI when configured (CLI tends to expose new models first).
-        if (canUseCli && (prefersCli || !apiKey)) {
-          try {
-            models = await listOtherAiModelsCli(
-              providerType,
-              cliCommand,
-              provider.env ?? null,
-            );
-          } catch {
-            if (apiKey) {
-              try {
-                models = await listOtherAiModels(providerType, apiKey);
-              } catch {
-                if (existingModels.length === 0 && fallback.length > 0) {
-                  models = fallback;
-                }
-              }
-            } else if (existingModels.length === 0 && fallback.length > 0) {
-              models = fallback;
-            }
-          }
-        } else if (apiKey) {
-          try {
-            models = await listOtherAiModels(providerType, apiKey);
-          } catch {
-            if (canUseCli) {
-              try {
-                models = await listOtherAiModelsCli(
-                  providerType,
-                  cliCommand,
-                  provider.env ?? null,
-                );
-              } catch {
-                if (existingModels.length === 0 && fallback.length > 0) {
-                  models = fallback;
-                }
-              }
-            } else if (existingModels.length === 0 && fallback.length > 0) {
-              models = fallback;
-            }
-          }
-        } else if (canUseCli) {
-          try {
-            models = await listOtherAiModelsCli(
-              providerType,
-              cliCommand,
-              provider.env ?? null,
-            );
-          } catch {
-            if (existingModels.length === 0 && fallback.length > 0) {
-              models = fallback;
-            }
-          }
-        } else if (existingModels.length === 0 && fallback.length > 0) {
-          models = fallback;
-        }
-
-        const normalizedModels = normalizeModelList(models);
+        const discovery = await discoverOtherAiModels({
+          providerType,
+          apiKey,
+          cliCommand,
+          prefersCli: (provider.protocol ?? "").trim().toLowerCase() === "cli",
+          env: provider.env ?? null,
+          existingModels: Array.isArray(provider.models) ? provider.models : [],
+          fallbackModels: getFallbackOtherAiModels(providerType),
+          listViaApi: listOtherAiModels,
+          listViaCli: listOtherAiModelsCli,
+        });
+        const normalizedModels = normalizeModelList(discovery.models);
+        nextRegistry[provider.id] = discovery.registry;
         const prevModels = Array.isArray(nextProviders[idx].models)
           ? nextProviders[idx].models
           : [];
@@ -397,6 +353,12 @@ export function useAppSettings() {
       try {
         if (changed) {
           await saveSettings({ ...settings, otherAiProviders: nextProviders });
+        }
+        if (active && Object.keys(nextRegistry).length > 0) {
+          setOtherAiModelRegistryByProvider((prev) => ({
+            ...prev,
+            ...nextRegistry,
+          }));
         }
       } finally {
         syncInFlightRef.current = false;
@@ -455,5 +417,6 @@ export function useAppSettings() {
     doctor,
     isLoading,
     otherAiModelsSyncPercent,
+    otherAiModelRegistryByProvider,
   };
 }

@@ -61,6 +61,7 @@ import {
   getFallbackOtherAiModels,
   normalizeModelList,
 } from "../../../utils/otherAiModels";
+import { discoverOtherAiModels } from "../../../utils/otherAiProviderEngine";
 import { DEFAULT_OPEN_APP_ID, OPEN_APP_STORAGE_KEY } from "../../app/constants";
 import { GENERIC_APP_ICON, getKnownOpenAppIcon } from "../../app/utils/openAppIcons";
 import { useGlobalAgentsMd } from "../hooks/useGlobalAgentsMd";
@@ -1202,13 +1203,10 @@ export function SettingsView({
     }
     const normalizedProvider = normalizeOtherAiProvider(provider, draft);
     const cliCommand = normalizedProvider.command?.trim() ?? "";
-    const canUseCli = cliCommand.length > 0;
     const apiKey = (draft.apiKey ?? provider.apiKey ?? "").trim();
-    const prefersCli = normalizedProvider.protocol === "cli";
-    const useCli = (prefersCli || !apiKey) && canUseCli;
     const fallbackModels = getFallbackOtherAiModels(providerType);
     const existingModels = normalizeModelList(normalizedProvider.models ?? []);
-    if (!useCli && !apiKey && fallbackModels.length > 0) {
+    if (!cliCommand && !apiKey && fallbackModels.length > 0) {
       handleOtherAiDraftChange(provider.id, {
         provider: providerType,
         modelsText: fallbackModels.join("\n"),
@@ -1220,17 +1218,18 @@ export function SettingsView({
       [provider.id]: { loading: true },
     }));
     try {
-      let models = useCli
-        ? await listOtherAiModelsCli(
-            providerType,
-            cliCommand,
-            normalizedProvider.env ?? null,
-          )
-        : await listOtherAiModels(providerType, apiKey);
-      if (models.length === 0 && fallbackModels.length > 0) {
-        models = fallbackModels;
-      }
-      const normalizedModels = normalizeModelList(models);
+      const discovery = await discoverOtherAiModels({
+        providerType,
+        apiKey,
+        cliCommand,
+        prefersCli: normalizedProvider.protocol === "cli",
+        env: normalizedProvider.env ?? null,
+        existingModels,
+        fallbackModels,
+        listViaApi: listOtherAiModels,
+        listViaCli: listOtherAiModelsCli,
+      });
+      const normalizedModels = normalizeModelList(discovery.models);
       handleOtherAiDraftChange(provider.id, {
         provider: providerType,
         modelsText: normalizedModels.join("\n"),
@@ -1243,7 +1242,7 @@ export function SettingsView({
         });
       }
       const baseMessage = error instanceof Error ? error.message : String(error);
-      const updateHint = useCli
+      const updateHint = cliCommand
         ? providerType === "claude"
           ? "Run `claude update` and retry."
           : "Run `gemini update` (or your package manager update) and retry."

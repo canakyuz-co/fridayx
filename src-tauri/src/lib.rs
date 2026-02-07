@@ -119,6 +119,7 @@ pub fn run() {
             settings::get_codex_config_path,
             other_ai::list_other_ai_models,
             other_ai::list_other_ai_models_cli,
+            other_ai::preflight_other_ai_model_cli,
             files::file_read,
             files::file_write,
             codex::get_config_model,

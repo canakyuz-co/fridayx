@@ -403,6 +403,30 @@ fn run_cli_with_env(
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
+fn normalize_claude_cli_model(model: &str) -> String {
+    let trimmed = model.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let normalized = trimmed.to_ascii_lowercase();
+    if normalized.starts_with("claude-sonnet-")
+        && normalized.chars().filter(|ch| *ch == '-').count() == 3
+    {
+        return "sonnet".to_string();
+    }
+    if normalized.starts_with("claude-opus-")
+        && normalized.chars().filter(|ch| *ch == '-').count() == 3
+    {
+        return "opus".to_string();
+    }
+    if normalized.starts_with("claude-haiku-")
+        && normalized.chars().filter(|ch| *ch == '-').count() == 3
+    {
+        return "haiku".to_string();
+    }
+    trimmed.to_string()
+}
+
 fn list_models_via_cli(
     provider: &str,
     command: &str,
@@ -441,6 +465,53 @@ fn list_models_via_cli(
         }
     }
     Err(last_error.unwrap_or_else(|| "CLI model list failed.".to_string()))
+}
+
+fn preflight_claude_model_via_cli(
+    command: &str,
+    model: &str,
+    env: &Option<HashMap<String, String>>,
+) -> Result<String, String> {
+    let normalized_model = normalize_claude_cli_model(model);
+    if normalized_model.is_empty() {
+        return Err("Model is required".to_string());
+    }
+    let args = [
+        "-p",
+        "--output-format",
+        "json",
+        "--input-format",
+        "text",
+        "--model",
+        normalized_model.as_str(),
+        "Reply with OK only.",
+    ];
+    run_cli_with_env(command, &args, env)?;
+    Ok(normalized_model)
+}
+
+#[tauri::command]
+pub(crate) async fn preflight_other_ai_model_cli(
+    provider: String,
+    command: String,
+    model: String,
+    env: Option<HashMap<String, String>>,
+) -> Result<String, String> {
+    let normalized_provider = provider.trim().to_lowercase();
+    let command = command.trim();
+    if command.is_empty() {
+        return Err("CLI command is required".to_string());
+    }
+    let model = model.trim();
+    if model.is_empty() {
+        return Err("Model is required".to_string());
+    }
+    match normalized_provider.as_str() {
+        "claude" => preflight_claude_model_via_cli(command, model, &env),
+        // Gemini CLI model validation differs by distribution; keep no-op preflight for now.
+        "gemini" => Ok(model.to_string()),
+        _ => Err("Unsupported provider".to_string()),
+    }
 }
 
 #[tauri::command]

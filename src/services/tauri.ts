@@ -633,6 +633,20 @@ export async function listOtherAiModelsCli(
   return invoke<string[]>("list_other_ai_models_cli", { provider, command, env });
 }
 
+export async function preflightOtherAiModelCli(
+  provider: string,
+  command: string,
+  model: string,
+  env?: Record<string, string> | null,
+): Promise<string> {
+  return invoke<string>("preflight_other_ai_model_cli", {
+    provider,
+    command,
+    model,
+    env,
+  });
+}
+
 type MenuAcceleratorUpdate = {
   id: string;
   accelerator: string | null;
