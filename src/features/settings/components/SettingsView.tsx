@@ -725,7 +725,7 @@ export function SettingsView({
   }, [mcpWorkspaceId, projects]);
 
   useEffect(() => {
-    if (activeSection !== "codex") {
+    if (activeSection !== "mcp") {
       return;
     }
     void refreshMcp();
@@ -3974,6 +3974,105 @@ export function SettingsView({
                   >
                     <span className="settings-toggle-knob" />
                   </button>
+                </div>
+              </section>
+            )}
+            {activeSection === "mcp" && (
+              <section className="settings-section">
+                <div className="settings-section-title">MCP</div>
+                <div className="settings-section-subtitle">
+                  MCP servers are shared across all AI systems. Manage them per workspace.
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">MCP servers</div>
+                  <div className="settings-field-row">
+                    <select
+                      className="settings-select"
+                      value={mcpWorkspaceId}
+                      onChange={(event) => setMcpWorkspaceId(event.target.value)}
+                      aria-label="MCP workspace"
+                    >
+                      <option value="">Select a workspace…</option>
+                      {projects.map((workspace) => (
+                        <option key={workspace.id} value={workspace.id}>
+                          {workspace.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => {
+                        void refreshMcp();
+                      }}
+                      disabled={mcpLoading || !mcpWorkspaceId}
+                    >
+                      Refresh
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => {
+                        void handleMcpReload();
+                      }}
+                      disabled={mcpLoading || !mcpWorkspaceId}
+                    >
+                      Reload
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Per-workspace view based on that workspace&apos;s resolved{" "}
+                    <code>CODEX_HOME/config.toml</code>. Reload applies changes to the running
+                    app-server session.
+                  </div>
+                  {mcpError && <div className="settings-help">{mcpError}</div>}
+
+                  <div className="settings-overrides">
+                    {mcpRows.map((row) => (
+                      <div key={row.name} className="settings-override-row">
+                        <div className="settings-override-info">
+                          <div className="settings-project-name">{row.name}</div>
+                          <div className="settings-project-path">
+                            {(row.configured ? "Configured" : "Not in config.toml") +
+                              (row.authLabel ? ` · auth: ${row.authLabel}` : "") +
+                              (row.toolsCount > 0 ? ` · tools: ${row.toolsCount}` : "") +
+                              (row.resourcesCount > 0 || row.templatesCount > 0
+                                ? ` · resources: ${row.resourcesCount}, templates: ${row.templatesCount}`
+                                : "")}
+                          </div>
+                        </div>
+                        <div className="settings-override-actions">
+                          <div className="settings-override-field">
+                            <button
+                              type="button"
+                              className={`settings-toggle ${row.enabled ? "on" : ""}`}
+                              onClick={() => {
+                                void handleMcpSetEnabled(row.name, !row.enabled);
+                              }}
+                              aria-pressed={row.enabled}
+                              disabled={mcpLoading || !mcpWorkspaceId}
+                              aria-label={`Toggle MCP server ${row.name}`}
+                            >
+                              <span className="settings-toggle-knob" />
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost"
+                              onClick={() => {
+                                void handleMcpOauthLogin(row.name);
+                              }}
+                              disabled={mcpLoading || !mcpWorkspaceId}
+                            >
+                              Login
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {!mcpLoading && mcpRows.length === 0 && (
+                      <div className="settings-empty">No MCP servers found.</div>
+                    )}
+                  </div>
                 </div>
               </section>
             )}
