@@ -109,12 +109,23 @@ export function LatexPreview({ workspaceId, path, source }: LatexPreviewProps) {
       ) : null}
 
       {pdfUrl ? (
-        <iframe
-          className="editor-latex-frame"
-          src={pdfUrl}
-          title="LaTeX Preview"
-          sandbox="allow-same-origin"
-        />
+        <>
+          {/* WebView engines can be picky about PDF-in-iframe; embed/object is more reliable here. */}
+          <object
+            key={pdfUrl}
+            className="editor-latex-frame"
+            data={pdfUrl}
+            type="application/pdf"
+            aria-label="LaTeX Preview"
+          >
+            <embed src={pdfUrl} type="application/pdf" />
+          </object>
+          <div className="editor-latex-download">
+            <a href={pdfUrl} target="_blank" rel="noreferrer">
+              PDF'i yeni pencerede ac
+            </a>
+          </div>
+        </>
       ) : (
         <div className="editor-latex-empty">
           {status === "compiling" ? "PDF olusuyor..." : "Onizleme yok"}

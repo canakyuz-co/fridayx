@@ -343,6 +343,19 @@
   background: #ffffff;
 }
 
+.editor-latex-download {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-card);
+  font-size: 12px;
+}
+
+.editor-latex-download a {
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .editor-latex-empty {
   flex: 1;
   display: grid;
