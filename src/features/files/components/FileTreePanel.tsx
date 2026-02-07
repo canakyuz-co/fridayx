@@ -76,6 +76,12 @@ type PendingRenameState = {
   error: string | null;
 };
 
+type PendingMoveState = {
+  fromPath: string;
+  value: string;
+  error: string | null;
+};
+
 type FileTreeBuildNode = {
   name: string;
   path: string;
@@ -211,6 +217,7 @@ export function FileTreePanel({
   const [actionBusy, setActionBusy] = useState(false);
   const [pendingCreate, setPendingCreate] = useState<PendingCreateState | null>(null);
   const [pendingRename, setPendingRename] = useState<PendingRenameState | null>(null);
+  const [pendingMove, setPendingMove] = useState<PendingMoveState | null>(null);
   const [isDragSelecting, setIsDragSelecting] = useState(false);
   const dragAnchorLineRef = useRef<number | null>(null);
   const dragMovedRef = useRef(false);
@@ -288,6 +295,15 @@ export function FileTreePanel({
       setPendingRename(null);
     }
   }, [files, pendingRename]);
+
+  useEffect(() => {
+    if (!pendingMove) {
+      return;
+    }
+    if (!files.includes(pendingMove.fromPath)) {
+      setPendingMove(null);
+    }
+  }, [files, pendingMove]);
 
   const closePreview = useCallback(() => {
     setPreviewPath(null);
@@ -405,6 +421,8 @@ export function FileTreePanel({
         value: "new-file.ts",
         error: null,
       });
+      setPendingRename(null);
+      setPendingMove(null);
     },
     [],
   );
@@ -417,6 +435,8 @@ export function FileTreePanel({
         value: "new-folder",
         error: null,
       });
+      setPendingRename(null);
+      setPendingMove(null);
     },
     [],
   );
@@ -473,6 +493,32 @@ export function FileTreePanel({
     setPendingRename(null);
   }, [joinPath, normalizeRelativePath, pendingRename, runFileAction, workspaceId]);
 
+  const submitMove = useCallback(async () => {
+    if (!pendingMove) {
+      return;
+    }
+    const nextPath = normalizeRelativePath(pendingMove.value);
+    if (!nextPath) {
+      setPendingMove((prev) =>
+        prev
+          ? {
+              ...prev,
+              error: "Please enter a valid path.",
+            }
+          : prev,
+      );
+      return;
+    }
+    if (nextPath === pendingMove.fromPath) {
+      setPendingMove(null);
+      return;
+    }
+    await runFileAction(() =>
+      moveWorkspacePath(workspaceId, pendingMove.fromPath, nextPath),
+    );
+    setPendingMove(null);
+  }, [normalizeRelativePath, pendingMove, runFileAction, workspaceId]);
+
   const handleDeletePath = useCallback(
     async (relativePath: string) => {
       const confirmDelete = window.confirm(
@@ -497,21 +543,23 @@ export function FileTreePanel({
         value: currentName,
         error: null,
       });
+      setPendingCreate(null);
+      setPendingMove(null);
     },
     [],
   );
 
   const handleMovePath = useCallback(
     async (relativePath: string) => {
-      const nextPath = normalizeRelativePath(
-        window.prompt("Yeni konum (path)", relativePath),
-      );
-      if (!nextPath || nextPath === relativePath) {
-        return;
-      }
-      await runFileAction(() => moveWorkspacePath(workspaceId, relativePath, nextPath));
+      setPendingMove({
+        fromPath: relativePath,
+        value: relativePath,
+        error: null,
+      });
+      setPendingCreate(null);
+      setPendingRename(null);
     },
-    [normalizeRelativePath, runFileAction, workspaceId],
+    [],
   );
 
   const previewImageSrc = useMemo(() => {
@@ -771,6 +819,7 @@ export function FileTreePanel({
     const isExpanded = isFolder && expandedFolders.has(node.path);
     const fileTypeIconUrl = !isFolder ? getFileTypeIconUrl(node.path) : null;
     const isRenaming = pendingRename?.fromPath === node.path;
+    const isMoving = pendingMove?.fromPath === node.path;
     return (
       <div key={node.path}>
         <div className="file-tree-row-wrap">
@@ -821,6 +870,53 @@ export function FileTreePanel({
                 Cancel
               </button>
             </div>
+          ) : isMoving ? (
+            <div
+              className={`file-tree-row file-tree-row--editing${isFolder ? " is-folder" : " is-file"}`}
+              style={{ paddingLeft: `${depth * 10}px` }}
+            >
+              <input
+                className="file-tree-rename-input"
+                value={pendingMove?.value ?? ""}
+                onChange={(event) =>
+                  setPendingMove((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          value: event.target.value,
+                          error: null,
+                        }
+                      : prev,
+                  )
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void submitMove();
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    setPendingMove(null);
+                  }
+                }}
+                autoFocus
+              />
+              <button
+                type="button"
+                className="ghost file-tree-inline-action"
+                onClick={() => void submitMove()}
+                disabled={actionBusy}
+              >
+                Move
+              </button>
+              <button
+                type="button"
+                className="ghost file-tree-inline-action"
+                onClick={() => setPendingMove(null)}
+                disabled={actionBusy}
+              >
+                Cancel
+              </button>
+            </div>
           ) : (
             <button
               type="button"
@@ -865,7 +961,12 @@ export function FileTreePanel({
               <span className="file-tree-name">{node.name}</span>
             </button>
           )}
-          {!isRenaming && !isFolder && showMentionActions && canInsertText && onInsertText && (
+          {!isRenaming &&
+          !isMoving &&
+          !isFolder &&
+          showMentionActions &&
+          canInsertText &&
+          onInsertText && (
             <button
               type="button"
               className="ghost icon-button file-tree-action"
@@ -882,6 +983,9 @@ export function FileTreePanel({
         </div>
         {isRenaming && pendingRename?.error ? (
           <div className="file-tree-rename-error">{pendingRename.error}</div>
+        ) : null}
+        {isMoving && pendingMove?.error ? (
+          <div className="file-tree-rename-error">{pendingMove.error}</div>
         ) : null}
         {isFolder && isExpanded && node.children.length > 0 && (
           <div className="file-tree-children">
