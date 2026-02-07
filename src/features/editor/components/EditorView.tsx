@@ -232,6 +232,17 @@ type TextPatch = {
   insertText: string;
 };
 
+const UI_FONT_LABELS: Record<string, string> = {
+  [UI_FONT_FAMILY_OPTIONS[0]]: "Inter",
+  [UI_FONT_FAMILY_OPTIONS[1]]: "SF Pro",
+};
+
+const CODE_FONT_LABELS: Record<string, string> = {
+  [CODE_FONT_FAMILY_OPTIONS[0]]: "Geist Mono",
+  [CODE_FONT_FAMILY_OPTIONS[1]]: "SF Mono",
+  [CODE_FONT_FAMILY_OPTIONS[2]]: "JetBrains Mono",
+};
+
 function computeSinglePatch(previous: string, next: string): TextPatch | null {
   if (previous === next) {
     return null;
@@ -463,16 +474,36 @@ export function EditorView({
 
   const pinnedPathSet = useMemo(() => new Set(pinnedPaths), [pinnedPaths]);
   const uiFontOptions = useMemo(() => {
+    const entries = UI_FONT_FAMILY_OPTIONS.map((value) => ({
+      value,
+      label: UI_FONT_LABELS[value] ?? value,
+    }));
     if (UI_FONT_FAMILY_OPTIONS.includes(appSettings.uiFontFamily)) {
-      return UI_FONT_FAMILY_OPTIONS;
+      return entries;
     }
-    return [appSettings.uiFontFamily, ...UI_FONT_FAMILY_OPTIONS];
+    return [
+      {
+        value: appSettings.uiFontFamily,
+        label: "Custom UI font",
+      },
+      ...entries,
+    ];
   }, [appSettings.uiFontFamily]);
   const codeFontOptions = useMemo(() => {
+    const entries = CODE_FONT_FAMILY_OPTIONS.map((value) => ({
+      value,
+      label: CODE_FONT_LABELS[value] ?? value,
+    }));
     if (CODE_FONT_FAMILY_OPTIONS.includes(appSettings.codeFontFamily)) {
-      return CODE_FONT_FAMILY_OPTIONS;
+      return entries;
     }
-    return [appSettings.codeFontFamily, ...CODE_FONT_FAMILY_OPTIONS];
+    return [
+      {
+        value: appSettings.codeFontFamily,
+        label: "Custom code font",
+      },
+      ...entries,
+    ];
   }, [appSettings.codeFontFamily]);
 
   const tabs = useMemo(
@@ -1490,6 +1521,7 @@ export function EditorView({
           </button>
         </div>
       ) : null}
+      <div className="editor-main">
       {editorSettingsOpen ? (
         <div className="editor-settings-panel" ref={settingsPanelRef}>
           <div className="editor-settings-panel__title">Editor settings</div>
@@ -1520,8 +1552,8 @@ export function EditorView({
               }
             >
               {uiFontOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
@@ -1537,8 +1569,8 @@ export function EditorView({
               }
             >
               {codeFontOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
@@ -1666,6 +1698,7 @@ export function EditorView({
       ) : (
         <EditorPlaceholder hasWorkspace />
       )}
+      </div>
       {activeBuffer ? (
         <div className="editor-statusbar" role="status" aria-live="polite">
           <div className="editor-status-group">

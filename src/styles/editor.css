@@ -195,18 +195,16 @@
 }
 
 .editor-settings-panel {
-  position: absolute;
-  top: 40px;
-  right: 12px;
-  width: min(340px, calc(100% - 24px));
-  z-index: 40;
+  order: 2;
+  width: 258px;
+  min-width: 258px;
+  max-width: 258px;
   display: grid;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--surface-card) 92%, black 8%);
-  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.28);
+  gap: 9px;
+  padding: 10px;
+  border-left: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-card) 90%, black 10%);
+  overflow-y: auto;
 }
 
 .editor-settings-panel__title {
@@ -228,29 +226,43 @@
 }
 
 .editor-settings-panel__field select {
-  height: 30px;
-  border-radius: 8px;
+  height: 28px;
+  border-radius: 7px;
   border: 1px solid var(--border-subtle);
   background: var(--surface-raised);
   color: var(--text-emphasis);
   padding: 0 8px;
+  font-size: 11px;
 }
 
 .editor-settings-panel__toggle {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-emphasis);
 }
 
+.editor-settings-panel__toggle input {
+  margin: 0;
+}
+
 .editor-canvas {
+  order: 1;
   flex: 1;
   width: 100%;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--surface-sidebar);
+}
+
+.editor-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
 }
 
 .editor-statusbar {
