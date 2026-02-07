@@ -69,6 +69,13 @@ type PendingCreateState = {
   error: string | null;
 };
 
+type PendingRenameState = {
+  fromPath: string;
+  baseDir: string;
+  value: string;
+  error: string | null;
+};
+
 type FileTreeBuildNode = {
   name: string;
   path: string;
@@ -203,6 +210,7 @@ export function FileTreePanel({
   } | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [pendingCreate, setPendingCreate] = useState<PendingCreateState | null>(null);
+  const [pendingRename, setPendingRename] = useState<PendingRenameState | null>(null);
   const [isDragSelecting, setIsDragSelecting] = useState(false);
   const dragAnchorLineRef = useRef<number | null>(null);
   const dragMovedRef = useRef(false);
@@ -271,6 +279,15 @@ export function FileTreePanel({
     dragAnchorLineRef.current = null;
     dragMovedRef.current = false;
   }, [workspaceId]);
+
+  useEffect(() => {
+    if (!pendingRename) {
+      return;
+    }
+    if (!files.includes(pendingRename.fromPath)) {
+      setPendingRename(null);
+    }
+  }, [files, pendingRename]);
 
   const closePreview = useCallback(() => {
     setPreviewPath(null);
@@ -429,6 +446,33 @@ export function FileTreePanel({
     setPendingCreate(null);
   }, [joinPath, normalizeRelativePath, pendingCreate, runFileAction, workspaceId]);
 
+  const submitRename = useCallback(async () => {
+    if (!pendingRename) {
+      return;
+    }
+    const nextName = normalizeRelativePath(pendingRename.value);
+    if (!nextName) {
+      setPendingRename((prev) =>
+        prev
+          ? {
+              ...prev,
+              error: "Please enter a valid name.",
+            }
+          : prev,
+      );
+      return;
+    }
+    const nextPath = joinPath(pendingRename.baseDir, nextName);
+    if (nextPath === pendingRename.fromPath) {
+      setPendingRename(null);
+      return;
+    }
+    await runFileAction(() =>
+      moveWorkspacePath(workspaceId, pendingRename.fromPath, nextPath),
+    );
+    setPendingRename(null);
+  }, [joinPath, normalizeRelativePath, pendingRename, runFileAction, workspaceId]);
+
   const handleDeletePath = useCallback(
     async (relativePath: string) => {
       const confirmDelete = window.confirm(
@@ -447,16 +491,14 @@ export function FileTreePanel({
       const parts = relativePath.split("/");
       const currentName = parts.pop() ?? relativePath;
       const baseDir = parts.join("/");
-      const nextName = normalizeRelativePath(
-        window.prompt("Yeni ad", currentName),
-      );
-      if (!nextName || nextName === currentName) {
-        return;
-      }
-      const nextPath = joinPath(baseDir, nextName);
-      await runFileAction(() => moveWorkspacePath(workspaceId, relativePath, nextPath));
+      setPendingRename({
+        fromPath: relativePath,
+        baseDir,
+        value: currentName,
+        error: null,
+      });
     },
-    [joinPath, normalizeRelativePath, runFileAction, workspaceId],
+    [],
   );
 
   const handleMovePath = useCallback(
@@ -728,52 +770,102 @@ export function FileTreePanel({
     const isFolder = node.type === "folder";
     const isExpanded = isFolder && expandedFolders.has(node.path);
     const fileTypeIconUrl = !isFolder ? getFileTypeIconUrl(node.path) : null;
+    const isRenaming = pendingRename?.fromPath === node.path;
     return (
       <div key={node.path}>
         <div className="file-tree-row-wrap">
-          <button
-            type="button"
-            className={`file-tree-row${isFolder ? " is-folder" : " is-file"}`}
-            style={{ paddingLeft: `${depth * 10}px` }}
-            onClick={(event) => {
-              if (isFolder) {
-                toggleFolder(node.path);
-                return;
-              }
-              if (onOpenFile) {
-                onOpenFile(node.path);
-                return;
-              }
-              openPreview(node.path, event.currentTarget);
-            }}
-            onContextMenu={(event) => {
-              void showNodeMenu(event, node.path, isFolder);
-            }}
-          >
-            {isFolder ? (
-              <span className={`file-tree-chevron${isExpanded ? " is-open" : ""}`}>
-                ›
+          {isRenaming ? (
+            <div
+              className={`file-tree-row file-tree-row--editing${isFolder ? " is-folder" : " is-file"}`}
+              style={{ paddingLeft: `${depth * 10}px` }}
+            >
+              <input
+                className="file-tree-rename-input"
+                value={pendingRename?.value ?? ""}
+                onChange={(event) =>
+                  setPendingRename((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          value: event.target.value,
+                          error: null,
+                        }
+                      : prev,
+                  )
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void submitRename();
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    setPendingRename(null);
+                  }
+                }}
+                autoFocus
+              />
+              <button
+                type="button"
+                className="ghost file-tree-inline-action"
+                onClick={() => void submitRename()}
+                disabled={actionBusy}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                className="ghost file-tree-inline-action"
+                onClick={() => setPendingRename(null)}
+                disabled={actionBusy}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={`file-tree-row${isFolder ? " is-folder" : " is-file"}`}
+              style={{ paddingLeft: `${depth * 10}px` }}
+              onClick={(event) => {
+                if (isFolder) {
+                  toggleFolder(node.path);
+                  return;
+                }
+                if (onOpenFile) {
+                  onOpenFile(node.path);
+                  return;
+                }
+                openPreview(node.path, event.currentTarget);
+              }}
+              onContextMenu={(event) => {
+                void showNodeMenu(event, node.path, isFolder);
+              }}
+            >
+              {isFolder ? (
+                <span className={`file-tree-chevron${isExpanded ? " is-open" : ""}`}>
+                  ›
+                </span>
+              ) : (
+                <span className="file-tree-spacer" aria-hidden />
+              )}
+              <span className="file-tree-icon" aria-hidden>
+                {(() => {
+                  const icon = getFileIconDescriptor(node.path, isFolder, isExpanded);
+                  return (
+                    <img
+                      className="file-tree-icon-img"
+                      src={fileTypeIconUrl ?? icon.src}
+                      alt=""
+                      loading="lazy"
+                      aria-hidden
+                    />
+                  );
+                })()}
               </span>
-            ) : (
-              <span className="file-tree-spacer" aria-hidden />
-            )}
-            <span className="file-tree-icon" aria-hidden>
-              {(() => {
-                const icon = getFileIconDescriptor(node.path, isFolder, isExpanded);
-                return (
-                  <img
-                    className="file-tree-icon-img"
-                    src={fileTypeIconUrl ?? icon.src}
-                    alt=""
-                    loading="lazy"
-                    aria-hidden
-                  />
-                );
-              })()}
-            </span>
-            <span className="file-tree-name">{node.name}</span>
-          </button>
-          {!isFolder && showMentionActions && canInsertText && onInsertText && (
+              <span className="file-tree-name">{node.name}</span>
+            </button>
+          )}
+          {!isRenaming && !isFolder && showMentionActions && canInsertText && onInsertText && (
             <button
               type="button"
               className="ghost icon-button file-tree-action"
@@ -788,6 +880,9 @@ export function FileTreePanel({
             </button>
           )}
         </div>
+        {isRenaming && pendingRename?.error ? (
+          <div className="file-tree-rename-error">{pendingRename.error}</div>
+        ) : null}
         {isFolder && isExpanded && node.children.length > 0 && (
           <div className="file-tree-children">
             {node.children.map((child) => renderNode(child, depth + 1))}
