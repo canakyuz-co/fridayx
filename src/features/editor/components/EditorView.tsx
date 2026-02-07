@@ -13,6 +13,7 @@ import { EditorWorkspaceSearch } from "./EditorWorkspaceSearch";
 import { LatexPreview } from "./LatexPreview";
 import type { EditorKeymap, LaunchScriptEntry } from "../../../types";
 import {
+  editorApplyDelta,
   editorClose,
   editorOpen,
   editorSearchInBuffer,
@@ -263,8 +264,12 @@ export function EditorView({
   const [workspaceSearchError, setWorkspaceSearchError] = useState<string | null>(null);
   const [workspaceSearchBufferId, setWorkspaceSearchBufferId] = useState<number | null>(null);
   const [workspaceSearchBufferPath, setWorkspaceSearchBufferPath] = useState<string | null>(null);
+  const [workspaceSearchBufferVersion, setWorkspaceSearchBufferVersion] = useState<number | null>(
+    null,
+  );
   const lastSearchCommitAtRef = useRef<number | null>(null);
   const searchRequestSeqRef = useRef(0);
+  const syncedSearchBufferContentRef = useRef("");
   const rustEditorSearchEnabled = useMemo(isRustEditorSearchEnabled, []);
   const recordWorkspaceSearchLatency = useMemo(
     () => createLatencyTracker("workspace-search"),
@@ -588,6 +593,8 @@ export function EditorView({
         void editorClose(workspaceSearchBufferId).catch(() => {});
         setWorkspaceSearchBufferId(null);
         setWorkspaceSearchBufferPath(null);
+        setWorkspaceSearchBufferVersion(null);
+        syncedSearchBufferContentRef.current = "";
       }
       return;
     }
@@ -606,6 +613,8 @@ export function EditorView({
         recordBufferOpenLatency(performance.now() - startedAt);
         setWorkspaceSearchBufferId(snapshot.bufferId);
         setWorkspaceSearchBufferPath(activePath);
+        setWorkspaceSearchBufferVersion(snapshot.version);
+        syncedSearchBufferContentRef.current = activeBufferContent;
         if (previousBufferId && previousBufferId !== snapshot.bufferId) {
           void editorClose(previousBufferId).catch(() => {});
         }
@@ -616,6 +625,8 @@ export function EditorView({
         }
         setWorkspaceSearchBufferId(null);
         setWorkspaceSearchBufferPath(null);
+        setWorkspaceSearchBufferVersion(null);
+        syncedSearchBufferContentRef.current = "";
       });
     return () => {
       cancelled = true;
@@ -626,6 +637,7 @@ export function EditorView({
     workspaceId,
     workspaceSearchBufferId,
     workspaceSearchBufferPath,
+    workspaceSearchBufferVersion,
     workspaceSearchOpen,
     workspaceSearchTab,
     rustEditorSearchEnabled,
@@ -639,6 +651,63 @@ export function EditorView({
       }
     };
   }, [workspaceSearchBufferId]);
+
+  useEffect(() => {
+    if (
+      !rustEditorSearchEnabled ||
+      !workspaceSearchOpen ||
+      workspaceSearchTab !== "text" ||
+      !workspaceId ||
+      !activePath ||
+      workspaceSearchBufferId == null ||
+      workspaceSearchBufferPath !== activePath ||
+      workspaceSearchBufferVersion == null
+    ) {
+      return;
+    }
+    const previousContent = syncedSearchBufferContentRef.current;
+    if (previousContent === activeBufferContent) {
+      return;
+    }
+    let cancelled = false;
+    const encoder = new TextEncoder();
+    const handle = window.setTimeout(() => {
+      void editorApplyDelta(
+        workspaceSearchBufferId,
+        workspaceSearchBufferVersion,
+        0,
+        encoder.encode(previousContent).length,
+        activeBufferContent,
+      )
+        .then((result) => {
+          if (cancelled) {
+            return;
+          }
+          setWorkspaceSearchBufferVersion(result.version);
+          syncedSearchBufferContentRef.current = activeBufferContent;
+        })
+        .catch(() => {
+          if (cancelled) {
+            return;
+          }
+          setWorkspaceSearchBufferVersion(null);
+        });
+    }, 120);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [
+    activeBufferContent,
+    activePath,
+    rustEditorSearchEnabled,
+    workspaceId,
+    workspaceSearchBufferId,
+    workspaceSearchBufferPath,
+    workspaceSearchBufferVersion,
+    workspaceSearchOpen,
+    workspaceSearchTab,
+  ]);
 
   useEffect(() => {
     if (!workspaceSearchOpen || !workspaceId) {
