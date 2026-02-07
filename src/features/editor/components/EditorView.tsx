@@ -16,6 +16,7 @@ import {
   editorApplyDelta,
   editorClose,
   editorOpen,
+  editorSnapshot,
   editorSearchInBuffer,
   lspRequest,
   searchWorkspaceFiles,
@@ -270,6 +271,7 @@ export function EditorView({
   const lastSearchCommitAtRef = useRef<number | null>(null);
   const searchRequestSeqRef = useRef(0);
   const syncedSearchBufferContentRef = useRef("");
+  const searchBufferSyncRetryRef = useRef(0);
   const rustEditorSearchEnabled = useMemo(isRustEditorSearchEnabled, []);
   const recordWorkspaceSearchLatency = useMemo(
     () => createLatencyTracker("workspace-search"),
@@ -595,6 +597,7 @@ export function EditorView({
         setWorkspaceSearchBufferPath(null);
         setWorkspaceSearchBufferVersion(null);
         syncedSearchBufferContentRef.current = "";
+        searchBufferSyncRetryRef.current = 0;
       }
       return;
     }
@@ -615,6 +618,7 @@ export function EditorView({
         setWorkspaceSearchBufferPath(activePath);
         setWorkspaceSearchBufferVersion(snapshot.version);
         syncedSearchBufferContentRef.current = activeBufferContent;
+        searchBufferSyncRetryRef.current = 0;
         if (previousBufferId && previousBufferId !== snapshot.bufferId) {
           void editorClose(previousBufferId).catch(() => {});
         }
@@ -627,6 +631,7 @@ export function EditorView({
         setWorkspaceSearchBufferPath(null);
         setWorkspaceSearchBufferVersion(null);
         syncedSearchBufferContentRef.current = "";
+        searchBufferSyncRetryRef.current = 0;
       });
     return () => {
       cancelled = true;
@@ -685,9 +690,31 @@ export function EditorView({
           }
           setWorkspaceSearchBufferVersion(result.version);
           syncedSearchBufferContentRef.current = activeBufferContent;
+          searchBufferSyncRetryRef.current = 0;
         })
-        .catch(() => {
+        .catch((error) => {
           if (cancelled) {
+            return;
+          }
+          const message = error instanceof Error ? error.message : String(error);
+          if (
+            message.toLowerCase().includes("version mismatch") &&
+            searchBufferSyncRetryRef.current < 2
+          ) {
+            searchBufferSyncRetryRef.current += 1;
+            void editorSnapshot(workspaceSearchBufferId)
+              .then((snapshot) => {
+                if (cancelled) {
+                  return;
+                }
+                setWorkspaceSearchBufferVersion(snapshot.version);
+              })
+              .catch(() => {
+                if (cancelled) {
+                  return;
+                }
+                setWorkspaceSearchBufferVersion(null);
+              });
             return;
           }
           setWorkspaceSearchBufferVersion(null);
