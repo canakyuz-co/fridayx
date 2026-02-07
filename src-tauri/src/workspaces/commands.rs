@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 
+use serde::Serialize;
 use serde_json::json;
 use tauri::{AppHandle, Manager, State};
 use tokio::io::AsyncWriteExt;
@@ -34,6 +35,7 @@ use crate::git_utils::resolve_git_root;
 use crate::remote_backend;
 use crate::shared::process_core::tokio_command;
 use crate::shared::workspaces_core;
+use crate::shared::editor_core::{EditorSearchOptions, EditorSearchMatch};
 use crate::state::AppState;
 use crate::storage::write_workspaces;
 use crate::types::{
@@ -49,6 +51,63 @@ fn spawn_with_app(
     codex_home: Option<PathBuf>,
 ) -> impl std::future::Future<Output = Result<Arc<WorkspaceSession>, String>> {
     spawn_workspace_session(entry, default_bin, codex_args, app.clone(), codex_home)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EditorBufferSnapshotResponse {
+    buffer_id: u64,
+    path: String,
+    version: u64,
+    line_count: u32,
+    byte_len: u64,
+    is_dirty: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EditorReadRangeResponse {
+    version: u64,
+    text: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EditorApplyDeltaResponse {
+    version: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EditorSearchResult {
+    line: u32,
+    column: u32,
+    line_text: String,
+    match_text: Option<String>,
+}
+
+impl From<EditorSearchMatch> for EditorSearchResult {
+    fn from(value: EditorSearchMatch) -> Self {
+        Self {
+            line: value.line,
+            column: value.column,
+            line_text: value.line_text,
+            match_text: value.match_text,
+        }
+    }
+}
+
+fn to_editor_snapshot_response(
+    snapshot: crate::shared::editor_core::EditorBufferSnapshot,
+) -> EditorBufferSnapshotResponse {
+    EditorBufferSnapshotResponse {
+        buffer_id: snapshot.buffer_id,
+        path: snapshot.path,
+        version: snapshot.version,
+        line_count: snapshot.line_count,
+        byte_len: snapshot.byte_len,
+        is_dirty: snapshot.is_dirty,
+    }
 }
 
 #[tauri::command]
@@ -103,6 +162,137 @@ pub(crate) async fn write_workspace_file(
         .ok_or("workspace not found")?;
     let root = PathBuf::from(&entry.path);
     write_workspace_file_inner(&root, &path, &content)
+}
+
+#[tauri::command]
+pub(crate) async fn editor_open(
+    workspace_id: String,
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<EditorBufferSnapshotResponse, String> {
+    let file = workspaces_core::read_workspace_file_core(
+        &state.workspaces,
+        &workspace_id,
+        &path,
+        |root, rel_path| read_workspace_file_inner(root, rel_path),
+    )
+    .await?;
+    let mut editor = state.editor_core.lock().await;
+    let snapshot = editor.open_buffer(workspace_id, path, file.content);
+    Ok(to_editor_snapshot_response(snapshot))
+}
+
+#[tauri::command]
+pub(crate) async fn editor_close(
+    buffer_id: u64,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut editor = state.editor_core.lock().await;
+    editor.close_buffer(buffer_id)
+}
+
+#[tauri::command]
+pub(crate) async fn editor_snapshot(
+    buffer_id: u64,
+    state: State<'_, AppState>,
+) -> Result<EditorBufferSnapshotResponse, String> {
+    let editor = state.editor_core.lock().await;
+    let snapshot = editor.snapshot(buffer_id)?;
+    Ok(to_editor_snapshot_response(snapshot))
+}
+
+#[tauri::command]
+pub(crate) async fn editor_read_range(
+    buffer_id: u64,
+    start_line: u32,
+    end_line: u32,
+    state: State<'_, AppState>,
+) -> Result<EditorReadRangeResponse, String> {
+    let editor = state.editor_core.lock().await;
+    let response = editor.read_range(buffer_id, start_line, end_line)?;
+    Ok(EditorReadRangeResponse {
+        version: response.version,
+        text: response.text,
+    })
+}
+
+#[tauri::command]
+pub(crate) async fn editor_apply_delta(
+    buffer_id: u64,
+    version: u64,
+    start_offset: u64,
+    end_offset: u64,
+    text: String,
+    state: State<'_, AppState>,
+) -> Result<EditorApplyDeltaResponse, String> {
+    let mut editor = state.editor_core.lock().await;
+    let next_version = editor.apply_delta(buffer_id, version, start_offset, end_offset, &text)?;
+    Ok(EditorApplyDeltaResponse {
+        version: next_version,
+    })
+}
+
+#[tauri::command]
+pub(crate) async fn editor_search_in_buffer(
+    buffer_id: u64,
+    query: String,
+    max_results: u32,
+    match_case: bool,
+    whole_word: bool,
+    is_regex: bool,
+    state: State<'_, AppState>,
+) -> Result<Vec<EditorSearchResult>, String> {
+    let editor = state.editor_core.lock().await;
+    let options = EditorSearchOptions {
+        match_case,
+        whole_word,
+        is_regex,
+    };
+    let matches = editor.search_in_buffer(buffer_id, &query, options, max_results as usize)?;
+    Ok(matches.into_iter().map(EditorSearchResult::from).collect())
+}
+
+#[tauri::command]
+pub(crate) async fn editor_flush_to_disk(
+    buffer_id: u64,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let (workspace_id, path, content) = {
+        let editor = state.editor_core.lock().await;
+        let (workspace_id, path) = editor.buffer_path(buffer_id)?;
+        let content = editor.export_content(buffer_id)?;
+        (workspace_id, path, content)
+    };
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?;
+    let root = PathBuf::from(&entry.path);
+    write_workspace_file_inner(&root, &path, &content)?;
+    drop(workspaces);
+    let mut editor = state.editor_core.lock().await;
+    editor.mark_saved(buffer_id)
+}
+
+#[tauri::command]
+pub(crate) async fn editor_reload_from_disk(
+    buffer_id: u64,
+    state: State<'_, AppState>,
+) -> Result<EditorBufferSnapshotResponse, String> {
+    let (workspace_id, path) = {
+        let editor = state.editor_core.lock().await;
+        editor.buffer_path(buffer_id)?
+    };
+    let file = workspaces_core::read_workspace_file_core(
+        &state.workspaces,
+        &workspace_id,
+        &path,
+        |root, rel_path| read_workspace_file_inner(root, rel_path),
+    )
+    .await?;
+    let mut editor = state.editor_core.lock().await;
+    let snapshot = editor.replace_content(buffer_id, file.content)?;
+    Ok(to_editor_snapshot_response(snapshot))
 }
 
 

@@ -64,8 +64,8 @@ const MAX_WORKSPACE_FILE_BYTES: u64 = 400_000;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct WorkspaceFileResponse {
-    content: String,
-    truncated: bool,
+    pub(crate) content: String,
+    pub(crate) truncated: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

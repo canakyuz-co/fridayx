@@ -736,6 +736,98 @@ export async function writeWorkspaceFile(
   return invoke("write_workspace_file", { workspaceId, path, content });
 }
 
+export type EditorBufferSnapshot = {
+  bufferId: number;
+  path: string;
+  version: number;
+  lineCount: number;
+  byteLen: number;
+  isDirty: boolean;
+};
+
+export type EditorReadRangeResponse = {
+  version: number;
+  text: string;
+};
+
+export type EditorSearchResult = {
+  line: number;
+  column: number;
+  lineText: string;
+  matchText?: string | null;
+};
+
+export async function editorOpen(
+  workspaceId: string,
+  path: string,
+): Promise<EditorBufferSnapshot> {
+  return invoke<EditorBufferSnapshot>("editor_open", { workspaceId, path });
+}
+
+export async function editorClose(bufferId: number): Promise<void> {
+  return invoke("editor_close", { bufferId });
+}
+
+export async function editorSnapshot(
+  bufferId: number,
+): Promise<EditorBufferSnapshot> {
+  return invoke<EditorBufferSnapshot>("editor_snapshot", { bufferId });
+}
+
+export async function editorReadRange(
+  bufferId: number,
+  startLine: number,
+  endLine: number,
+): Promise<EditorReadRangeResponse> {
+  return invoke<EditorReadRangeResponse>("editor_read_range", {
+    bufferId,
+    startLine,
+    endLine,
+  });
+}
+
+export async function editorApplyDelta(
+  bufferId: number,
+  version: number,
+  startOffset: number,
+  endOffset: number,
+  text: string,
+): Promise<{ version: number }> {
+  return invoke<{ version: number }>("editor_apply_delta", {
+    bufferId,
+    version,
+    startOffset,
+    endOffset,
+    text,
+  });
+}
+
+export async function editorSearchInBuffer(
+  bufferId: number,
+  query: string,
+  maxResults: number,
+  options?: WorkspaceTextSearchOptions,
+): Promise<EditorSearchResult[]> {
+  return invoke<EditorSearchResult[]>("editor_search_in_buffer", {
+    bufferId,
+    query,
+    maxResults,
+    matchCase: options?.matchCase ?? false,
+    wholeWord: options?.wholeWord ?? false,
+    isRegex: options?.useRegex ?? false,
+  });
+}
+
+export async function editorFlushToDisk(bufferId: number): Promise<void> {
+  return invoke("editor_flush_to_disk", { bufferId });
+}
+
+export async function editorReloadFromDisk(
+  bufferId: number,
+): Promise<EditorBufferSnapshot> {
+  return invoke<EditorBufferSnapshot>("editor_reload_from_disk", { bufferId });
+}
+
 export async function lspStart(
   workspaceId: string,
   languageId: string,

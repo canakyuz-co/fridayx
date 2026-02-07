@@ -8,6 +8,7 @@ use crate::dictation::DictationState;
 use crate::lsp::LspManager;
 use crate::shared::acp_core::AcpHost;
 use crate::shared::codex_core::CodexLoginCancelState;
+use crate::shared::editor_core::EditorCore;
 use crate::storage::{read_settings, read_workspaces};
 use crate::types::{AppSettings, WorkspaceEntry};
 
@@ -22,6 +23,7 @@ pub(crate) struct AppState {
     pub(crate) app_settings: Mutex<AppSettings>,
     pub(crate) dictation: Mutex<DictationState>,
     pub(crate) lsp_manager: Mutex<LspManager>,
+    pub(crate) editor_core: Mutex<EditorCore>,
     pub(crate) acp_host: Mutex<AcpHost>,
     pub(crate) codex_login_cancels: Mutex<HashMap<String, CodexLoginCancelState>>,
 }
@@ -46,6 +48,7 @@ impl AppState {
             app_settings: Mutex::new(app_settings),
             dictation: Mutex::new(DictationState::default()),
             lsp_manager: Mutex::new(LspManager::new()),
+            editor_core: Mutex::new(EditorCore::default()),
             acp_host: Mutex::new(AcpHost::new()),
             codex_login_cancels: Mutex::new(HashMap::new()),
         }
