@@ -10,13 +10,25 @@
 
 % --- PAGE / LANGUAGE ---
 \usepackage[a4paper, top=2.5cm, bottom=2.5cm, left=2cm, right=2cm]{geometry}
-% XeLaTeX/Tectonic preview needs Unicode-capable fonts for Turkish characters.
-% Use Latin Modern OpenType fonts shipped with TeX distributions (no OS font dependency).
-\usepackage{fontspec}
-\defaultfontfeatures{Ligatures=TeX}
-\setmainfont{Latin Modern Roman}
-\setsansfont{Latin Modern Sans}
-\setmonofont{Latin Modern Mono}
+% FridayX preview uses a bundled LaTeX engine (often Tectonic) that may not have
+% system font discovery available. Using `fontspec` with named fonts is therefore
+% brittle. Instead we stick to classic LaTeX fonts and map Turkish Unicode chars
+% to TeX accent sequences so compilation stays portable.
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{newunicodechar}
+\newunicodechar{İ}{\.{I}}
+\newunicodechar{ı}{\i}
+\newunicodechar{Ş}{\c{S}}
+\newunicodechar{ş}{\c{s}}
+\newunicodechar{Ğ}{\u{G}}
+\newunicodechar{ğ}{\u{g}}
+\newunicodechar{Ç}{\c{C}}
+\newunicodechar{ç}{\c{c}}
+\newunicodechar{Ö}{\"{O}}
+\newunicodechar{ö}{\"{o}}
+\newunicodechar{Ü}{\"{U}}
+\newunicodechar{ü}{\"{u}}
 % NOTE: We compile with XeLaTeX/Tectonic (XeTeX). Babel's `bidi=basic` requires LuaLaTeX.
 % Turkish is LTR, so we keep bidi off for engine compatibility.
 \usepackage[main=turkish, english]{babel}
