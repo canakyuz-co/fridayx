@@ -41,6 +41,44 @@ type UseEditorStateResult = {
   saveFile: (path: string) => void;
 };
 
+type RustBufferMeta = {
+  bufferId: number;
+  version: number;
+  byteLen: number;
+};
+
+type TextPatch = {
+  start: number;
+  end: number;
+  insertText: string;
+};
+
+function computeSinglePatch(previous: string, next: string): TextPatch | null {
+  if (previous === next) {
+    return null;
+  }
+  let start = 0;
+  const minLength = Math.min(previous.length, next.length);
+  while (start < minLength && previous.charCodeAt(start) === next.charCodeAt(start)) {
+    start += 1;
+  }
+  let prevEnd = previous.length;
+  let nextEnd = next.length;
+  while (
+    prevEnd > start &&
+    nextEnd > start &&
+    previous.charCodeAt(prevEnd - 1) === next.charCodeAt(nextEnd - 1)
+  ) {
+    prevEnd -= 1;
+    nextEnd -= 1;
+  }
+  return {
+    start,
+    end: prevEnd,
+    insertText: next.slice(start, nextEnd),
+  };
+}
+
 
 export function useEditorState({
   workspaceId,
@@ -52,6 +90,9 @@ export function useEditorState({
   const [activePath, setActivePath] = useState<string | null>(null);
   const [buffersByPath, setBuffersByPath] = useState<Record<string, EditorBuffer>>({});
   const latestBuffersRef = useRef<Record<string, EditorBuffer>>({});
+  const rustMetaByPathRef = useRef<Record<string, RustBufferMeta>>({});
+  const rustSyncQueueRef = useRef<Record<string, Promise<void>>>({});
+  const textEncoderRef = useRef(new TextEncoder());
   const hasRestoredRef = useRef(false);
 
   const getLastFileKey = useCallback(
@@ -132,8 +173,14 @@ export function useEditorState({
             rustBufferId = snapshot.bufferId;
             rustVersion = snapshot.version;
             rustByteLen = snapshot.byteLen;
+            rustMetaByPathRef.current[path] = {
+              bufferId: snapshot.bufferId,
+              version: snapshot.version,
+              byteLen: snapshot.byteLen,
+            };
           } catch {
             // Keep local editing usable even if Rust core buffer init fails.
+            delete rustMetaByPathRef.current[path];
           }
           setBuffersByPath((prev) => {
             const current = prev[path];
@@ -156,6 +203,7 @@ export function useEditorState({
         });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
+          delete rustMetaByPathRef.current[path];
           setBuffersByPath((prev) => {
             const current = prev[path];
             if (!current) {
@@ -183,6 +231,8 @@ export function useEditorState({
         void editorClose(buffer.rustBufferId).catch(() => {});
       }
     }
+    rustMetaByPathRef.current = {};
+    rustSyncQueueRef.current = {};
     setOpenPaths([]);
     setActivePath(null);
     setBuffersByPath({});
@@ -238,6 +288,8 @@ export function useEditorState({
     if (buffer?.rustBufferId) {
       void editorClose(buffer.rustBufferId).catch(() => {});
     }
+    delete rustMetaByPathRef.current[path];
+    delete rustSyncQueueRef.current[path];
     setOpenPaths((prev) => {
       const next = prev.filter((entry) => entry !== path);
       setActivePath((current) => {
@@ -256,6 +308,17 @@ export function useEditorState({
   }, []);
 
   const updateContent = useCallback((path: string, value: string) => {
+    const toByteOffset = (text: string, charOffset: number) =>
+      textEncoderRef.current.encode(text.slice(0, charOffset)).length;
+    const toByteLen = (text: string) => textEncoderRef.current.encode(text).length;
+    const currentBuffer = latestBuffersRef.current[path];
+    if (!currentBuffer || currentBuffer.isLoading) {
+      return;
+    }
+    const shouldSyncRust =
+      currentBuffer.rustBufferId != null && currentBuffer.rustVersion != null;
+    const previousContent = currentBuffer.content;
+
     setBuffersByPath((prev) => {
       const current = prev[path];
       if (!current || current.isLoading) {
@@ -270,6 +333,70 @@ export function useEditorState({
         },
       };
     });
+
+    if (!shouldSyncRust || currentBuffer.rustBufferId == null) {
+      return;
+    }
+    const patch = computeSinglePatch(previousContent, value);
+    if (!patch) {
+      return;
+    }
+    const startByte = toByteOffset(previousContent, patch.start);
+    const endByte = toByteOffset(previousContent, patch.end);
+    const nextByteLen = toByteLen(value);
+    const bufferId = currentBuffer.rustBufferId;
+    const queue = rustSyncQueueRef.current[path] ?? Promise.resolve();
+    rustSyncQueueRef.current[path] = queue
+      .then(async () => {
+        const meta = rustMetaByPathRef.current[path];
+        if (!meta || meta.bufferId !== bufferId) {
+          return;
+        }
+        const result = await editorApplyDelta(
+          meta.bufferId,
+          meta.version,
+          startByte,
+          endByte,
+          patch.insertText,
+        );
+        rustMetaByPathRef.current[path] = {
+          ...meta,
+          version: result.version,
+          byteLen: nextByteLen,
+        };
+        setBuffersByPath((prev) => {
+          const current = prev[path];
+          if (!current || current.rustBufferId !== meta.bufferId) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [path]: {
+              ...current,
+              rustVersion: result.version,
+              rustByteLen: nextByteLen,
+            },
+          };
+        });
+      })
+      .catch(() => {
+        delete rustMetaByPathRef.current[path];
+        setBuffersByPath((prev) => {
+          const current = prev[path];
+          if (!current) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [path]: {
+              ...current,
+              rustVersion: null,
+              rustByteLen: 0,
+              rustBufferId: null,
+            },
+          };
+        });
+      });
   }, []);
 
   const saveFile = useCallback(
@@ -297,16 +424,11 @@ export function useEditorState({
       });
       void (async () => {
         try {
-          const contentByteLen = new TextEncoder().encode(buffer.content).length;
-          if (buffer.rustBufferId && buffer.rustVersion != null) {
-            const delta = await editorApplyDelta(
-              buffer.rustBufferId,
-              buffer.rustVersion,
-              0,
-              buffer.rustByteLen,
-              buffer.content,
-            );
-            await editorFlushToDisk(buffer.rustBufferId);
+          await (rustSyncQueueRef.current[path] ?? Promise.resolve());
+          const latestBuffer = latestBuffersRef.current[path] ?? buffer;
+          const rustMeta = rustMetaByPathRef.current[path];
+          if (rustMeta) {
+            await editorFlushToDisk(rustMeta.bufferId);
             setBuffersByPath((prev) => {
               const current = prev[path];
               if (!current) {
@@ -319,13 +441,13 @@ export function useEditorState({
                   isDirty: false,
                   isSaving: false,
                   error: null,
-                  rustVersion: delta.version,
-                  rustByteLen: contentByteLen,
+                  rustVersion: rustMeta.version,
+                  rustByteLen: rustMeta.byteLen,
                 },
               };
             });
           } else {
-            await writeWorkspaceFile(workspaceId, path, buffer.content);
+            await writeWorkspaceFile(workspaceId, path, latestBuffer.content);
             setBuffersByPath((prev) => {
               const current = prev[path];
               if (!current) {
