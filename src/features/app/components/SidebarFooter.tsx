@@ -10,6 +10,13 @@ function formatTokenCount(tokens: number): string {
   return tokens.toString();
 }
 
+function formatPercent(part: number, total: number): string {
+  if (total <= 0) {
+    return "--";
+  }
+  return `${Math.round((part / total) * 100)}%`;
+}
+
 type SidebarFooterProps = {
   sessionPercent: number | null;
   weeklyPercent: number | null;
@@ -36,8 +43,13 @@ export function SidebarFooter({
   const showModelsSync = typeof otherAiModelsSyncPercent === "number";
 
   if (isOtherAiModel && claudeUsage) {
-    const totalTokens = claudeUsage.sessionInputTokens + claudeUsage.sessionOutputTokens;
-    const cacheTokens = claudeUsage.sessionCacheReadTokens + claudeUsage.sessionCacheCreationTokens;
+    const cacheTokens =
+      claudeUsage.sessionCacheReadTokens + claudeUsage.sessionCacheCreationTokens;
+    const totalTokens =
+      claudeUsage.sessionInputTokens + claudeUsage.sessionOutputTokens + cacheTokens;
+    const inputPercent = formatPercent(claudeUsage.sessionInputTokens, totalTokens);
+    const outputPercent = formatPercent(claudeUsage.sessionOutputTokens, totalTokens);
+    const cachePercent = formatPercent(cacheTokens, totalTokens);
 
     return (
       <div className="sidebar-footer">
@@ -67,7 +79,7 @@ export function SidebarFooter({
                 <span>Input</span>
               </span>
               <span className="usage-value">
-                {formatTokenCount(claudeUsage.sessionInputTokens)}
+                {formatTokenCount(claudeUsage.sessionInputTokens)} · {inputPercent}
               </span>
             </div>
           </div>
@@ -77,7 +89,7 @@ export function SidebarFooter({
                 <span>Output</span>
               </span>
               <span className="usage-value">
-                {formatTokenCount(claudeUsage.sessionOutputTokens)}
+                {formatTokenCount(claudeUsage.sessionOutputTokens)} · {outputPercent}
               </span>
             </div>
           </div>
@@ -88,7 +100,7 @@ export function SidebarFooter({
                   <span>Cache</span>
                 </span>
                 <span className="usage-value">
-                  {formatTokenCount(cacheTokens)}
+                  {formatTokenCount(cacheTokens)} · {cachePercent}
                 </span>
               </div>
             </div>
