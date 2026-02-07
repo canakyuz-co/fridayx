@@ -1062,23 +1062,25 @@ export function FileTreePanel({
             <>
               <button
                 type="button"
-                className="ghost icon-button file-tree-search-action"
+                className="ghost icon-button file-tree-search-action file-tree-search-action--create"
                 onClick={() => handleCreateFile("")}
                 aria-label="New file"
                 title="New file"
                 disabled={actionBusy}
               >
                 <FilePlus size={14} aria-hidden />
+                <span>File</span>
               </button>
               <button
                 type="button"
-                className="ghost icon-button file-tree-search-action"
+                className="ghost icon-button file-tree-search-action file-tree-search-action--create"
                 onClick={() => handleCreateFolder("")}
                 aria-label="New folder"
                 title="New folder"
                 disabled={actionBusy}
               >
                 <FolderPlus size={14} aria-hidden />
+                <span>Folder</span>
               </button>
             </>
           )}
