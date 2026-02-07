@@ -211,6 +211,38 @@ function ensureLatexLanguage(monaco: Monaco) {
   });
 }
 
+type TextPatch = {
+  start: number;
+  end: number;
+  insertText: string;
+};
+
+function computeSinglePatch(previous: string, next: string): TextPatch | null {
+  if (previous === next) {
+    return null;
+  }
+  let start = 0;
+  const minLength = Math.min(previous.length, next.length);
+  while (start < minLength && previous.charCodeAt(start) === next.charCodeAt(start)) {
+    start += 1;
+  }
+  let prevEnd = previous.length;
+  let nextEnd = next.length;
+  while (
+    prevEnd > start &&
+    nextEnd > start &&
+    previous.charCodeAt(prevEnd - 1) === next.charCodeAt(nextEnd - 1)
+  ) {
+    prevEnd -= 1;
+    nextEnd -= 1;
+  }
+  return {
+    start,
+    end: prevEnd,
+    insertText: next.slice(start, nextEnd),
+  };
+}
+
 export function EditorView({
   workspaceId,
   openPaths,
@@ -585,6 +617,38 @@ export function EditorView({
     editorRef.current.focus();
     pendingRevealRef.current = null;
   }, [activeBufferPath, activeBuffer?.content]);
+
+  useEffect(() => {
+    if (!editorRef.current || !activeBufferPath) {
+      return;
+    }
+    const model = editorRef.current.getModel();
+    if (!model) {
+      return;
+    }
+    const currentValue = model.getValue();
+    const patch = computeSinglePatch(currentValue, activeBufferContent);
+    if (!patch) {
+      return;
+    }
+    const start = model.getPositionAt(patch.start);
+    const end = model.getPositionAt(patch.end);
+    model.pushEditOperations(
+      [],
+      [
+        {
+          range: {
+            startLineNumber: start.lineNumber,
+            startColumn: start.column,
+            endLineNumber: end.lineNumber,
+            endColumn: end.column,
+          },
+          text: patch.insertText,
+        },
+      ],
+      () => null,
+    );
+  }, [activeBufferPath, activeBufferContent]);
 
   useEffect(() => {
     if (!rustEditorSearchEnabled) {
@@ -1229,7 +1293,7 @@ export function EditorView({
                       <Editor
                         path={activeBuffer.path}
                         language={activeBuffer.language ?? undefined}
-                        value={activeBuffer.content}
+                        defaultValue={activeBuffer.content}
                         theme="fridex-app"
                         height="100%"
                         width="100%"
@@ -1266,7 +1330,7 @@ export function EditorView({
                 <Editor
                   path={activeBuffer.path}
                   language={activeBuffer.language ?? undefined}
-                  value={activeBuffer.content}
+                  defaultValue={activeBuffer.content}
                   theme="fridex-app"
                   height="100%"
                   width="100%"
