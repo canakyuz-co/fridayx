@@ -82,6 +82,7 @@ import { useWorkspaceController } from "./features/app/hooks/useWorkspaceControl
 import { useWorkspaceSelection } from "./features/workspaces/hooks/useWorkspaceSelection";
 import { useEditorState } from "./features/editor/hooks/useEditorState";
 import { useEditorLsp } from "./features/editor/hooks/useEditorLsp";
+import type { EditorMetricEventDetail } from "./features/editor/utils/perf";
 import { useLocalUsage } from "./features/home/hooks/useLocalUsage";
 import { useGitHubPanelController } from "./features/app/hooks/useGitHubPanelController";
 import { useSettingsModalState } from "./features/app/hooks/useSettingsModalState";
@@ -234,6 +235,23 @@ function MainApp() {
     handleCopyDebug,
     clearDebugEntries,
   } = useDebugLog();
+  useEffect(() => {
+    const handleEditorMetric = (event: Event) => {
+      const detail = (event as CustomEvent<EditorMetricEventDetail>).detail;
+      if (!detail) {
+        return;
+      }
+      addDebugEntry({
+        id: `editor-metric-${detail.label}-${Date.now()}`,
+        timestamp: Date.now(),
+        source: "event",
+        label: `editor metric: ${detail.label}`,
+        payload: detail.summary,
+      });
+    };
+    window.addEventListener("fridex-editor-metric", handleEditorMetric);
+    return () => window.removeEventListener("fridex-editor-metric", handleEditorMetric);
+  }, [addDebugEntry]);
   useLiquidGlassEffect({ reduceTransparency, onDebug: addDebugEntry });
   const [accessMode, setAccessMode] = useState<AccessMode>("current");
   const [activeTab, setActiveTab] = useState<

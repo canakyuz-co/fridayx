@@ -5,6 +5,11 @@ type LatencySummary = {
   latest: number;
 };
 
+export type EditorMetricEventDetail = {
+  label: string;
+  summary: LatencySummary;
+};
+
 function percentile(sorted: number[], ratio: number) {
   if (sorted.length === 0) {
     return 0;
@@ -43,6 +48,13 @@ export function createLatencyTracker(
     console.info(
       `[editor-metric] ${label} count=${summary.count} p50=${summary.p50.toFixed(2)}ms p95=${summary.p95.toFixed(2)}ms latest=${summary.latest.toFixed(2)}ms`,
     );
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent<EditorMetricEventDetail>("fridex-editor-metric", {
+          detail: { label, summary },
+        }),
+      );
+    }
     return summary;
   };
 }
@@ -53,4 +65,3 @@ export function isRustEditorSearchEnabled() {
   }
   return window.localStorage.getItem("fridex.flags.rustEditorSearch") !== "false";
 }
-
