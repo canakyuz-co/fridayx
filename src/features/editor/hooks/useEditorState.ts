@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { readWorkspaceFile, writeWorkspaceFile } from "../../../services/tauri";
+import {
+  editorApplyDelta,
+  editorClose,
+  editorFlushToDisk,
+  editorOpen,
+  readWorkspaceFile,
+  writeWorkspaceFile,
+} from "../../../services/tauri";
 import { monacoLanguageFromPath } from "../../../utils/languageRegistry";
 
 type EditorBuffer = {
@@ -11,6 +18,9 @@ type EditorBuffer = {
   isLoading: boolean;
   error: string | null;
   isTruncated: boolean;
+  rustBufferId: number | null;
+  rustVersion: number | null;
+  rustByteLen: number;
 };
 
 type UseEditorStateOptions = {
@@ -41,6 +51,7 @@ export function useEditorState({
   const [openPaths, setOpenPaths] = useState<string[]>([]);
   const [activePath, setActivePath] = useState<string | null>(null);
   const [buffersByPath, setBuffersByPath] = useState<Record<string, EditorBuffer>>({});
+  const latestBuffersRef = useRef<Record<string, EditorBuffer>>({});
   const hasRestoredRef = useRef(false);
 
   const getLastFileKey = useCallback(
@@ -104,12 +115,26 @@ export function useEditorState({
             isLoading: true,
             error: null,
             isTruncated: false,
+            rustBufferId: null,
+            rustVersion: null,
+            rustByteLen: 0,
           },
         };
       });
       void (async () => {
         try {
           const response = await readWorkspaceFile(workspaceId, path);
+          let rustBufferId: number | null = null;
+          let rustVersion: number | null = null;
+          let rustByteLen = 0;
+          try {
+            const snapshot = await editorOpen(workspaceId, path, response.content);
+            rustBufferId = snapshot.bufferId;
+            rustVersion = snapshot.version;
+            rustByteLen = snapshot.byteLen;
+          } catch {
+            // Keep local editing usable even if Rust core buffer init fails.
+          }
           setBuffersByPath((prev) => {
             const current = prev[path];
           if (!current) {
@@ -123,6 +148,9 @@ export function useEditorState({
               isLoading: false,
               error: null,
               isTruncated: response.truncated,
+              rustBufferId,
+              rustVersion,
+              rustByteLen,
             },
           };
         });
@@ -149,11 +177,21 @@ export function useEditorState({
   );
 
   useEffect(() => {
+    const buffers = latestBuffersRef.current;
+    for (const buffer of Object.values(buffers)) {
+      if (buffer.rustBufferId) {
+        void editorClose(buffer.rustBufferId).catch(() => {});
+      }
+    }
     setOpenPaths([]);
     setActivePath(null);
     setBuffersByPath({});
     hasRestoredRef.current = false;
   }, [workspaceId]);
+
+  useEffect(() => {
+    latestBuffersRef.current = buffersByPath;
+  }, [buffersByPath]);
 
   useEffect(() => {
     if (!workspaceId || !filesReady) {
@@ -196,6 +234,10 @@ export function useEditorState({
   }, [activePath, getLastFileKey, workspaceId]);
 
   const closeFile = useCallback((path: string) => {
+    const buffer = latestBuffersRef.current[path];
+    if (buffer?.rustBufferId) {
+      void editorClose(buffer.rustBufferId).catch(() => {});
+    }
     setOpenPaths((prev) => {
       const next = prev.filter((entry) => entry !== path);
       setActivePath((current) => {
@@ -255,23 +297,52 @@ export function useEditorState({
       });
       void (async () => {
         try {
-          await writeWorkspaceFile(workspaceId, path, buffer.content);
+          const contentByteLen = new TextEncoder().encode(buffer.content).length;
+          if (buffer.rustBufferId && buffer.rustVersion != null) {
+            const delta = await editorApplyDelta(
+              buffer.rustBufferId,
+              buffer.rustVersion,
+              0,
+              buffer.rustByteLen,
+              buffer.content,
+            );
+            await editorFlushToDisk(buffer.rustBufferId);
+            setBuffersByPath((prev) => {
+              const current = prev[path];
+              if (!current) {
+                return prev;
+              }
+              return {
+                ...prev,
+                [path]: {
+                  ...current,
+                  isDirty: false,
+                  isSaving: false,
+                  error: null,
+                  rustVersion: delta.version,
+                  rustByteLen: contentByteLen,
+                },
+              };
+            });
+          } else {
+            await writeWorkspaceFile(workspaceId, path, buffer.content);
+            setBuffersByPath((prev) => {
+              const current = prev[path];
+              if (!current) {
+                return prev;
+              }
+              return {
+                ...prev,
+                [path]: {
+                  ...current,
+                  isDirty: false,
+                  isSaving: false,
+                  error: null,
+                },
+              };
+            });
+          }
           onDidSave?.(path);
-          setBuffersByPath((prev) => {
-            const current = prev[path];
-            if (!current) {
-              return prev;
-            }
-            return {
-              ...prev,
-              [path]: {
-                ...current,
-                isDirty: false,
-                isSaving: false,
-                error: null,
-              },
-            };
-          });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           setBuffersByPath((prev) => {
