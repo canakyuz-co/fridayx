@@ -1206,14 +1206,15 @@ export function SettingsView({
     const apiKey = (draft.apiKey ?? provider.apiKey ?? "").trim();
     const prefersCli = normalizedProvider.protocol === "cli";
     const useCli = (prefersCli || !apiKey) && canUseCli;
-      const fallbackModels = getFallbackOtherAiModels(providerType);
-      if (!useCli && !apiKey && fallbackModels.length > 0) {
-        handleOtherAiDraftChange(provider.id, {
-          provider: providerType,
-          modelsText: fallbackModels.join("\n"),
-        });
-        return;
-      }
+    const fallbackModels = getFallbackOtherAiModels(providerType);
+    const existingModels = normalizeModelList(normalizedProvider.models ?? []);
+    if (!useCli && !apiKey && fallbackModels.length > 0) {
+      handleOtherAiDraftChange(provider.id, {
+        provider: providerType,
+        modelsText: fallbackModels.join("\n"),
+      });
+      return;
+    }
     setOtherAiFetchState((prev) => ({
       ...prev,
       [provider.id]: { loading: true },
@@ -1235,17 +1236,26 @@ export function SettingsView({
         modelsText: normalizedModels.join("\n"),
       });
     } catch (error) {
-      if (fallbackModels.length > 0) {
+      if (fallbackModels.length > 0 && existingModels.length === 0) {
         handleOtherAiDraftChange(provider.id, {
           provider: providerType,
           modelsText: fallbackModels.join("\n"),
         });
-      } else {
-        pushErrorToast({
-          title: "Couldn’t fetch models",
-          message: error instanceof Error ? error.message : String(error),
-        });
       }
+      const baseMessage = error instanceof Error ? error.message : String(error);
+      const updateHint = useCli
+        ? providerType === "claude"
+          ? "Run `claude update` and retry."
+          : "Run `gemini update` (or your package manager update) and retry."
+        : "";
+      const preservedHint =
+        existingModels.length > 0
+          ? "Keeping your current saved model list."
+          : "Using fallback model list for now.";
+      pushErrorToast({
+        title: "Couldn’t fetch models",
+        message: [baseMessage, updateHint, preservedHint].filter(Boolean).join(" "),
+      });
     } finally {
       setOtherAiFetchState((prev) => ({
         ...prev,

@@ -261,9 +261,25 @@ type OtherAiHistoryEntry = { role: "user" | "assistant"; text: string };
 
 function collectOtherAiHistory(
   items: ConversationItem[],
-  limit: number,
+  limit: number | null,
 ): OtherAiHistoryEntry[] {
-  // Single-pass ring buffer keeps last N messages. Time O(n), space O(N).
+  // Full history mode keeps every message; time O(n), space O(n).
+  if (limit === null) {
+    const result: OtherAiHistoryEntry[] = [];
+    for (const item of items) {
+      if (item.kind !== "message") {
+        continue;
+      }
+      const text = item.text.trim();
+      if (!text) {
+        continue;
+      }
+      result.push({ role: item.role, text });
+    }
+    return result;
+  }
+
+  // Bounded mode keeps last N messages via ring buffer. Time O(n), space O(N).
   if (limit <= 0) {
     return [];
   }
@@ -349,7 +365,7 @@ export function useThreadMessaging({
       images: string[] = [],
       options?: SendMessageOptions,
     ) => {
-      const otherAiHistoryLimit = 20;
+      const otherAiHistoryLimit: number | null = null;
       const messageText = text.trim();
       if (!messageText && images.length === 0) {
         return;

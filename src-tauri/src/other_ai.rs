@@ -133,6 +133,7 @@ fn collect_models_from_json(provider: &str, payload: &Value) -> Vec<String> {
 fn collect_models_from_text(provider: &str, output: &str) -> Vec<String> {
     let prefix = if provider == "claude" { "claude-" } else { "gemini-" };
     let mut models = Vec::new();
+    let mut token = String::new();
     for line in output.lines() {
         let trimmed = line.trim().trim_start_matches("- ").trim();
         if trimmed.is_empty() {
@@ -147,6 +148,22 @@ fn collect_models_from_text(provider: &str, output: &str) -> Vec<String> {
             .find(|token| token.starts_with(prefix))
         {
             models.push(token.to_string());
+        }
+
+        // Also extract provider-prefixed IDs embedded in JSON/structured text.
+        token.clear();
+        for ch in trimmed.chars() {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' {
+                token.push(ch);
+            } else if !token.is_empty() {
+                if token.starts_with(prefix) {
+                    models.push(token.clone());
+                }
+                token.clear();
+            }
+        }
+        if !token.is_empty() && token.starts_with(prefix) {
+            models.push(token.clone());
         }
     }
     models

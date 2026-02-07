@@ -13,6 +13,9 @@ import { EditorWorkspaceSearch } from "./EditorWorkspaceSearch";
 import { LatexPreview } from "./LatexPreview";
 import type { EditorKeymap, LaunchScriptEntry } from "../../../types";
 import {
+  editorClose,
+  editorOpen,
+  editorSearchInBuffer,
   lspRequest,
   searchWorkspaceFiles,
   type WorkspaceTextSearchOptions,
@@ -253,6 +256,8 @@ export function EditorView({
   >([]);
   const [workspaceSearchLoading, setWorkspaceSearchLoading] = useState(false);
   const [workspaceSearchError, setWorkspaceSearchError] = useState<string | null>(null);
+  const [workspaceSearchBufferId, setWorkspaceSearchBufferId] = useState<number | null>(null);
+  const [workspaceSearchBufferPath, setWorkspaceSearchBufferPath] = useState<string | null>(null);
   const [workspaceSymbolResults, setWorkspaceSymbolResults] = useState<
     WorkspaceSymbolResult[]
   >([]);
@@ -551,6 +556,59 @@ export function EditorView({
   }, [activeBufferPath, activeBuffer?.content]);
 
   useEffect(() => {
+    if (!workspaceSearchOpen || workspaceSearchTab !== "text" || !workspaceId || !activePath) {
+      if (workspaceSearchBufferId) {
+        void editorClose(workspaceSearchBufferId).catch(() => {});
+        setWorkspaceSearchBufferId(null);
+        setWorkspaceSearchBufferPath(null);
+      }
+      return;
+    }
+    if (workspaceSearchBufferId && workspaceSearchBufferPath === activePath) {
+      return;
+    }
+    let cancelled = false;
+    const previousBufferId = workspaceSearchBufferId;
+    void editorOpen(workspaceId, activePath)
+      .then((snapshot) => {
+        if (cancelled) {
+          void editorClose(snapshot.bufferId).catch(() => {});
+          return;
+        }
+        setWorkspaceSearchBufferId(snapshot.bufferId);
+        setWorkspaceSearchBufferPath(activePath);
+        if (previousBufferId && previousBufferId !== snapshot.bufferId) {
+          void editorClose(previousBufferId).catch(() => {});
+        }
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setWorkspaceSearchBufferId(null);
+        setWorkspaceSearchBufferPath(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activePath,
+    workspaceId,
+    workspaceSearchBufferId,
+    workspaceSearchBufferPath,
+    workspaceSearchOpen,
+    workspaceSearchTab,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (workspaceSearchBufferId) {
+        void editorClose(workspaceSearchBufferId).catch(() => {});
+      }
+    };
+  }, [workspaceSearchBufferId]);
+
+  useEffect(() => {
     if (!workspaceSearchOpen || !workspaceId) {
       return;
     }
@@ -573,14 +631,33 @@ export function EditorView({
       .filter(Boolean);
     const handle = window.setTimeout(() => {
       setWorkspaceSearchLoading(true);
-      searchWorkspaceFiles(
-        workspaceId,
-        trimmed,
-        includeGlobs,
-        excludeGlobs,
-        200,
-        workspaceTextSearchOptions,
-      )
+      const request =
+        workspaceSearchTab === "text" &&
+        workspaceSearchBufferId &&
+        workspaceSearchBufferPath
+          ? editorSearchInBuffer(
+              workspaceSearchBufferId,
+              trimmed,
+              200,
+              workspaceTextSearchOptions,
+            ).then((results) =>
+              results.map((result) => ({
+                path: workspaceSearchBufferPath,
+                line: result.line,
+                column: result.column,
+                lineText: result.lineText,
+                matchText: result.matchText,
+              })),
+            )
+          : searchWorkspaceFiles(
+              workspaceId,
+              trimmed,
+              includeGlobs,
+              excludeGlobs,
+              200,
+              workspaceTextSearchOptions,
+            );
+      request
         .then((results) => {
           setWorkspaceSearchResults(results);
           setWorkspaceSearchError(null);
@@ -603,6 +680,8 @@ export function EditorView({
     workspaceSearchOpen,
     workspaceSearchQuery,
     workspaceSearchTab,
+    workspaceSearchBufferId,
+    workspaceSearchBufferPath,
     workspaceTextSearchOptions,
   ]);
 
