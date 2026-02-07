@@ -802,65 +802,69 @@ export function FileTreePanel({
         </div>
       </div>
       <div className="file-tree-search">
-        <Search className="file-tree-search-icon" aria-hidden />
-        <input
-          className="file-tree-search-input"
-          type="search"
-          placeholder="Filter files and folders"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          aria-label="Filter files and folders"
-        />
-        <button
-          type="button"
-          className={`ghost icon-button file-tree-search-filter${
-            filterMode === "modified" ? " is-active" : ""
-          }`}
-          onClick={() => {
-            setFilterMode((prev) => (prev === "all" ? "modified" : "all"));
-          }}
-          aria-pressed={filterMode === "modified"}
-          aria-label={
-            filterMode === "modified" ? "Show all files" : "Show modified files only"
-          }
-          title={filterMode === "modified" ? "Show all files" : "Show modified files only"}
-        >
-          <GitBranch size={14} aria-hidden />
-        </button>
-        {showCreateActions && (
-          <>
-            <button
-              type="button"
-              className="ghost icon-button file-tree-search-action"
-              onClick={() => handleCreateFile("")}
-              aria-label="New file"
-              title="New file"
-              disabled={actionBusy}
-            >
-              <FilePlus size={14} aria-hidden />
-            </button>
-            <button
-              type="button"
-              className="ghost icon-button file-tree-search-action"
-              onClick={() => handleCreateFolder("")}
-              aria-label="New folder"
-              title="New folder"
-              disabled={actionBusy}
-            >
-              <FolderPlus size={14} aria-hidden />
-            </button>
-          </>
-        )}
-        <button
-          type="button"
-          className="ghost icon-button file-tree-search-action"
-          onClick={() => onRefreshFiles?.()}
-          aria-label="Refresh files"
-          title="Refresh files"
-          disabled={actionBusy}
-        >
-          <RefreshCcw size={14} aria-hidden />
-        </button>
+        <div className="file-tree-search-field">
+          <Search className="file-tree-search-icon" aria-hidden />
+          <input
+            className="file-tree-search-input"
+            type="search"
+            placeholder="Filter files and folders"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Filter files and folders"
+          />
+        </div>
+        <div className="file-tree-search-actions">
+          <button
+            type="button"
+            className={`ghost icon-button file-tree-search-filter${
+              filterMode === "modified" ? " is-active" : ""
+            }`}
+            onClick={() => {
+              setFilterMode((prev) => (prev === "all" ? "modified" : "all"));
+            }}
+            aria-pressed={filterMode === "modified"}
+            aria-label={
+              filterMode === "modified" ? "Show all files" : "Show modified files only"
+            }
+            title={filterMode === "modified" ? "Show all files" : "Show modified files only"}
+          >
+            <GitBranch size={14} aria-hidden />
+          </button>
+          {showCreateActions && (
+            <>
+              <button
+                type="button"
+                className="ghost icon-button file-tree-search-action"
+                onClick={() => handleCreateFile("")}
+                aria-label="New file"
+                title="New file"
+                disabled={actionBusy}
+              >
+                <FilePlus size={14} aria-hidden />
+              </button>
+              <button
+                type="button"
+                className="ghost icon-button file-tree-search-action"
+                onClick={() => handleCreateFolder("")}
+                aria-label="New folder"
+                title="New folder"
+                disabled={actionBusy}
+              >
+                <FolderPlus size={14} aria-hidden />
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className="ghost icon-button file-tree-search-action"
+            onClick={() => onRefreshFiles?.()}
+            aria-label="Refresh files"
+            title="Refresh files"
+            disabled={actionBusy}
+          >
+            <RefreshCcw size={14} aria-hidden />
+          </button>
+        </div>
       </div>
       <div className="file-tree-list">
         {showLoading ? (

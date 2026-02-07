@@ -54,10 +54,16 @@
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px 12px;
+  gap: 2px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--border-muted);
   background: var(--surface-topbar);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.editor-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .editor-tabs-actions {
@@ -86,22 +92,28 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 8px;
-  border-radius: 8px;
-  background: var(--surface-card);
-  color: var(--text-muted);
-  border: 1px solid transparent;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-card) 72%, transparent);
+  color: var(--text-dim);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+  border-bottom-color: transparent;
+  transform: translateY(1px);
 }
 
 .editor-tab:hover {
   color: var(--text-strong);
-  border-color: var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-hover) 72%, transparent);
+  border-color: var(--border-strong);
+  border-bottom-color: transparent;
 }
 
 .editor-tab.is-active {
   color: var(--text-strong);
   border-color: var(--border-stronger);
-  background: var(--surface-card-strong);
+  border-bottom-color: var(--surface-sidebar);
+  background: color-mix(in srgb, var(--surface-card-strong) 88%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-muted) 14%, transparent);
 }
 
 .editor-tab-title {
