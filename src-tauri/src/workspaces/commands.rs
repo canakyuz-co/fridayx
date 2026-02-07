@@ -168,17 +168,23 @@ pub(crate) async fn write_workspace_file(
 pub(crate) async fn editor_open(
     workspace_id: String,
     path: String,
+    content: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<EditorBufferSnapshotResponse, String> {
-    let file = workspaces_core::read_workspace_file_core(
-        &state.workspaces,
-        &workspace_id,
-        &path,
-        |root, rel_path| read_workspace_file_inner(root, rel_path),
-    )
-    .await?;
+    let initial_content = if let Some(content) = content {
+        content
+    } else {
+        workspaces_core::read_workspace_file_core(
+            &state.workspaces,
+            &workspace_id,
+            &path,
+            |root, rel_path| read_workspace_file_inner(root, rel_path),
+        )
+        .await?
+        .content
+    };
     let mut editor = state.editor_core.lock().await;
-    let snapshot = editor.open_buffer(workspace_id, path, file.content);
+    let snapshot = editor.open_buffer(workspace_id, path, initial_content);
     Ok(to_editor_snapshot_response(snapshot))
 }
 

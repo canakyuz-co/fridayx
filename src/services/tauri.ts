@@ -774,8 +774,9 @@ export type EditorSearchResult = {
 export async function editorOpen(
   workspaceId: string,
   path: string,
+  content?: string,
 ): Promise<EditorBufferSnapshot> {
-  return invoke<EditorBufferSnapshot>("editor_open", { workspaceId, path });
+  return invoke<EditorBufferSnapshot>("editor_open", { workspaceId, path, content });
 }
 
 export async function editorClose(bufferId: number): Promise<void> {

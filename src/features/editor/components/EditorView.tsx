@@ -229,6 +229,7 @@ export function EditorView({
   onMonacoReady,
 }: EditorViewProps) {
   const activeBuffer = activePath ? buffersByPath[activePath] : null;
+  const activeBufferContent = activeBuffer?.content ?? "";
   const activeBufferPath = activeBuffer?.path ?? null;
   const isMarkdown = activeBuffer
     ? activeBuffer.language === "markdown" || isMarkdownPath(activeBuffer.path)
@@ -263,6 +264,7 @@ export function EditorView({
   const [workspaceSearchBufferId, setWorkspaceSearchBufferId] = useState<number | null>(null);
   const [workspaceSearchBufferPath, setWorkspaceSearchBufferPath] = useState<string | null>(null);
   const lastSearchCommitAtRef = useRef<number | null>(null);
+  const searchRequestSeqRef = useRef(0);
   const rustEditorSearchEnabled = useMemo(isRustEditorSearchEnabled, []);
   const recordWorkspaceSearchLatency = useMemo(
     () => createLatencyTracker("workspace-search"),
@@ -595,7 +597,7 @@ export function EditorView({
     let cancelled = false;
     const previousBufferId = workspaceSearchBufferId;
     const startedAt = performance.now();
-    void editorOpen(workspaceId, activePath)
+    void editorOpen(workspaceId, activePath, activeBufferContent)
       .then((snapshot) => {
         if (cancelled) {
           void editorClose(snapshot.bufferId).catch(() => {});
@@ -620,6 +622,7 @@ export function EditorView({
     };
   }, [
     activePath,
+    activeBufferContent,
     workspaceId,
     workspaceSearchBufferId,
     workspaceSearchBufferPath,
@@ -646,6 +649,7 @@ export function EditorView({
     }
     const trimmed = workspaceSearchQuery.trim();
     if (!trimmed) {
+      searchRequestSeqRef.current += 1;
       setWorkspaceSearchResults([]);
       setWorkspaceSearchError(null);
       return;
@@ -659,6 +663,8 @@ export function EditorView({
       .map((entry) => entry.trim())
       .filter(Boolean);
     const handle = window.setTimeout(() => {
+      const requestId = searchRequestSeqRef.current + 1;
+      searchRequestSeqRef.current = requestId;
       setWorkspaceSearchLoading(true);
       const startedAt = performance.now();
       const request =
@@ -690,6 +696,9 @@ export function EditorView({
             );
       request
         .then((results) => {
+          if (requestId !== searchRequestSeqRef.current) {
+            return;
+          }
           const elapsed = performance.now() - startedAt;
           if (
             rustEditorSearchEnabled &&
@@ -706,12 +715,18 @@ export function EditorView({
           setWorkspaceSearchError(null);
         })
         .catch((error) => {
+          if (requestId !== searchRequestSeqRef.current) {
+            return;
+          }
           setWorkspaceSearchResults([]);
           setWorkspaceSearchError(
             error instanceof Error ? error.message : String(error),
           );
         })
         .finally(() => {
+          if (requestId !== searchRequestSeqRef.current) {
+            return;
+          }
           setWorkspaceSearchLoading(false);
         });
     }, 250);
