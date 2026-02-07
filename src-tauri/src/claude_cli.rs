@@ -65,6 +65,32 @@ fn extract_text_content(message: &Value) -> Option<String> {
     }
 }
 
+fn normalize_claude_model_for_cli(model: &str) -> String {
+    let trimmed = model.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let normalized = trimmed.to_ascii_lowercase();
+    // Claude CLI non-interactive mode is most reliable with aliases (`sonnet|opus|haiku`) or dated IDs.
+    // Convert short family IDs like `claude-sonnet-4-6` into stable aliases.
+    if normalized.starts_with("claude-sonnet-")
+        && normalized.chars().filter(|ch| *ch == '-').count() == 3
+    {
+        return "sonnet".to_string();
+    }
+    if normalized.starts_with("claude-opus-")
+        && normalized.chars().filter(|ch| *ch == '-').count() == 3
+    {
+        return "opus".to_string();
+    }
+    if normalized.starts_with("claude-haiku-")
+        && normalized.chars().filter(|ch| *ch == '-').count() == 3
+    {
+        return "haiku".to_string();
+    }
+    trimmed.to_string()
+}
+
 #[tauri::command]
 pub async fn send_claude_cli_message(
     command: String,
@@ -103,7 +129,10 @@ pub async fn send_claude_cli_message(
     }
 
     // Add model if provided and not already set by args.
-    if let Some(model) = model.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty())
+    if let Some(model) = model
+        .as_ref()
+        .map(|value| normalize_claude_model_for_cli(value))
+        .filter(|value| !value.is_empty())
     {
         let args_str = cmd
             .get_args()
@@ -112,7 +141,7 @@ pub async fn send_claude_cli_message(
         let has_model_flag = args_str.iter().any(|arg| arg == "--model");
         if !has_model_flag {
             cmd.arg("--model");
-            cmd.arg(model);
+            cmd.arg(&model);
         }
     }
 
@@ -315,4 +344,24 @@ pub async fn send_claude_cli_message(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_claude_model_for_cli;
+
+    #[test]
+    fn normalizes_short_family_ids_to_alias() {
+        assert_eq!(normalize_claude_model_for_cli("claude-sonnet-4-6"), "sonnet");
+        assert_eq!(normalize_claude_model_for_cli("claude-opus-4-6"), "opus");
+        assert_eq!(normalize_claude_model_for_cli("claude-haiku-4-6"), "haiku");
+    }
+
+    #[test]
+    fn preserves_dated_model_ids() {
+        assert_eq!(
+            normalize_claude_model_for_cli("claude-sonnet-4-5-20250929"),
+            "claude-sonnet-4-5-20250929"
+        );
+    }
 }
