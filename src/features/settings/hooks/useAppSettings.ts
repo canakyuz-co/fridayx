@@ -282,6 +282,9 @@ export function useAppSettings() {
         const cliCommand = (provider.command ?? "").trim();
         const models = Array.isArray(provider.models) ? provider.models : [];
         // Only do work when we can fetch (API/CLI) or when we need to auto-fill (empty list).
+        if (normalizedProvider === "claude") {
+          return apiKey.length > 0 || models.length === 0;
+        }
         return apiKey.length > 0 || cliCommand.length > 0 || models.length === 0;
       });
 
@@ -311,7 +314,7 @@ export function useAppSettings() {
         const providerType = provider.provider.trim().toLowerCase();
         const apiKey = (provider.apiKey ?? "").trim();
         const cliCommand = (provider.command ?? "").trim();
-        const canUseCli = cliCommand.length > 0;
+        const canUseCli = providerType !== "claude" && cliCommand.length > 0;
         const prefersCli = (provider.protocol ?? "").trim().toLowerCase() === "cli";
 
         const fallback = getFallbackOtherAiModels(providerType);

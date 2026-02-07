@@ -11,6 +11,7 @@ import Stethoscope from "lucide-react/dist/esm/icons/stethoscope";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import TerminalSquare from "lucide-react/dist/esm/icons/terminal-square";
 import FileText from "lucide-react/dist/esm/icons/file-text";
+import Plug from "lucide-react/dist/esm/icons/plug";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 import X from "lucide-react/dist/esm/icons/x";
 import FlaskConical from "lucide-react/dist/esm/icons/flask-conical";
@@ -298,6 +299,7 @@ type SettingsSection =
   | "shortcuts"
   | "open-apps"
   | "git"
+  | "mcp"
   | "other-ai";
 type CodexSection = SettingsSection | "codex" | "features";
 type ShortcutSettingKey =
@@ -1200,7 +1202,7 @@ export function SettingsView({
     }
     const normalizedProvider = normalizeOtherAiProvider(provider, draft);
     const cliCommand = normalizedProvider.command?.trim() ?? "";
-    const canUseCli = cliCommand.length > 0;
+    const canUseCli = providerType !== "claude" && cliCommand.length > 0;
     const apiKey = (draft.apiKey ?? provider.apiKey ?? "").trim();
     const prefersCli = normalizedProvider.protocol === "cli";
     const useCli = (prefersCli || !apiKey) && canUseCli;
@@ -1595,6 +1597,14 @@ export function SettingsView({
             >
               <TerminalSquare aria-hidden />
               Codex
+            </button>
+            <button
+              type="button"
+              className={`settings-nav ${activeSection === "mcp" ? "active" : ""}`}
+              onClick={() => setActiveSection("mcp")}
+            >
+              <Plug aria-hidden />
+              MCP
             </button>
             <button
               type="button"
@@ -3663,98 +3673,6 @@ export function SettingsView({
                     help: "settings-help",
                   }}
                 />
-
-                <div className="settings-field">
-                  <div className="settings-field-label">MCP servers</div>
-                  <div className="settings-field-row">
-                    <select
-                      className="settings-select"
-                      value={mcpWorkspaceId}
-                      onChange={(event) => setMcpWorkspaceId(event.target.value)}
-                      aria-label="MCP workspace"
-                    >
-                      <option value="">Select a workspace…</option>
-                      {projects.map((workspace) => (
-                        <option key={workspace.id} value={workspace.id}>
-                          {workspace.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() => {
-                        void refreshMcp();
-                      }}
-                      disabled={mcpLoading || !mcpWorkspaceId}
-                    >
-                      Refresh
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() => {
-                        void handleMcpReload();
-                      }}
-                      disabled={mcpLoading || !mcpWorkspaceId}
-                    >
-                      Reload
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    Per-workspace view based on that workspace&apos;s resolved{" "}
-                    <code>CODEX_HOME/config.toml</code>. Reload applies changes to the running
-                    app-server session.
-                  </div>
-                  {mcpError && <div className="settings-help">{mcpError}</div>}
-
-                  <div className="settings-overrides">
-                    {mcpRows.map((row) => (
-                      <div key={row.name} className="settings-override-row">
-                        <div className="settings-override-info">
-                          <div className="settings-project-name">{row.name}</div>
-                          <div className="settings-project-path">
-                            {(row.configured ? "Configured" : "Not in config.toml") +
-                              (row.authLabel ? ` · auth: ${row.authLabel}` : "") +
-                              (row.toolsCount > 0 ? ` · tools: ${row.toolsCount}` : "") +
-                              (row.resourcesCount > 0 || row.templatesCount > 0
-                                ? ` · resources: ${row.resourcesCount}, templates: ${row.templatesCount}`
-                                : "")}
-                          </div>
-                        </div>
-                        <div className="settings-override-actions">
-                          <div className="settings-override-field">
-                            <button
-                              type="button"
-                              className={`settings-toggle ${row.enabled ? "on" : ""}`}
-                              onClick={() => {
-                                void handleMcpSetEnabled(row.name, !row.enabled);
-                              }}
-                              aria-pressed={row.enabled}
-                              disabled={mcpLoading || !mcpWorkspaceId}
-                              aria-label={`Toggle MCP server ${row.name}`}
-                            >
-                              <span className="settings-toggle-knob" />
-                            </button>
-                            <button
-                              type="button"
-                              className="ghost"
-                              onClick={() => {
-                                void handleMcpOauthLogin(row.name);
-                              }}
-                              disabled={mcpLoading || !mcpWorkspaceId}
-                            >
-                              Login
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {!mcpLoading && mcpRows.length === 0 && (
-                      <div className="settings-empty">No MCP servers found.</div>
-                    )}
-                  </div>
-                </div>
 
                 <div className="settings-field">
                   <div className="settings-field-label">Workspace overrides</div>

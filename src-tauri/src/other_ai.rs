@@ -186,6 +186,9 @@ fn list_models_via_cli(
     command: &str,
     env: &Option<HashMap<String, String>>,
 ) -> Result<Vec<String>, String> {
+    if provider == "claude" {
+        return Err("Claude CLI does not expose a non-interactive model list.".to_string());
+    }
     let attempts: Vec<Vec<&str>> = vec![
         vec!["models", "list", "--output-format", "json"],
         vec!["models", "list", "--output", "json"],
