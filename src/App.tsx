@@ -2417,6 +2417,7 @@ function MainApp() {
       buffersByPath={editorState.buffersByPath}
       availablePaths={files}
       editorKeymap={appSettings.editorKeymap}
+      appSettings={appSettings}
       workspacePath={activeWorkspace?.path ?? null}
       launchScript={launchScriptState.launchScript}
       launchScripts={launchScriptsState.launchScripts}
@@ -2427,6 +2428,7 @@ function MainApp() {
       onOpenPath={editorState.openFile}
       onContentChange={editorState.updateContent}
       onSavePath={editorState.saveFile}
+      onUpdateAppSettings={queueSaveSettings}
       onRunLaunchScript={launchScriptState.onRunLaunchScript}
       onRunLaunchScriptEntry={launchScriptsState.onRunScript}
       onMonacoReady={editorLsp.onMonacoReady}

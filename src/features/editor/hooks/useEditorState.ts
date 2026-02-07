@@ -117,6 +117,10 @@ export function useEditorState({
     (id: string) => `codexmonitor.editorLastFile.${id}`,
     [],
   );
+  const getPinnedFileKey = useCallback(
+    (id: string) => `codexmonitor.editorPinnedFiles.${id}`,
+    [],
+  );
 
   const findReadmePath = useCallback((paths: string[]) => {
     if (!paths.length) {
@@ -306,6 +310,39 @@ export function useEditorState({
     }
     window.localStorage.setItem(getLastFileKey(workspaceId), activePath);
   }, [activePath, getLastFileKey, workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId || typeof window === "undefined") {
+      return;
+    }
+    const raw = window.localStorage.getItem(getPinnedFileKey(workspaceId));
+    if (!raw) {
+      setPinnedPaths(new Set());
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        setPinnedPaths(new Set());
+        return;
+      }
+      setPinnedPaths(
+        new Set(parsed.filter((entry): entry is string => typeof entry === "string")),
+      );
+    } catch {
+      setPinnedPaths(new Set());
+    }
+  }, [getPinnedFileKey, workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId || typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(
+      getPinnedFileKey(workspaceId),
+      JSON.stringify(Array.from(pinnedPaths)),
+    );
+  }, [getPinnedFileKey, pinnedPaths, workspaceId]);
 
   const closeFile = useCallback((path: string) => {
     const buffer = latestBuffersRef.current[path];

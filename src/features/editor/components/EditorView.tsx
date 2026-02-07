@@ -7,13 +7,14 @@ import Columns2 from "lucide-react/dist/esm/icons/columns-2";
 import Eye from "lucide-react/dist/esm/icons/eye";
 import Pin from "lucide-react/dist/esm/icons/pin";
 import PinOff from "lucide-react/dist/esm/icons/pin-off";
+import SlidersHorizontal from "lucide-react/dist/esm/icons/sliders-horizontal";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorPlaceholder } from "./EditorPlaceholder";
 import { Markdown } from "../../messages/components/Markdown";
 import { EditorCommandPalette } from "./EditorCommandPalette";
 import { EditorWorkspaceSearch } from "./EditorWorkspaceSearch";
 import { LatexPreview } from "./LatexPreview";
-import type { EditorKeymap, LaunchScriptEntry } from "../../../types";
+import type { AppSettings, EditorKeymap, LaunchScriptEntry } from "../../../types";
 import {
   editorApplyDelta,
   editorClose,
@@ -29,6 +30,13 @@ import {
   createLatencyTracker,
   isRustEditorSearchEnabled,
 } from "../utils/perf";
+import {
+  CODE_FONT_FAMILY_OPTIONS,
+  CODE_FONT_SIZE_MAX,
+  CODE_FONT_SIZE_MIN,
+  UI_FONT_FAMILY_OPTIONS,
+  clampCodeFontSize,
+} from "../../../utils/fonts";
 
 import "monaco-editor/esm/vs/language/css/monaco.contribution";
 import "monaco-editor/esm/vs/language/html/monaco.contribution";
@@ -96,6 +104,7 @@ type EditorViewProps = {
   buffersByPath: Record<string, EditorBuffer>;
   availablePaths: string[];
   editorKeymap: EditorKeymap;
+  appSettings: AppSettings;
   workspacePath: string | null;
   launchScript: string | null;
   launchScripts: LaunchScriptEntry[];
@@ -106,6 +115,7 @@ type EditorViewProps = {
   onOpenPath: (path: string) => void;
   onContentChange: (path: string, value: string) => void;
   onSavePath: (path: string) => void;
+  onUpdateAppSettings: (next: AppSettings) => Promise<unknown>;
   onRunLaunchScript: () => void;
   onRunLaunchScriptEntry: (id: string) => void;
   onMonacoReady?: (
@@ -256,6 +266,7 @@ export function EditorView({
   buffersByPath,
   availablePaths,
   editorKeymap,
+  appSettings,
   workspacePath,
   launchScript,
   launchScripts,
@@ -266,6 +277,7 @@ export function EditorView({
   onOpenPath,
   onContentChange,
   onSavePath,
+  onUpdateAppSettings,
   onRunLaunchScript,
   onRunLaunchScriptEntry,
   onMonacoReady,
@@ -336,6 +348,26 @@ export function EditorView({
   const [workspaceSymbolError, setWorkspaceSymbolError] = useState<string | null>(null);
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
   const [lineCount, setLineCount] = useState(1);
+  const [editorSettingsOpen, setEditorSettingsOpen] = useState(false);
+  const [tabContextMenu, setTabContextMenu] = useState<{
+    path: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [compactMode, setCompactMode] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    return window.localStorage.getItem("codexmonitor.editorCompactMode") !== "0";
+  });
+  const [wordWrapEnabled, setWordWrapEnabled] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    return window.localStorage.getItem("codexmonitor.editorWordWrap") !== "0";
+  });
+  const settingsPanelRef = useRef<HTMLDivElement | null>(null);
+  const tabContextMenuRef = useRef<HTMLDivElement | null>(null);
   const shiftTapRef = useRef(0);
   const pendingRevealRef = useRef<{ path: string; line: number; column: number } | null>(
     null,
@@ -365,6 +397,16 @@ export function EditorView({
     setWorkspaceSearchOpen(false);
   }, []);
 
+  const updateEditorAppSettings = useCallback(
+    (patch: Partial<AppSettings>) => {
+      void onUpdateAppSettings({
+        ...appSettings,
+        ...patch,
+      });
+    },
+    [appSettings, onUpdateAppSettings],
+  );
+
   useEffect(() => {
     activePathRef.current = activePath;
   }, [activePath]);
@@ -379,7 +421,59 @@ export function EditorView({
     setWorkspaceSymbolError(null);
   }, [workspaceId]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(
+      "codexmonitor.editorCompactMode",
+      compactMode ? "1" : "0",
+    );
+  }, [compactMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(
+      "codexmonitor.editorWordWrap",
+      wordWrapEnabled ? "1" : "0",
+    );
+  }, [wordWrapEnabled]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      if (
+        settingsPanelRef.current?.contains(target) ||
+        tabContextMenuRef.current?.contains(target) ||
+        target.closest(".editor-settings-toggle")
+      ) {
+        return;
+      }
+      setEditorSettingsOpen(false);
+      setTabContextMenu(null);
+    };
+    window.addEventListener("mousedown", handlePointerDown, true);
+    return () => window.removeEventListener("mousedown", handlePointerDown, true);
+  }, []);
+
   const pinnedPathSet = useMemo(() => new Set(pinnedPaths), [pinnedPaths]);
+  const uiFontOptions = useMemo(() => {
+    if (UI_FONT_FAMILY_OPTIONS.includes(appSettings.uiFontFamily)) {
+      return UI_FONT_FAMILY_OPTIONS;
+    }
+    return [appSettings.uiFontFamily, ...UI_FONT_FAMILY_OPTIONS];
+  }, [appSettings.uiFontFamily]);
+  const codeFontOptions = useMemo(() => {
+    if (CODE_FONT_FAMILY_OPTIONS.includes(appSettings.codeFontFamily)) {
+      return CODE_FONT_FAMILY_OPTIONS;
+    }
+    return [appSettings.codeFontFamily, ...CODE_FONT_FAMILY_OPTIONS];
+  }, [appSettings.codeFontFamily]);
 
   const tabs = useMemo(
     () =>
@@ -1183,13 +1277,18 @@ export function EditorView({
     activeBuffer &&
       (activeBuffer.isTruncated || activeBuffer.content.length > 1_000_000),
   );
+  const handleCloseAllTabs = () => {
+    for (const path of openPaths) {
+      onClosePath(path);
+    }
+  };
   const editorOptions = {
     minimap: { enabled: false },
     fontFamily: "var(--code-font-family)",
     fontSize: 13,
     lineHeight: 20,
     scrollBeyondLastLine: false,
-    wordWrap: isLargeFile ? "off" : "on",
+    wordWrap: isLargeFile ? "off" : wordWrapEnabled ? "on" : "off",
     readOnly: activeBuffer?.isTruncated ?? false,
     renderWhitespace: isLargeFile ? "none" : "selection",
     renderLineHighlight: "none",
@@ -1203,7 +1302,7 @@ export function EditorView({
   } as const;
 
   return (
-    <div className="editor-shell">
+    <div className={`editor-shell${compactMode ? " is-compact" : ""}`}>
       <div className="editor-tabs" role="tablist" aria-label="Editor tabs">
         {tabs.length === 0 ? (
           <div className="editor-tabs-empty">Dosya acmak icin soldan sec.</div>
@@ -1214,6 +1313,14 @@ export function EditorView({
               type="button"
               className={`editor-tab${tab.isActive ? " is-active" : ""}`}
               onClick={() => onSelectPath(tab.path)}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setTabContextMenu({
+                  path: tab.path,
+                  x: event.clientX,
+                  y: event.clientY,
+                });
+              }}
               aria-current={tab.isActive ? "page" : undefined}
             >
               {tab.isPinned ? (
@@ -1248,6 +1355,23 @@ export function EditorView({
             </button>
           ))
         )}
+        <div className="editor-tabs-actions" role="group" aria-label="Editor preferences">
+          <button
+            type="button"
+            className={`icon-button editor-view-toggle editor-settings-toggle${
+              editorSettingsOpen ? " is-active" : ""
+            }`}
+            onClick={() => {
+              setEditorSettingsOpen((prev) => !prev);
+              setTabContextMenu(null);
+            }}
+            aria-pressed={editorSettingsOpen}
+            aria-label="Editor settings"
+            title="Editor settings"
+          >
+            <SlidersHorizontal size={14} aria-hidden />
+          </button>
+        </div>
         {activePath ? (
           <div className="editor-tabs-actions" role="group" aria-label="Tab actions">
             <button
@@ -1317,6 +1441,156 @@ export function EditorView({
           </div>
         ) : null}
       </div>
+      {tabContextMenu ? (
+        <div
+          ref={tabContextMenuRef}
+          className="editor-tab-context-menu"
+          style={{ top: tabContextMenu.y, left: tabContextMenu.x }}
+        >
+          <button
+            type="button"
+            className="editor-tab-context-menu__item"
+            onClick={() => {
+              onTogglePinPath(tabContextMenu.path);
+              setTabContextMenu(null);
+            }}
+          >
+            {pinnedPathSet.has(tabContextMenu.path) ? "Unpin tab" : "Pin tab"}
+          </button>
+          <button
+            type="button"
+            className="editor-tab-context-menu__item"
+            onClick={() => {
+              onClosePath(tabContextMenu.path);
+              setTabContextMenu(null);
+            }}
+          >
+            Close
+          </button>
+          <button
+            type="button"
+            className="editor-tab-context-menu__item"
+            onClick={() => {
+              onCloseOtherPaths(tabContextMenu.path);
+              setTabContextMenu(null);
+            }}
+          >
+            Close others
+          </button>
+          <button
+            type="button"
+            className="editor-tab-context-menu__item"
+            onClick={() => {
+              handleCloseAllTabs();
+              setTabContextMenu(null);
+            }}
+            disabled={openPaths.length === 0}
+          >
+            Close all
+          </button>
+        </div>
+      ) : null}
+      {editorSettingsOpen ? (
+        <div className="editor-settings-panel" ref={settingsPanelRef}>
+          <div className="editor-settings-panel__title">Editor settings</div>
+          <label className="editor-settings-panel__field">
+            Theme
+            <select
+              value={appSettings.theme}
+              onChange={(event) =>
+                updateEditorAppSettings({
+                  theme: event.target.value as AppSettings["theme"],
+                })
+              }
+            >
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+              <option value="dim">Dim</option>
+            </select>
+          </label>
+          <label className="editor-settings-panel__field">
+            UI font
+            <select
+              value={appSettings.uiFontFamily}
+              onChange={(event) =>
+                updateEditorAppSettings({
+                  uiFontFamily: event.target.value,
+                })
+              }
+            >
+              {uiFontOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="editor-settings-panel__field">
+            Code font
+            <select
+              value={appSettings.codeFontFamily}
+              onChange={(event) =>
+                updateEditorAppSettings({
+                  codeFontFamily: event.target.value,
+                })
+              }
+            >
+              {codeFontOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="editor-settings-panel__field">
+            Code font size ({appSettings.codeFontSize}px)
+            <input
+              type="range"
+              min={CODE_FONT_SIZE_MIN}
+              max={CODE_FONT_SIZE_MAX}
+              step={1}
+              value={appSettings.codeFontSize}
+              onChange={(event) =>
+                updateEditorAppSettings({
+                  codeFontSize: clampCodeFontSize(Number(event.target.value)),
+                })
+              }
+            />
+          </label>
+          <label className="editor-settings-panel__field">
+            Keymap
+            <select
+              value={appSettings.editorKeymap}
+              onChange={(event) =>
+                updateEditorAppSettings({
+                  editorKeymap: event.target.value as AppSettings["editorKeymap"],
+                })
+              }
+            >
+              <option value="jetbrains">JetBrains</option>
+              <option value="vscode">VS Code</option>
+              <option value="default">Monaco default</option>
+            </select>
+          </label>
+          <label className="editor-settings-panel__toggle">
+            <input
+              type="checkbox"
+              checked={compactMode}
+              onChange={(event) => setCompactMode(event.target.checked)}
+            />
+            Compact layout
+          </label>
+          <label className="editor-settings-panel__toggle">
+            <input
+              type="checkbox"
+              checked={wordWrapEnabled}
+              onChange={(event) => setWordWrapEnabled(event.target.checked)}
+            />
+            Word wrap
+          </label>
+        </div>
+      ) : null}
       {activeBuffer ? (
         <div className="editor-canvas">
           {activeBuffer.isLoading ? (

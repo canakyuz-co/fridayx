@@ -1,4 +1,5 @@
 .editor-shell {
+  position: relative;
   height: 100%;
   width: 100%;
   display: flex;
@@ -6,6 +7,15 @@
   align-items: stretch;
   justify-content: stretch;
   background: var(--surface-sidebar);
+}
+
+.editor-shell.is-compact .editor-tab {
+  min-height: 30px;
+  padding: 0 9px;
+}
+
+.editor-shell.is-compact .editor-statusbar {
+  padding: 4px 10px;
 }
 
 .app.editor-active .content {
@@ -149,6 +159,89 @@
 .editor-tab-close:hover {
   color: var(--text-strong);
   background: var(--surface-hover);
+}
+
+.editor-tab-context-menu {
+  position: fixed;
+  z-index: 50;
+  min-width: 170px;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-card) 94%, black 6%);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
+}
+
+.editor-tab-context-menu__item {
+  border: none;
+  background: transparent;
+  color: var(--text-emphasis);
+  text-align: left;
+  border-radius: 7px;
+  padding: 6px 9px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.editor-tab-context-menu__item:hover {
+  background: var(--surface-hover);
+}
+
+.editor-tab-context-menu__item:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.editor-settings-panel {
+  position: absolute;
+  top: 40px;
+  right: 12px;
+  width: min(340px, calc(100% - 24px));
+  z-index: 40;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-card) 92%, black 8%);
+  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.28);
+}
+
+.editor-settings-panel__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.editor-settings-panel__field {
+  display: grid;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.editor-settings-panel__field select,
+.editor-settings-panel__field input[type="range"] {
+  width: 100%;
+}
+
+.editor-settings-panel__field select {
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+  color: var(--text-emphasis);
+  padding: 0 8px;
+}
+
+.editor-settings-panel__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-emphasis);
 }
 
 .editor-canvas {
