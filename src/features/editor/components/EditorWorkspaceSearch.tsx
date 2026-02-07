@@ -113,12 +113,29 @@ export function EditorWorkspaceSearch({
   onSelectSymbol,
 }: EditorWorkspaceSearchProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const resultsRef = useRef<HTMLDivElement | null>(null);
   const showTextOptions = activeTab === "all" || activeTab === "text";
   const [visibleTextCount, setVisibleTextCount] = useState(80);
+  const [textScrollTop, setTextScrollTop] = useState(0);
+  const [textViewportHeight, setTextViewportHeight] = useState(520);
   const visibleTextResults = useMemo(
     () => results.slice(0, visibleTextCount),
     [results, visibleTextCount],
   );
+  const virtualText = useMemo(() => {
+    const rowHeight = 56;
+    const overscan = 8;
+    const start = Math.max(0, Math.floor(textScrollTop / rowHeight) - overscan);
+    const end = Math.min(
+      results.length,
+      Math.ceil((textScrollTop + textViewportHeight) / rowHeight) + overscan,
+    );
+    return {
+      items: results.slice(start, end),
+      topPad: start * rowHeight,
+      bottomPad: Math.max(0, (results.length - end) * rowHeight),
+    };
+  }, [results, textScrollTop, textViewportHeight]);
 
   const summary = useMemo(() => {
     if (!query.trim()) {
@@ -184,6 +201,18 @@ export function EditorWorkspaceSearch({
   useEffect(() => {
     setVisibleTextCount(80);
   }, [query, activeTab, results.length]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== "text" || !resultsRef.current) {
+      return;
+    }
+    const updateViewport = () => {
+      setTextViewportHeight(resultsRef.current?.clientHeight ?? 520);
+    };
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
+  }, [isOpen, activeTab]);
 
   if (!isOpen) {
     return null;
@@ -287,7 +316,16 @@ export function EditorWorkspaceSearch({
           ) : null}
         </div>
         <div className="editor-workspace-search__summary">{summary}</div>
-        <div className="editor-workspace-search__results">
+        <div
+          ref={resultsRef}
+          className="editor-workspace-search__results"
+          onScroll={(event) => {
+            if (activeTab !== "text") {
+              return;
+            }
+            setTextScrollTop((event.currentTarget as HTMLDivElement).scrollTop);
+          }}
+        >
           {(activeTab === "all" || activeTab === "actions") && actions.length > 0 ? (
             <div className="editor-workspace-search__section">
               <div className="editor-workspace-search__section-title">Actions</div>
@@ -340,7 +378,37 @@ export function EditorWorkspaceSearch({
               ))}
             </div>
           ) : null}
-          {(activeTab === "all" || activeTab === "text") && results.length > 0
+          {activeTab === "text" && results.length > 0 ? (
+            <div
+              className="editor-workspace-search__virtual-list"
+              style={{ paddingTop: virtualText.topPad, paddingBottom: virtualText.bottomPad }}
+            >
+              {virtualText.items.map((result) => (
+                <button
+                  key={`${result.path}:${result.line}:${result.column}`}
+                  type="button"
+                  className="editor-workspace-search__result"
+                  onClick={() => onSelectResult(result)}
+                >
+                  <div className="editor-workspace-search__result-icon">
+                    <Hash size={14} aria-hidden />
+                  </div>
+                  <div className="editor-workspace-search__result-path">
+                    {highlightMatch(result.lineText, result.matchText)}
+                  </div>
+                  <div className="editor-workspace-search__result-line">
+                    <span className="editor-workspace-search__result-loc">
+                      {result.line}:{result.column}
+                    </span>
+                    <span className="editor-workspace-search__result-text">
+                      {result.path}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {activeTab === "all" && results.length > 0
             ? visibleTextResults.map((result) => (
                 <button
                   key={`${result.path}:${result.line}:${result.column}`}

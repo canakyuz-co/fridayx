@@ -144,6 +144,11 @@
   padding: 6px 10px 12px;
 }
 
+.editor-workspace-search__virtual-list {
+  display: flex;
+  flex-direction: column;
+}
+
 .editor-workspace-search__section {
   padding: 4px 0 10px;
 }

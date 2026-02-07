@@ -117,6 +117,48 @@
   color: var(--text-emphasis);
 }
 
+.file-tree-create-inline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.file-tree-create-input {
+  min-width: 0;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+  color: var(--text-emphasis);
+  padding: 0 10px;
+  font-size: 12px;
+  outline: none;
+}
+
+.file-tree-create-input:focus {
+  border-color: var(--border-strong);
+}
+
+.file-tree-create-button {
+  height: 30px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.file-tree-create-button:hover {
+  color: var(--text-emphasis);
+  border-color: var(--border-strong);
+}
+
+.file-tree-create-error {
+  color: var(--text-error, #ff8d8d);
+  font-size: 11px;
+}
+
 .file-tree-list {
   display: flex;
   flex-direction: column;

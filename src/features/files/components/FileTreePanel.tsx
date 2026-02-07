@@ -62,6 +62,13 @@ type FileTreePanelProps = {
   onSelectOpenAppId: (id: string) => void;
 };
 
+type PendingCreateState = {
+  kind: "file" | "folder";
+  basePath: string;
+  value: string;
+  error: string | null;
+};
+
 type FileTreeBuildNode = {
   name: string;
   path: string;
@@ -195,6 +202,7 @@ export function FileTreePanel({
     end: number;
   } | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [pendingCreate, setPendingCreate] = useState<PendingCreateState | null>(null);
   const [isDragSelecting, setIsDragSelecting] = useState(false);
   const dragAnchorLineRef = useRef<number | null>(null);
   const dragMovedRef = useRef(false);
@@ -374,31 +382,52 @@ export function FileTreePanel({
 
   const handleCreateFile = useCallback(
     async (basePath: string) => {
-      const name = normalizeRelativePath(
-        window.prompt("Yeni dosya adi", "new-file.ts"),
-      );
-      if (!name) {
-        return;
-      }
-      const targetPath = joinPath(basePath, name);
-      await runFileAction(() => createWorkspaceFile(workspaceId, targetPath));
+      setPendingCreate({
+        kind: "file",
+        basePath,
+        value: "new-file.ts",
+        error: null,
+      });
     },
-    [joinPath, normalizeRelativePath, runFileAction, workspaceId],
+    [],
   );
 
   const handleCreateFolder = useCallback(
     async (basePath: string) => {
-      const name = normalizeRelativePath(
-        window.prompt("Yeni klasor adi", "new-folder"),
-      );
-      if (!name) {
-        return;
-      }
-      const targetPath = joinPath(basePath, name);
-      await runFileAction(() => createWorkspaceDir(workspaceId, targetPath));
+      setPendingCreate({
+        kind: "folder",
+        basePath,
+        value: "new-folder",
+        error: null,
+      });
     },
-    [joinPath, normalizeRelativePath, runFileAction, workspaceId],
+    [],
   );
+
+  const submitCreate = useCallback(async () => {
+    if (!pendingCreate) {
+      return;
+    }
+    const normalized = normalizeRelativePath(pendingCreate.value);
+    if (!normalized) {
+      setPendingCreate((prev) =>
+        prev
+          ? {
+              ...prev,
+              error: "Please enter a valid relative path.",
+            }
+          : prev,
+      );
+      return;
+    }
+    const targetPath = joinPath(pendingCreate.basePath, normalized);
+    await runFileAction(() =>
+      pendingCreate.kind === "file"
+        ? createWorkspaceFile(workspaceId, targetPath)
+        : createWorkspaceDir(workspaceId, targetPath),
+    );
+    setPendingCreate(null);
+  }, [joinPath, normalizeRelativePath, pendingCreate, runFileAction, workspaceId]);
 
   const handleDeletePath = useCallback(
     async (relativePath: string) => {
@@ -866,6 +895,57 @@ export function FileTreePanel({
           </button>
         </div>
       </div>
+      {pendingCreate ? (
+        <div className="file-tree-create-inline">
+          <input
+            className="file-tree-create-input"
+            value={pendingCreate.value}
+            onChange={(event) =>
+              setPendingCreate((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      value: event.target.value,
+                      error: null,
+                    }
+                  : prev,
+              )
+            }
+            placeholder={
+              pendingCreate.kind === "file" ? "new-file.ts" : "new-folder"
+            }
+            autoFocus
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void submitCreate();
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                setPendingCreate(null);
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="ghost file-tree-create-button"
+            onClick={() => void submitCreate()}
+            disabled={actionBusy}
+          >
+            Create
+          </button>
+          <button
+            type="button"
+            className="ghost file-tree-create-button"
+            onClick={() => setPendingCreate(null)}
+            disabled={actionBusy}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : null}
+      {pendingCreate?.error ? (
+        <div className="file-tree-create-error">{pendingCreate.error}</div>
+      ) : null}
       <div className="file-tree-list">
         {showLoading ? (
           <div className="file-tree-skeleton">
