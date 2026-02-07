@@ -2412,6 +2412,7 @@ function MainApp() {
     <EditorView
       workspaceId={activeWorkspaceId}
       openPaths={editorState.openPaths}
+      pinnedPaths={editorState.pinnedPaths}
       activePath={editorState.activePath}
       buffersByPath={editorState.buffersByPath}
       availablePaths={files}
@@ -2421,6 +2422,8 @@ function MainApp() {
       launchScripts={launchScriptsState.launchScripts}
       onSelectPath={editorState.setActivePath}
       onClosePath={editorState.closeFile}
+      onCloseOtherPaths={editorState.closeOtherFiles}
+      onTogglePinPath={editorState.togglePinPath}
       onOpenPath={editorState.openFile}
       onContentChange={editorState.updateContent}
       onSavePath={editorState.saveFile}

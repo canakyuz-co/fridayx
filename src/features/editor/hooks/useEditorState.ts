@@ -31,10 +31,13 @@ type UseEditorStateOptions = {
 
 type UseEditorStateResult = {
   openPaths: string[];
+  pinnedPaths: string[];
   activePath: string | null;
   buffersByPath: Record<string, EditorBuffer>;
   openFile: (path: string) => void;
   closeFile: (path: string) => void;
+  closeOtherFiles: (path: string) => void;
+  togglePinPath: (path: string) => void;
   setActivePath: (path: string) => void;
   updateContent: (path: string, value: string) => void;
   saveFile: (path: string) => void;
@@ -78,6 +81,19 @@ function computeSinglePatch(previous: string, next: string): TextPatch | null {
   };
 }
 
+function orderOpenPaths(paths: string[], pinnedPaths: Set<string>): string[] {
+  const pinned: string[] = [];
+  const regular: string[] = [];
+  for (const path of paths) {
+    if (pinnedPaths.has(path)) {
+      pinned.push(path);
+    } else {
+      regular.push(path);
+    }
+  }
+  return [...pinned, ...regular];
+}
+
 
 export function useEditorState({
   workspaceId,
@@ -86,11 +102,14 @@ export function useEditorState({
   onDidSave,
 }: UseEditorStateOptions): UseEditorStateResult {
   const [openPaths, setOpenPaths] = useState<string[]>([]);
+  const [pinnedPaths, setPinnedPaths] = useState<Set<string>>(new Set());
   const [activePath, setActivePath] = useState<string | null>(null);
   const [buffersByPath, setBuffersByPath] = useState<Record<string, EditorBuffer>>({});
   const latestBuffersRef = useRef<Record<string, EditorBuffer>>({});
   const rustMetaByPathRef = useRef<Record<string, RustBufferMeta>>({});
   const rustSyncQueueRef = useRef<Record<string, Promise<void>>>({});
+  const latestOpenPathsRef = useRef<string[]>([]);
+  const latestPinnedPathsRef = useRef<Set<string>>(new Set());
   const textEncoderRef = useRef(new TextEncoder());
   const hasRestoredRef = useRef(false);
 
@@ -227,7 +246,10 @@ export function useEditorState({
     }
     rustMetaByPathRef.current = {};
     rustSyncQueueRef.current = {};
+    latestOpenPathsRef.current = [];
+    latestPinnedPathsRef.current = new Set();
     setOpenPaths([]);
+    setPinnedPaths(new Set());
     setActivePath(null);
     setBuffersByPath({});
     hasRestoredRef.current = false;
@@ -236,6 +258,14 @@ export function useEditorState({
   useEffect(() => {
     latestBuffersRef.current = buffersByPath;
   }, [buffersByPath]);
+
+  useEffect(() => {
+    latestOpenPathsRef.current = openPaths;
+  }, [openPaths]);
+
+  useEffect(() => {
+    latestPinnedPathsRef.current = pinnedPaths;
+  }, [pinnedPaths]);
 
   useEffect(() => {
     if (!workspaceId || !filesReady) {
@@ -284,19 +314,68 @@ export function useEditorState({
     }
     delete rustMetaByPathRef.current[path];
     delete rustSyncQueueRef.current[path];
+    setPinnedPaths((prev) => {
+      if (!prev.has(path)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.delete(path);
+      return next;
+    });
     setOpenPaths((prev) => {
       const next = prev.filter((entry) => entry !== path);
+      const ordered = orderOpenPaths(next, latestPinnedPathsRef.current);
       setActivePath((current) => {
         if (current !== path) {
           return current;
         }
-        return next[next.length - 1] ?? null;
+        return ordered[ordered.length - 1] ?? null;
       });
       return next;
     });
     setBuffersByPath((prev) => {
       const next = { ...prev };
       delete next[path];
+      return next;
+    });
+  }, []);
+
+  const closeOtherFiles = useCallback((path: string) => {
+    const keepPinned = latestPinnedPathsRef.current;
+    const toClose = latestOpenPathsRef.current.filter(
+      (entry) => entry !== path && !keepPinned.has(entry),
+    );
+    for (const closePath of toClose) {
+      const buffer = latestBuffersRef.current[closePath];
+      if (buffer?.rustBufferId) {
+        void editorClose(buffer.rustBufferId).catch(() => {});
+      }
+      delete rustMetaByPathRef.current[closePath];
+      delete rustSyncQueueRef.current[closePath];
+    }
+    setOpenPaths((prev) =>
+      prev.filter((entry) => entry === path || keepPinned.has(entry)),
+    );
+    setBuffersByPath((prev) => {
+      const next: Record<string, EditorBuffer> = {};
+      for (const [entryPath, entry] of Object.entries(prev)) {
+        if (entryPath === path || keepPinned.has(entryPath)) {
+          next[entryPath] = entry;
+        }
+      }
+      return next;
+    });
+    setActivePath(path);
+  }, []);
+
+  const togglePinPath = useCallback((path: string) => {
+    setPinnedPaths((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
       return next;
     });
   }, []);
@@ -482,11 +561,14 @@ export function useEditorState({
   );
 
   return {
-    openPaths,
+    openPaths: orderOpenPaths(openPaths, pinnedPaths),
+    pinnedPaths: Array.from(pinnedPaths),
     activePath,
     buffersByPath,
     openFile,
     closeFile,
+    closeOtherFiles,
+    togglePinPath,
     setActivePath,
     updateContent,
     saveFile,

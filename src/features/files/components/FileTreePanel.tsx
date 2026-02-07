@@ -441,6 +441,56 @@ export function FileTreePanel({
     [],
   );
 
+  useEffect(() => {
+    if (!showCreateActions) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat || actionBusy) {
+        return;
+      }
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        const tagName = target.tagName.toLowerCase();
+        if (
+          target.isContentEditable ||
+          tagName === "input" ||
+          tagName === "textarea" ||
+          tagName === "select"
+        ) {
+          return;
+        }
+      }
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) {
+        return;
+      }
+      if (event.key.toLowerCase() !== "n") {
+        return;
+      }
+      event.preventDefault();
+      if (pendingCreate || pendingRename || pendingMove) {
+        setPendingCreate(null);
+        setPendingRename(null);
+        setPendingMove(null);
+      }
+      if (event.shiftKey) {
+        void handleCreateFolder("");
+        return;
+      }
+      void handleCreateFile("");
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [
+    actionBusy,
+    handleCreateFile,
+    handleCreateFolder,
+    pendingCreate,
+    pendingMove,
+    pendingRename,
+    showCreateActions,
+  ]);
+
   const submitCreate = useCallback(async () => {
     if (!pendingCreate) {
       return;

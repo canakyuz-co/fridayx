@@ -126,6 +126,11 @@
   white-space: nowrap;
 }
 
+.editor-tab-pin {
+  display: inline-flex;
+  color: var(--text-faint);
+}
+
 .editor-tab-dirty {
   color: var(--text-accent);
   font-size: 10px;

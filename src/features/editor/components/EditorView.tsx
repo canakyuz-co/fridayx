@@ -5,6 +5,8 @@ import Close from "lucide-react/dist/esm/icons/x";
 import Code from "lucide-react/dist/esm/icons/code";
 import Columns2 from "lucide-react/dist/esm/icons/columns-2";
 import Eye from "lucide-react/dist/esm/icons/eye";
+import Pin from "lucide-react/dist/esm/icons/pin";
+import PinOff from "lucide-react/dist/esm/icons/pin-off";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorPlaceholder } from "./EditorPlaceholder";
 import { Markdown } from "../../messages/components/Markdown";
@@ -89,6 +91,7 @@ type WorkspaceSearchAction = {
 type EditorViewProps = {
   workspaceId: string | null;
   openPaths: string[];
+  pinnedPaths: string[];
   activePath: string | null;
   buffersByPath: Record<string, EditorBuffer>;
   availablePaths: string[];
@@ -98,6 +101,8 @@ type EditorViewProps = {
   launchScripts: LaunchScriptEntry[];
   onSelectPath: (path: string) => void;
   onClosePath: (path: string) => void;
+  onCloseOtherPaths: (path: string) => void;
+  onTogglePinPath: (path: string) => void;
   onOpenPath: (path: string) => void;
   onContentChange: (path: string, value: string) => void;
   onSavePath: (path: string) => void;
@@ -246,6 +251,7 @@ function computeSinglePatch(previous: string, next: string): TextPatch | null {
 export function EditorView({
   workspaceId,
   openPaths,
+  pinnedPaths,
   activePath,
   buffersByPath,
   availablePaths,
@@ -255,6 +261,8 @@ export function EditorView({
   launchScripts,
   onSelectPath,
   onClosePath,
+  onCloseOtherPaths,
+  onTogglePinPath,
   onOpenPath,
   onContentChange,
   onSavePath,
@@ -371,15 +379,18 @@ export function EditorView({
     setWorkspaceSymbolError(null);
   }, [workspaceId]);
 
+  const pinnedPathSet = useMemo(() => new Set(pinnedPaths), [pinnedPaths]);
+
   const tabs = useMemo(
     () =>
       openPaths.map((path) => ({
         path,
         name: path.split("/").pop() ?? path,
         isActive: path === activePath,
+        isPinned: pinnedPathSet.has(path),
         buffer: buffersByPath[path],
       })),
-    [openPaths, activePath, buffersByPath],
+    [openPaths, activePath, buffersByPath, pinnedPathSet],
   );
 
   const applyTheme = useCallback((monaco: Monaco) => {
@@ -1205,6 +1216,11 @@ export function EditorView({
               onClick={() => onSelectPath(tab.path)}
               aria-current={tab.isActive ? "page" : undefined}
             >
+              {tab.isPinned ? (
+                <span className="editor-tab-pin" aria-hidden>
+                  <Pin size={11} />
+                </span>
+              ) : null}
               <span className="editor-tab-title">{tab.name}</span>
               {tab.buffer?.isDirty ? (
                 <span className="editor-tab-dirty" aria-hidden>
@@ -1232,6 +1248,34 @@ export function EditorView({
             </button>
           ))
         )}
+        {activePath ? (
+          <div className="editor-tabs-actions" role="group" aria-label="Tab actions">
+            <button
+              type="button"
+              className="icon-button editor-view-toggle"
+              onClick={() => onTogglePinPath(activePath)}
+              aria-pressed={pinnedPathSet.has(activePath)}
+              aria-label={pinnedPathSet.has(activePath) ? "Unpin tab" : "Pin tab"}
+              title={pinnedPathSet.has(activePath) ? "Unpin tab" : "Pin tab"}
+            >
+              {pinnedPathSet.has(activePath) ? (
+                <PinOff size={14} aria-hidden />
+              ) : (
+                <Pin size={14} aria-hidden />
+              )}
+            </button>
+            <button
+              type="button"
+              className="icon-button editor-view-toggle"
+              onClick={() => onCloseOtherPaths(activePath)}
+              disabled={openPaths.length <= 1}
+              aria-label="Close other tabs"
+              title="Close other tabs"
+            >
+              <Close size={14} aria-hidden />
+            </button>
+          </div>
+        ) : null}
         {hasPreview ? (
           <div className="editor-tabs-actions" role="group" aria-label="Preview view">
             <button
