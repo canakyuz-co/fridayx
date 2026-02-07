@@ -209,6 +209,7 @@ function MainApp() {
     scaleShortcutText,
     queueSaveSettings,
     otherAiModelsSyncPercent,
+    otherAiModelRegistryByProvider,
   } = useAppSettingsController();
   useCodeCssVars(appSettings);
   const {
@@ -2549,6 +2550,7 @@ function MainApp() {
           },
           scaleShortcutTitle,
           scaleShortcutText,
+          otherAiModelRegistryByProvider,
           onTestNotificationSound: handleTestNotificationSound,
           onTestSystemNotification: handleTestSystemNotification,
           dictationModelStatus: dictationModel.status,

@@ -62,6 +62,7 @@ import {
   normalizeModelList,
 } from "../../../utils/otherAiModels";
 import { discoverOtherAiModels } from "../../../utils/otherAiProviderEngine";
+import type { OtherAiModelRegistryEntry } from "../../../utils/otherAiProviderEngine";
 import { DEFAULT_OPEN_APP_ID, OPEN_APP_STORAGE_KEY } from "../../app/constants";
 import { GENERIC_APP_ICON, getKnownOpenAppIcon } from "../../app/utils/openAppIcons";
 import { useGlobalAgentsMd } from "../hooks/useGlobalAgentsMd";
@@ -283,6 +284,7 @@ export type SettingsViewProps = {
   ) => Promise<void>;
   scaleShortcutTitle: string;
   scaleShortcutText: string;
+  otherAiModelRegistryByProvider?: Record<string, OtherAiModelRegistryEntry[]>;
   onTestNotificationSound: () => void;
   onTestSystemNotification: () => void;
   dictationModelStatus?: DictationModelStatus | null;
@@ -425,6 +427,7 @@ export function SettingsView({
   onUpdateWorkspaceSettings,
   scaleShortcutTitle,
   scaleShortcutText,
+  otherAiModelRegistryByProvider = {},
   onTestNotificationSound,
   onTestSystemNotification,
   dictationModelStatus,
@@ -4129,6 +4132,17 @@ export function SettingsView({
                     envText: formatEnvText(provider.env),
                   };
                   const fetchState = otherAiFetchState[provider.id];
+                  const registryRows = otherAiModelRegistryByProvider[provider.id] ?? [];
+                  const discoverySource = registryRows[0]?.source ?? null;
+                  const discoveryLabel = discoverySource
+                    ? discoverySource === "cli"
+                      ? "CLI"
+                      : discoverySource === "api"
+                        ? "API"
+                        : discoverySource === "fallback"
+                          ? "Fallback"
+                          : "Existing"
+                    : null;
                   return (
                     <div key={provider.id} className="settings-field">
                       <div className="settings-toggle-row">
@@ -4285,6 +4299,7 @@ export function SettingsView({
                       <div className="settings-help">
                         One model per line or comma-separated. These appear in the model picker.
                         Uses API discovery for Claude/Gemini when you fetch.
+                        {discoveryLabel ? ` Last discovery source: ${discoveryLabel}.` : ""}
                       </div>
                     </div>
                   );

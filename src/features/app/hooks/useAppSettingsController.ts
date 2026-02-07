@@ -11,6 +11,7 @@ export function useAppSettingsController() {
     doctor,
     isLoading: appSettingsLoading,
     otherAiModelsSyncPercent,
+    otherAiModelRegistryByProvider,
   } = useAppSettings();
 
   useThemePreference(appSettings.theme);
@@ -41,5 +42,6 @@ export function useAppSettingsController() {
     scaleShortcutTitle,
     scaleShortcutText,
     otherAiModelsSyncPercent,
+    otherAiModelRegistryByProvider,
   };
 }
