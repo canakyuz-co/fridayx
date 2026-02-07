@@ -1,6 +1,7 @@
 use reqwest::Client;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::fs;
 use std::process::Command;
 
 fn collect_unique_models(items: Vec<String>) -> Vec<String> {
@@ -173,6 +174,7 @@ fn list_claude_models_via_prompt(
     command: &str,
     env: &Option<HashMap<String, String>>,
 ) -> Result<Vec<String>, String> {
+    let cli_version = detect_claude_cli_version(command, env).ok();
     let prompt = "List the available Claude model IDs for this account. \
 Return ONLY a JSON array of model IDs.";
     let args = [
@@ -183,18 +185,193 @@ Return ONLY a JSON array of model IDs.";
         "text",
         prompt,
     ];
-    let stdout = run_cli_with_env(command, &args, env)?;
-    let parsed = serde_json::from_str::<Value>(&stdout).ok();
-    let mut models = if let Some(payload) = parsed {
-        collect_models_from_json("claude", &payload)
-    } else {
-        collect_models_from_text("claude", &stdout)
+    let mut cli_error: Option<String> = None;
+    let prompt_models = match run_cli_with_env(command, &args, env) {
+        Ok(stdout) => {
+            let parsed = serde_json::from_str::<Value>(&stdout).ok();
+            if let Some(payload) = parsed {
+                collect_models_from_json("claude", &payload)
+            } else {
+                collect_models_from_text("claude", &stdout)
+            }
+        }
+        Err(error) => {
+            cli_error = Some(error);
+            Vec::new()
+        }
     };
-    models = collect_unique_models(models);
-    if models.is_empty() {
-        return Err("Claude CLI returned no models.".to_string());
+    let mut merged = Vec::new();
+    merged.extend(prompt_models);
+    merged.extend(list_claude_models_from_local_cache());
+    merged.extend(known_claude_models_for_version(cli_version.as_ref()));
+    merged = collect_unique_models(merged);
+    if merged.is_empty() {
+        if let Some(version) = cli_version {
+            if is_claude_cli_outdated_for_latest_models(&version) {
+                return Err(format!(
+                    "Claude CLI {} is outdated for latest model discovery. Run `claude update`.",
+                    format_claude_cli_version(&version)
+                ));
+            }
+        }
+        return Err(cli_error.unwrap_or_else(|| "Claude CLI returned no models.".to_string()));
     }
-    Ok(models)
+    Ok(merged)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ClaudeCliVersion {
+    major: u32,
+    minor: u32,
+    patch: u32,
+}
+
+fn parse_claude_cli_version(raw: &str) -> Option<ClaudeCliVersion> {
+    let mut digits = String::new();
+    for ch in raw.chars() {
+        if ch.is_ascii_digit() || ch == '.' {
+            digits.push(ch);
+        } else if !digits.is_empty() {
+            break;
+        }
+    }
+    let mut parts = digits.split('.');
+    let major = parts.next()?.parse::<u32>().ok()?;
+    let minor = parts.next().unwrap_or("0").parse::<u32>().ok()?;
+    let patch = parts.next().unwrap_or("0").parse::<u32>().ok()?;
+    Some(ClaudeCliVersion {
+        major,
+        minor,
+        patch,
+    })
+}
+
+fn detect_claude_cli_version(
+    command: &str,
+    env: &Option<HashMap<String, String>>,
+) -> Result<ClaudeCliVersion, String> {
+    let output = run_cli_with_env(command, &["--version"], env)?;
+    parse_claude_cli_version(&output)
+        .ok_or_else(|| format!("Unable to parse Claude CLI version from: {}", output.trim()))
+}
+
+fn format_claude_cli_version(version: &ClaudeCliVersion) -> String {
+    format!("{}.{}.{}", version.major, version.minor, version.patch)
+}
+
+fn compare_claude_cli_versions(
+    left: &ClaudeCliVersion,
+    right: &ClaudeCliVersion,
+) -> std::cmp::Ordering {
+    left.major
+        .cmp(&right.major)
+        .then(left.minor.cmp(&right.minor))
+        .then(left.patch.cmp(&right.patch))
+}
+
+fn is_claude_cli_outdated_for_latest_models(version: &ClaudeCliVersion) -> bool {
+    compare_claude_cli_versions(
+        version,
+        &ClaudeCliVersion {
+            major: 2,
+            minor: 1,
+            patch: 34,
+        },
+    ) == std::cmp::Ordering::Less
+}
+
+fn known_claude_models_for_version(version: Option<&ClaudeCliVersion>) -> Vec<String> {
+    let mut models = vec![
+        "claude-sonnet-4-5".to_string(),
+        "claude-opus-4-5".to_string(),
+        "claude-haiku-4-5".to_string(),
+    ];
+    if let Some(cli_version) = version {
+        if !is_claude_cli_outdated_for_latest_models(cli_version) {
+            models.extend([
+                "claude-sonnet-4-6".to_string(),
+                "claude-opus-4-6".to_string(),
+                "claude-haiku-4-6".to_string(),
+            ]);
+        }
+    }
+    models
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        known_claude_models_for_version, parse_claude_cli_version, ClaudeCliVersion,
+    };
+
+    #[test]
+    fn parse_claude_cli_version_reads_semver_prefix() {
+        let parsed = parse_claude_cli_version("2.1.34 (Claude Code)");
+        assert_eq!(
+            parsed,
+            Some(ClaudeCliVersion {
+                major: 2,
+                minor: 1,
+                patch: 34
+            })
+        );
+    }
+
+    #[test]
+    fn known_models_include_46_on_new_cli() {
+        let version = ClaudeCliVersion {
+            major: 2,
+            minor: 1,
+            patch: 34,
+        };
+        let models = known_claude_models_for_version(Some(&version));
+        assert!(models.iter().any(|model| model == "claude-sonnet-4-6"));
+    }
+}
+
+fn list_claude_models_from_local_cache() -> Vec<String> {
+    let home = match std::env::var_os("HOME") {
+        Some(value) if !value.is_empty() => value,
+        _ => return Vec::new(),
+    };
+    let stats_path = std::path::PathBuf::from(home).join(".claude/stats-cache.json");
+    let raw = match fs::read_to_string(stats_path) {
+        Ok(value) => value,
+        Err(_) => return Vec::new(),
+    };
+    let payload = match serde_json::from_str::<Value>(&raw) {
+        Ok(value) => value,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut models = Vec::new();
+    collect_claude_model_ids_recursive(&payload, &mut models);
+    collect_unique_models(models)
+}
+
+fn collect_claude_model_ids_recursive(value: &Value, output: &mut Vec<String>) {
+    match value {
+        Value::String(text) => {
+            let trimmed = text.trim();
+            if trimmed.starts_with("claude-") {
+                output.push(trimmed.to_string());
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                collect_claude_model_ids_recursive(item, output);
+            }
+        }
+        Value::Object(map) => {
+            for (key, item) in map {
+                if key.starts_with("claude-") {
+                    output.push(key.to_string());
+                }
+                collect_claude_model_ids_recursive(item, output);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn run_cli_with_env(
