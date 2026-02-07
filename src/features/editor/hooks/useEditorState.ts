@@ -4,7 +4,6 @@ import {
   editorClose,
   editorFlushToDisk,
   editorOpen,
-  readWorkspaceFile,
   writeWorkspaceFile,
 } from "../../../services/tauri";
 import { monacoLanguageFromPath } from "../../../utils/languageRegistry";
@@ -164,24 +163,19 @@ export function useEditorState({
       });
       void (async () => {
         try {
-          const response = await readWorkspaceFile(workspaceId, path);
+          const snapshot = await editorOpen(workspaceId, path);
+          const initialContent = snapshot.initialContent ?? "";
           let rustBufferId: number | null = null;
           let rustVersion: number | null = null;
           let rustByteLen = 0;
-          try {
-            const snapshot = await editorOpen(workspaceId, path, response.content);
-            rustBufferId = snapshot.bufferId;
-            rustVersion = snapshot.version;
-            rustByteLen = snapshot.byteLen;
-            rustMetaByPathRef.current[path] = {
-              bufferId: snapshot.bufferId,
-              version: snapshot.version,
-              byteLen: snapshot.byteLen,
-            };
-          } catch {
-            // Keep local editing usable even if Rust core buffer init fails.
-            delete rustMetaByPathRef.current[path];
-          }
+          rustBufferId = snapshot.bufferId;
+          rustVersion = snapshot.version;
+          rustByteLen = snapshot.byteLen;
+          rustMetaByPathRef.current[path] = {
+            bufferId: snapshot.bufferId,
+            version: snapshot.version,
+            byteLen: snapshot.byteLen,
+          };
           setBuffersByPath((prev) => {
             const current = prev[path];
           if (!current) {
@@ -191,10 +185,10 @@ export function useEditorState({
             ...prev,
             [path]: {
               ...current,
-              content: response.content,
+              content: initialContent,
               isLoading: false,
               error: null,
-              isTruncated: response.truncated,
+              isTruncated: Boolean(snapshot.truncated),
               rustBufferId,
               rustVersion,
               rustByteLen,

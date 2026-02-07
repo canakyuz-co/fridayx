@@ -62,6 +62,8 @@ pub(crate) struct EditorBufferSnapshotResponse {
     line_count: u32,
     byte_len: u64,
     is_dirty: bool,
+    initial_content: Option<String>,
+    truncated: bool,
 }
 
 #[derive(Serialize)]
@@ -107,6 +109,8 @@ fn to_editor_snapshot_response(
         line_count: snapshot.line_count,
         byte_len: snapshot.byte_len,
         is_dirty: snapshot.is_dirty,
+        initial_content: None,
+        truncated: false,
     }
 }
 
@@ -171,21 +175,25 @@ pub(crate) async fn editor_open(
     content: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<EditorBufferSnapshotResponse, String> {
-    let initial_content = if let Some(content) = content {
-        content
+    let (initial_content, truncated) = if let Some(content) = content {
+        (content, false)
     } else {
-        workspaces_core::read_workspace_file_core(
+        let file = workspaces_core::read_workspace_file_core(
             &state.workspaces,
             &workspace_id,
             &path,
             |root, rel_path| read_workspace_file_inner(root, rel_path),
         )
-        .await?
-        .content
+        .await?;
+        (file.content, file.truncated)
     };
     let mut editor = state.editor_core.lock().await;
-    let snapshot = editor.open_buffer(workspace_id, path, initial_content);
-    Ok(to_editor_snapshot_response(snapshot))
+    let snapshot = editor.open_buffer(workspace_id, path, initial_content.clone());
+    Ok(EditorBufferSnapshotResponse {
+        initial_content: Some(initial_content),
+        truncated,
+        ..to_editor_snapshot_response(snapshot)
+    })
 }
 
 #[tauri::command]

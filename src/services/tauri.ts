@@ -757,6 +757,8 @@ export type EditorBufferSnapshot = {
   lineCount: number;
   byteLen: number;
   isDirty: boolean;
+  initialContent?: string | null;
+  truncated?: boolean;
 };
 
 export type EditorReadRangeResponse = {
