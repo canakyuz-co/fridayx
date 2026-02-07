@@ -32,6 +32,9 @@
 % NOTE: We compile with XeLaTeX/Tectonic (XeTeX). Babel's `bidi=basic` requires LuaLaTeX.
 % Turkish is LTR, so we keep bidi off for engine compatibility.
 \usepackage[main=turkish, english]{babel}
+% Turkish babel shorthands (notably ':', '!' and '=') can interfere with packages
+% like hyperref; disable them for stable compilation.
+\AtBeginDocument{\shorthandoff{:=!}}
 
 % NOTE: Default LaTeX fonts (Latin Modern via lmodern) are used for maximum compatibility.
 
@@ -153,7 +156,7 @@ Fridex'in gelişimi üç ana sütun üzerine inşa edilir:
 \end{itemize}
 
 \section{Üretim Guardrail'leri (Özet)}
-FridayX üretim rehberi; \textbf{DRY, KISS, YAGNI} ile birlikte performans ve güvenliği “birinci sınıf gereksinim” kabul eder:
+FridayX üretim rehberi; \textbf{DRY, KISS, YAGNI} ile birlikte performans ve güvenliği ``birinci sınıf gereksinim'' kabul eder:
 \begin{itemize}
   \item \textbf{Multi-tenant izolasyonu:} \texttt{tenant\_id} bağlamı zorunlu; çapraz tenant erişim \textbf{yasak}.
   \item \textbf{RBAC/ABAC:} deny-default; kararlar audit edilebilir olmalı.
@@ -194,7 +197,7 @@ Editör \textbf{kod görünümü} ile \textbf{önizleme}yi ayrıştırır:
   \item Markdown dosyaları için \textbf{HTML preview}.
   \item LaTeX dosyaları için \textbf{PDF compile + preview}.
 \end{itemize}
-Bu döküman, FridayX editörde LaTeX önizleme hattının “tek dosya” modunda kusursuz çalışmasını hedefler.
+Bu döküman, FridayX editörde LaTeX önizleme hattının ``tek dosya'' modunda kusursuz çalışmasını hedefler.
 
 \newpage
 
@@ -205,10 +208,10 @@ Bu döküman, FridayX editörde LaTeX önizleme hattının “tek dosya” modun
 
 \section{Aktif Çıkarım (Active Inference) Teorisi}
 Fridex, belirsizliği (entropy) azaltmaya çalışan bir ajan olarak modellenir.
-Bu yaklaşım, Karl Friston'ın “Serbest Enerji Prensibi” çizgisinde özetlenir.
+Bu yaklaşım, Karl Friston'ın ``Serbest Enerji Prensibi'' çizgisinde özetlenir.
 
 \subsection{Varyasyonel Serbest Enerji (VFE)}
-Sistem, duyusal girdi ile içsel dünya modeli arasındaki “sürprizi” minimize eder:
+Sistem, duyusal girdi ile içsel dünya modeli arasındaki ``sürprizi'' minimize eder:
 \begin{equation}
   \mathcal{F} = \mathrm{D}_{KL}[Q(s) \,\|\, P(s,o)]
 \end{equation}
