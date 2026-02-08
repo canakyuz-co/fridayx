@@ -6,7 +6,6 @@ import Code from "lucide-react/dist/esm/icons/code";
 import Columns2 from "lucide-react/dist/esm/icons/columns-2";
 import Eye from "lucide-react/dist/esm/icons/eye";
 import Pin from "lucide-react/dist/esm/icons/pin";
-import SlidersHorizontal from "lucide-react/dist/esm/icons/sliders-horizontal";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorPlaceholder } from "./EditorPlaceholder";
 import { Markdown } from "../../messages/components/Markdown";
@@ -1381,25 +1380,6 @@ export function EditorView({
             </span>
           </button>
         ))}
-        {tabs.length > 0 ? (
-          <div className="editor-tabs-actions" role="group" aria-label="Editor preferences">
-            <button
-              type="button"
-              className={`icon-button editor-view-toggle editor-settings-toggle${
-                editorSettingsOpen ? " is-active" : ""
-              }`}
-              onClick={() => {
-                setEditorSettingsOpen((prev) => !prev);
-                setTabContextMenu(null);
-              }}
-              aria-pressed={editorSettingsOpen}
-              aria-label="Editor settings"
-              title="Editor settings"
-            >
-              <SlidersHorizontal size={14} aria-hidden />
-            </button>
-          </div>
-        ) : null}
         {hasPreview ? (
           <div className="editor-tabs-actions" role="group" aria-label="Preview view">
             <button
