@@ -69,7 +69,6 @@ type MessageRowProps = {
   isCopied: boolean;
   onCopy: (item: Extract<ConversationItem, { kind: "message" }>) => void;
   codeBlockCopyUseModifier?: boolean;
-  workspacePath?: string | null;
   onOpenFileLink?: (path: string) => void;
   onOpenFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
   onOpenThreadLink?: (threadId: string) => void;
@@ -80,7 +79,6 @@ type ReasoningRowProps = {
   parsed: ReturnType<typeof parseReasoning>;
   isExpanded: boolean;
   onToggle: (id: string) => void;
-  workspacePath?: string | null;
   onOpenFileLink?: (path: string) => void;
   onOpenFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
   onOpenThreadLink?: (threadId: string) => void;
@@ -88,7 +86,6 @@ type ReasoningRowProps = {
 
 type ReviewRowProps = {
   item: Extract<ConversationItem, { kind: "review" }>;
-  workspacePath?: string | null;
   onOpenFileLink?: (path: string) => void;
   onOpenFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
   onOpenThreadLink?: (threadId: string) => void;
@@ -102,7 +99,6 @@ type ToolRowProps = {
   item: Extract<ConversationItem, { kind: "tool" }>;
   isExpanded: boolean;
   onToggle: (id: string) => void;
-  workspacePath?: string | null;
   onOpenFileLink?: (path: string) => void;
   onOpenFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
   onOpenThreadLink?: (threadId: string) => void;
@@ -677,7 +673,6 @@ const MessageRow = memo(function MessageRow({
   isCopied,
   onCopy,
   codeBlockCopyUseModifier,
-  workspacePath,
   onOpenFileLink,
   onOpenFileLinkMenu,
   onOpenThreadLink,
@@ -715,7 +710,6 @@ const MessageRow = memo(function MessageRow({
             className="markdown"
             codeBlockStyle="message"
             codeBlockCopyUseModifier={codeBlockCopyUseModifier}
-            workspacePath={workspacePath}
             onOpenFileLink={onOpenFileLink}
             onOpenFileLinkMenu={onOpenFileLinkMenu}
             onOpenThreadLink={onOpenThreadLink}
@@ -750,7 +744,6 @@ const ReasoningRow = memo(function ReasoningRow({
   parsed,
   isExpanded,
   onToggle,
-  workspacePath,
   onOpenFileLink,
   onOpenFileLinkMenu,
   onOpenThreadLink,
@@ -786,7 +779,6 @@ const ReasoningRow = memo(function ReasoningRow({
             className={`reasoning-inline-detail markdown ${
               isExpanded ? "" : "tool-inline-clamp"
             }`}
-            workspacePath={workspacePath}
             onOpenFileLink={onOpenFileLink}
             onOpenFileLinkMenu={onOpenFileLinkMenu}
             onOpenThreadLink={onOpenThreadLink}
@@ -799,7 +791,6 @@ const ReasoningRow = memo(function ReasoningRow({
 
 const ReviewRow = memo(function ReviewRow({
   item,
-  workspacePath,
   onOpenFileLink,
   onOpenFileLinkMenu,
   onOpenThreadLink,
@@ -819,7 +810,6 @@ const ReviewRow = memo(function ReviewRow({
         <Markdown
           value={item.text}
           className="item-text markdown"
-          workspacePath={workspacePath}
           onOpenFileLink={onOpenFileLink}
           onOpenFileLinkMenu={onOpenFileLinkMenu}
           onOpenThreadLink={onOpenThreadLink}
@@ -847,7 +837,6 @@ const ToolRow = memo(function ToolRow({
   item,
   isExpanded,
   onToggle,
-  workspacePath,
   onOpenFileLink,
   onOpenFileLinkMenu,
   onOpenThreadLink,
@@ -991,7 +980,6 @@ const ToolRow = memo(function ToolRow({
           <Markdown
             value={item.detail}
             className="item-text markdown"
-            workspacePath={workspacePath}
             onOpenFileLink={onOpenFileLink}
             onOpenFileLinkMenu={onOpenFileLinkMenu}
             onOpenThreadLink={onOpenThreadLink}
@@ -1003,7 +991,6 @@ const ToolRow = memo(function ToolRow({
             value={summary.output}
             className="tool-inline-output markdown"
             codeBlock
-            workspacePath={workspacePath}
             onOpenFileLink={onOpenFileLink}
             onOpenFileLinkMenu={onOpenFileLinkMenu}
             onOpenThreadLink={onOpenThreadLink}
@@ -1129,7 +1116,6 @@ export const Messages = memo(function Messages({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const autoScrollRef = useRef(true);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const manuallyToggledExpandedRef = useRef<Set<string>>(new Set());
   const [collapsedToolGroups, setCollapsedToolGroups] = useState<Set<string>>(
     new Set(),
   );
@@ -1180,7 +1166,6 @@ export const Messages = memo(function Messages({
     autoScrollRef.current = true;
   }, [threadId]);
   const toggleExpanded = useCallback((id: string) => {
-    manuallyToggledExpandedRef.current.add(id);
     setExpandedItems((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -1241,30 +1226,6 @@ export const Messages = memo(function Messages({
       }),
     [items, reasoningMetaById],
   );
-
-  useEffect(() => {
-    for (let index = visibleItems.length - 1; index >= 0; index -= 1) {
-      const item = visibleItems[index];
-      if (
-        item.kind === "tool" &&
-        item.toolType === "plan" &&
-        (item.output ?? "").trim().length > 0
-      ) {
-        if (manuallyToggledExpandedRef.current.has(item.id)) {
-          return;
-        }
-        setExpandedItems((prev) => {
-          if (prev.has(item.id)) {
-            return prev;
-          }
-          const next = new Set(prev);
-          next.add(item.id);
-          return next;
-        });
-        return;
-      }
-    }
-  }, [visibleItems]);
 
   useEffect(() => {
     return () => {
@@ -1344,7 +1305,6 @@ export const Messages = memo(function Messages({
           isCopied={isCopied}
           onCopy={handleCopyMessage}
           codeBlockCopyUseModifier={codeBlockCopyUseModifier}
-          workspacePath={workspacePath}
           onOpenFileLink={openFileLink}
           onOpenFileLinkMenu={showFileLinkMenu}
           onOpenThreadLink={onOpenThreadLink}
@@ -1361,7 +1321,6 @@ export const Messages = memo(function Messages({
           parsed={parsed}
           isExpanded={isExpanded}
           onToggle={toggleExpanded}
-          workspacePath={workspacePath}
           onOpenFileLink={openFileLink}
           onOpenFileLinkMenu={showFileLinkMenu}
           onOpenThreadLink={onOpenThreadLink}
@@ -1373,7 +1332,6 @@ export const Messages = memo(function Messages({
         <ReviewRow
           key={item.id}
           item={item}
-          workspacePath={workspacePath}
           onOpenFileLink={openFileLink}
           onOpenFileLinkMenu={showFileLinkMenu}
           onOpenThreadLink={onOpenThreadLink}
@@ -1391,7 +1349,6 @@ export const Messages = memo(function Messages({
           item={item}
           isExpanded={isExpanded}
           onToggle={toggleExpanded}
-          workspacePath={workspacePath}
           onOpenFileLink={openFileLink}
           onOpenFileLinkMenu={showFileLinkMenu}
           onOpenThreadLink={onOpenThreadLink}

@@ -11,7 +11,6 @@ import {
 } from "../../../services/tauri";
 import {
   buildItemsFromThread,
-  getThreadCreatedTimestamp,
   getThreadTimestamp,
   isReviewingFromThread,
   mergeThreadItems,
@@ -19,6 +18,12 @@ import {
 } from "../../../utils/threadItems";
 import { saveThreadActivity } from "../utils/threadStorage";
 import { useThreadActions } from "./useThreadActions";
+
+vi.mock("@sentry/react", () => ({
+  metrics: {
+    count: vi.fn(),
+  },
+}));
 
 vi.mock("../../../services/tauri", () => ({
   startThread: vi.fn(),
@@ -30,7 +35,6 @@ vi.mock("../../../services/tauri", () => ({
 
 vi.mock("../../../utils/threadItems", () => ({
   buildItemsFromThread: vi.fn(),
-  getThreadCreatedTimestamp: vi.fn(),
   getThreadTimestamp: vi.fn(),
   isReviewingFromThread: vi.fn(),
   mergeThreadItems: vi.fn(),
@@ -52,7 +56,6 @@ describe("useThreadActions", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getThreadCreatedTimestamp).mockReturnValue(0);
   });
 
   function renderActions(
@@ -73,7 +76,6 @@ describe("useThreadActions", () => {
       activeThreadIdByWorkspace: {},
       threadListCursorByWorkspace: {},
       threadStatusById: {},
-      threadSortKey: "updated_at",
       getCustomName: () => undefined,
       threadActivityRef,
       loadedThreadsRef,
@@ -375,7 +377,6 @@ describe("useThreadActions", () => {
     expect(dispatch).toHaveBeenCalledWith({
       type: "setThreads",
       workspaceId: "ws-1",
-      sortKey: "updated_at",
       threads: [
         {
           id: "thread-1",
@@ -420,23 +421,6 @@ describe("useThreadActions", () => {
     });
   });
 
-  it("requests created_at sorting when provided", async () => {
-    vi.mocked(listThreads).mockResolvedValue({
-      result: {
-        data: [],
-        nextCursor: null,
-      },
-    });
-
-    const { result } = renderActions({ threadSortKey: "created_at" });
-
-    await act(async () => {
-      await result.current.listThreadsForWorkspace(workspace);
-    });
-
-    expect(listThreads).toHaveBeenCalledWith("ws-1", null, 20, "created_at");
-  });
-
   it("loads older threads when a cursor is available", async () => {
     vi.mocked(listThreads).mockResolvedValue({
       result: {
@@ -475,7 +459,6 @@ describe("useThreadActions", () => {
     expect(dispatch).toHaveBeenCalledWith({
       type: "setThreads",
       workspaceId: "ws-1",
-      sortKey: "updated_at",
       threads: [
         { id: "thread-1", name: "Agent 1", updatedAt: 6000 },
         { id: "thread-2", name: "Older preview", updatedAt: 4000 },

@@ -1,15 +1,6 @@
 import { useEffect, useMemo } from "react";
 import type { ApprovalRequest, WorkspaceInfo } from "../../../types";
 import { getApprovalCommandInfo } from "../../../utils/approvalRules";
-import {
-  ToastActions,
-  ToastBody,
-  ToastCard,
-  ToastError,
-  ToastHeader,
-  ToastTitle,
-  ToastViewport,
-} from "../../design-system/components/toast/ToastPrimitives";
 
 type ApprovalToastsProps = {
   approvals: ApprovalRequest[];
@@ -90,24 +81,24 @@ export function ApprovalToasts({
   };
 
   return (
-    <ToastViewport className="approval-toasts" role="region" ariaLive="assertive">
+    <div className="approval-toasts" role="region" aria-live="assertive">
       {approvals.map((request) => {
         const workspaceName = workspaceLabels.get(request.workspace_id);
         const params = request.params ?? {};
         const commandInfo = getApprovalCommandInfo(params);
         const entries = Object.entries(params);
         return (
-          <ToastCard
+          <div
             key={`${request.workspace_id}-${request.request_id}`}
             className="approval-toast"
             role="alert"
           >
-            <ToastHeader className="approval-toast-header">
-              <ToastTitle className="approval-toast-title">Approval needed</ToastTitle>
+            <div className="approval-toast-header">
+              <div className="approval-toast-title">Approval needed</div>
               {workspaceName ? (
                 <div className="approval-toast-workspace">{workspaceName}</div>
               ) : null}
-            </ToastHeader>
+            </div>
             <div className="approval-toast-method">{methodLabel(request.method)}</div>
             <div className="approval-toast-details">
               {entries.length ? (
@@ -119,13 +110,13 @@ export function ApprovalToasts({
                         {formatLabel(key)}
                       </div>
                       {rendered.isCode ? (
-                        <ToastError className="approval-toast-detail-code">
+                        <pre className="approval-toast-detail-code">
                           {rendered.text}
-                        </ToastError>
+                        </pre>
                       ) : (
-                        <ToastBody className="approval-toast-detail-value">
+                        <div className="approval-toast-detail-value">
                           {rendered.text}
-                        </ToastBody>
+                        </div>
                       )}
                     </div>
                   );
@@ -136,7 +127,7 @@ export function ApprovalToasts({
                 </div>
               )}
             </div>
-            <ToastActions className="approval-toast-actions">
+            <div className="approval-toast-actions">
               <button
                 className="secondary"
                 onClick={() => onDecision(request, "decline")}
@@ -158,10 +149,10 @@ export function ApprovalToasts({
               >
                 Approve (Enter)
               </button>
-            </ToastActions>
-          </ToastCard>
+            </div>
+          </div>
         );
       })}
-    </ToastViewport>
+    </div>
   );
 }

@@ -1,11 +1,4 @@
 import type { ErrorToast } from "../../../services/toasts";
-import {
-  ToastBody,
-  ToastCard,
-  ToastHeader,
-  ToastTitle,
-  ToastViewport,
-} from "../../design-system/components/toast/ToastPrimitives";
 
 type ErrorToastsProps = {
   toasts: ErrorToast[];
@@ -18,11 +11,11 @@ export function ErrorToasts({ toasts, onDismiss }: ErrorToastsProps) {
   }
 
   return (
-    <ToastViewport className="error-toasts" role="region" ariaLive="assertive">
+    <div className="error-toasts" role="region" aria-live="assertive">
       {toasts.map((toast) => (
-        <ToastCard key={toast.id} className="error-toast" role="alert">
-          <ToastHeader className="error-toast-header">
-            <ToastTitle className="error-toast-title">{toast.title}</ToastTitle>
+        <div key={toast.id} className="error-toast" role="alert">
+          <div className="error-toast-header">
+            <div className="error-toast-title">{toast.title}</div>
             <button
               type="button"
               className="ghost error-toast-dismiss"
@@ -32,10 +25,11 @@ export function ErrorToasts({ toasts, onDismiss }: ErrorToastsProps) {
             >
               ×
             </button>
-          </ToastHeader>
-          <ToastBody className="error-toast-body">{toast.message}</ToastBody>
-        </ToastCard>
+          </div>
+          <div className="error-toast-body">{toast.message}</div>
+        </div>
       ))}
-    </ToastViewport>
+    </div>
   );
 }
+

@@ -5,14 +5,6 @@ import type {
   RequestUserInputRequest,
 } from "../../../types";
 import { subscribeAppServerEvents } from "../../../services/events";
-import {
-  getAppServerParams,
-  getAppServerRawMethod,
-  getAppServerRequestId,
-  isApprovalRequestMethod,
-  isSupportedAppServerMethod,
-} from "../../../utils/appServerEvents";
-import type { SupportedAppServerMethod } from "../../../utils/appServerEvents";
 
 type AgentDelta = {
   workspaceId: string;
@@ -92,68 +84,35 @@ type AppServerEventHandlers = {
   ) => void;
 };
 
-export const METHODS_ROUTED_IN_USE_APP_SERVER_EVENTS = [
-  "account/login/completed",
-  "account/rateLimits/updated",
-  "account/updated",
-  "codex/backgroundThread",
-  "codex/connected",
-  "error",
-  "item/agentMessage/delta",
-  "item/commandExecution/outputDelta",
-  "item/commandExecution/terminalInteraction",
-  "item/completed",
-  "item/fileChange/outputDelta",
-  "item/plan/delta",
-  "item/reasoning/summaryPartAdded",
-  "item/reasoning/summaryTextDelta",
-  "item/reasoning/textDelta",
-  "item/started",
-  "item/tool/requestUserInput",
-  "thread/name/updated",
-  "thread/started",
-  "thread/tokenUsage/updated",
-  "turn/completed",
-  "turn/diff/updated",
-  "turn/plan/updated",
-  "turn/started",
-] as const satisfies readonly SupportedAppServerMethod[];
-
 export function useAppServerEvents(handlers: AppServerEventHandlers) {
   useEffect(() => {
     const unlisten = subscribeAppServerEvents((payload) => {
       handlers.onAppServerEvent?.(payload);
 
-      const { workspace_id } = payload;
-      const method = getAppServerRawMethod(payload);
-      if (!method) {
-        return;
-      }
-      const params = getAppServerParams(payload);
+      const { workspace_id, message } = payload;
+      const method = String(message.method ?? "");
 
       if (method === "codex/connected") {
         handlers.onWorkspaceConnected?.(workspace_id);
         return;
       }
 
-      const requestId = getAppServerRequestId(payload);
-      const hasRequestId = requestId !== null;
+      const requestId = message.id;
+      const hasRequestId =
+        typeof requestId === "number" || typeof requestId === "string";
 
-      if (isApprovalRequestMethod(method) && hasRequestId) {
+      if (method.includes("requestApproval") && hasRequestId) {
         handlers.onApprovalRequest?.({
           workspace_id,
-          request_id: requestId as string | number,
+          request_id: requestId,
           method,
-          params,
+          params: (message.params as Record<string, unknown>) ?? {},
         });
         return;
       }
 
-      if (!isSupportedAppServerMethod(method)) {
-        return;
-      }
-
       if (method === "item/tool/requestUserInput" && hasRequestId) {
+        const params = (message.params as Record<string, unknown>) ?? {};
         const questionsRaw = Array.isArray(params.questions) ? params.questions : [];
         const questions = questionsRaw
           .map((entry) => {
@@ -181,7 +140,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
           .filter((question) => question.id);
         handlers.onRequestUserInput?.({
           workspace_id,
-          request_id: requestId as string | number,
+          request_id: requestId,
           params: {
             thread_id: String(params.threadId ?? params.thread_id ?? ""),
             turn_id: String(params.turnId ?? params.turn_id ?? ""),
@@ -193,6 +152,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "item/agentMessage/delta") {
+        const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const itemId = String(params.itemId ?? params.item_id ?? "");
         const delta = String(params.delta ?? "");
@@ -208,6 +168,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "turn/started") {
+        const params = message.params as Record<string, unknown>;
         const turn = params.turn as Record<string, unknown> | undefined;
         const threadId = String(
           params.threadId ?? params.thread_id ?? turn?.threadId ?? turn?.thread_id ?? "",
@@ -220,6 +181,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "thread/started") {
+        const params = message.params as Record<string, unknown>;
         const thread = (params.thread as Record<string, unknown> | undefined) ?? null;
         const threadId = String(thread?.id ?? "");
         if (thread && threadId) {
@@ -229,6 +191,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "thread/name/updated") {
+        const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "").trim();
         const threadNameRaw = params.threadName ?? params.thread_name ?? null;
         const threadName =
@@ -242,6 +205,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "codex/backgroundThread") {
+        const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const action = String(params.action ?? "hide");
         if (threadId) {
@@ -251,6 +215,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "error") {
+        const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const turnId = String(params.turnId ?? params.turn_id ?? "");
         const error = (params.error as Record<string, unknown> | undefined) ?? {};
@@ -266,6 +231,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "turn/completed") {
+        const params = message.params as Record<string, unknown>;
         const turn = params.turn as Record<string, unknown> | undefined;
         const threadId = String(
           params.threadId ?? params.thread_id ?? turn?.threadId ?? turn?.thread_id ?? "",
@@ -278,6 +244,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "turn/plan/updated") {
+        const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const turnId = String(params.turnId ?? params.turn_id ?? "");
         if (threadId) {
@@ -290,6 +257,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "turn/diff/updated") {
+        const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const diff = String(params.diff ?? "");
         if (threadId && diff) {
@@ -299,6 +267,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "thread/tokenUsage/updated") {
+        const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const tokenUsage =
           (params.tokenUsage as Record<string, unknown> | undefined) ??
@@ -310,6 +279,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "account/rateLimits/updated") {
+        const params = message.params as Record<string, unknown>;
         const rateLimits =
           (params.rateLimits as Record<string, unknown> | undefined) ??
           (params.rate_limits as Record<string, unknown> | undefined);
@@ -326,6 +296,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "account/updated") {
+        const params = message.params as Record<string, unknown>;
         const authModeRaw = params.authMode ?? params.auth_mode ?? null;
         const authMode =
           typeof authModeRaw === "string" && authModeRaw.trim().length > 0
@@ -336,6 +307,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "account/login/completed") {
+        const params = message.params as Record<string, unknown>;
         const loginIdRaw = params.loginId ?? params.login_id ?? null;
         const loginId =
           typeof loginIdRaw === "string" && loginIdRaw.trim().length > 0
@@ -354,6 +326,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "item/completed") {
+        const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const item = params.item as Record<string, unknown> | undefined;
         if (threadId && item) {
@@ -375,6 +348,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "item/started") {
+        const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const item = params.item as Record<string, unknown> | undefined;
         if (threadId && item) {
@@ -384,6 +358,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "item/reasoning/summaryTextDelta") {
+        const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const itemId = String(params.itemId ?? params.item_id ?? "");
         const delta = String(params.delta ?? "");
@@ -394,6 +369,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "item/reasoning/summaryPartAdded") {
+        const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const itemId = String(params.itemId ?? params.item_id ?? "");
         if (threadId && itemId) {
@@ -403,6 +379,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "item/reasoning/textDelta") {
+        const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const itemId = String(params.itemId ?? params.item_id ?? "");
         const delta = String(params.delta ?? "");
@@ -413,6 +390,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "item/plan/delta") {
+        const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const itemId = String(params.itemId ?? params.item_id ?? "");
         const delta = String(params.delta ?? "");
@@ -423,6 +401,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "item/commandExecution/outputDelta") {
+        const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const itemId = String(params.itemId ?? params.item_id ?? "");
         const delta = String(params.delta ?? "");
@@ -433,6 +412,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "item/commandExecution/terminalInteraction") {
+        const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const itemId = String(params.itemId ?? params.item_id ?? "");
         const stdin = String(params.stdin ?? "");
@@ -443,6 +423,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "item/fileChange/outputDelta") {
+        const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const itemId = String(params.itemId ?? params.item_id ?? "");
         const delta = String(params.delta ?? "");

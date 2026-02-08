@@ -5,16 +5,10 @@ import Terminal from "lucide-react/dist/esm/icons/terminal";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { BranchInfo, OpenAppTarget, WorkspaceInfo } from "../../../types";
 import type { ReactNode } from "react";
-import { revealInFileManagerLabel } from "../../../utils/platformPaths";
-import { BranchList } from "../../git/components/BranchList";
-import { filterBranches, findExactBranch } from "../../git/utils/branchSearch";
-import { validateBranchName } from "../../git/utils/branchValidation";
-import { PopoverSurface } from "../../design-system/components/popover/PopoverPrimitives";
 import { OpenAppMenu } from "./OpenAppMenu";
 import { LaunchScriptButton } from "./LaunchScriptButton";
 import { LaunchScriptEntryButton } from "./LaunchScriptEntryButton";
 import type { WorkspaceLaunchScriptsState } from "../hooks/useWorkspaceLaunchScripts";
-import { useDismissibleMenu } from "../hooks/useDismissibleMenu";
 
 type MainHeaderProps = {
   workspace: WorkspaceInfo;
@@ -115,19 +109,55 @@ export function MainHeader({
   const renameOnCancel = worktreeRename?.onCancel;
 
   const trimmedQuery = branchQuery.trim();
+  const lowercaseQuery = trimmedQuery.toLowerCase();
   const filteredBranches = useMemo(
-    () => filterBranches(branches, branchQuery, { mode: "includes", whenEmptyLimit: 12 }),
-    [branches, branchQuery],
+    () =>
+      trimmedQuery.length > 0
+        ? branches.filter((branch) =>
+            branch.name.toLowerCase().includes(lowercaseQuery),
+          )
+        : branches.slice(0, 12),
+    [branches, lowercaseQuery, trimmedQuery],
   );
   const exactMatch = useMemo(
-    () => findExactBranch(branches, trimmedQuery),
+    () =>
+      trimmedQuery
+        ? branches.find((branch) => branch.name === trimmedQuery) ?? null
+        : null,
     [branches, trimmedQuery],
   );
   const canCreate = trimmedQuery.length > 0 && !exactMatch;
-  const branchValidationMessage = useMemo(
-    () => validateBranchName(trimmedQuery),
-    [trimmedQuery],
-  );
+  const branchValidationMessage = useMemo(() => {
+    if (trimmedQuery.length === 0) {
+      return null;
+    }
+    if (trimmedQuery === "." || trimmedQuery === "..") {
+      return "Branch name cannot be '.' or '..'.";
+    }
+    if (/\s/.test(trimmedQuery)) {
+      return "Branch name cannot contain spaces.";
+    }
+    if (trimmedQuery.startsWith("/") || trimmedQuery.endsWith("/")) {
+      return "Branch name cannot start or end with '/'.";
+    }
+    if (trimmedQuery.endsWith(".lock")) {
+      return "Branch name cannot end with '.lock'.";
+    }
+    if (trimmedQuery.includes("..")) {
+      return "Branch name cannot contain '..'.";
+    }
+    if (trimmedQuery.includes("@{")) {
+      return "Branch name cannot contain '@{'.";
+    }
+    const invalidChars = ["~", "^", ":", "?", "*", "[", "\\"];
+    if (invalidChars.some((char) => trimmedQuery.includes(char))) {
+      return "Branch name contains invalid characters.";
+    }
+    if (trimmedQuery.endsWith(".")) {
+      return "Branch name cannot end with '.'.";
+    }
+    return null;
+  }, [trimmedQuery]);
   const resolvedWorktreePath = worktreePath ?? workspace.path;
   const relativeWorktreePath = useMemo(() => {
     if (!parentPath) {
@@ -142,21 +172,26 @@ export function MainHeader({
     [relativeWorktreePath],
   );
 
-  useDismissibleMenu({
-    isOpen: menuOpen,
-    containerRef: menuRef,
-    onClose: () => {
-      setMenuOpen(false);
-      setBranchQuery("");
-      setError(null);
-    },
-  });
-
-  useDismissibleMenu({
-    isOpen: infoOpen,
-    containerRef: infoRef,
-    onClose: () => setInfoOpen(false),
-  });
+  useEffect(() => {
+    if (!menuOpen && !infoOpen) {
+      return;
+    }
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      const menuContains = menuRef.current?.contains(target) ?? false;
+      const infoContains = infoRef.current?.contains(target) ?? false;
+      if (!menuContains && !infoContains) {
+        setMenuOpen(false);
+        setInfoOpen(false);
+        setBranchQuery("");
+        setError(null);
+      }
+    };
+    window.addEventListener("mousedown", handleClick);
+    return () => {
+      window.removeEventListener("mousedown", handleClick);
+    };
+  }, [infoOpen, menuOpen]);
 
   useEffect(() => {
     if (!infoOpen && renameOnCancel) {
@@ -214,7 +249,7 @@ export function MainHeader({
                 {worktreeLabel || branchName}
               </button>
               {infoOpen && (
-                <PopoverSurface className="worktree-info-popover" role="dialog">
+                <div className="worktree-info-popover popover-surface" role="dialog">
                   {worktreeRename && (
                     <div className="worktree-info-rename">
                       <span className="worktree-info-label">Name</span>
@@ -337,10 +372,10 @@ export function MainHeader({
                       }}
                       data-tauri-drag-region="false"
                     >
-                      {revealInFileManagerLabel()}
+                      Reveal in Finder
                     </button>
                   </div>
-                </PopoverSurface>
+                </div>
               )}
             </div>
           ) : (
@@ -359,8 +394,8 @@ export function MainHeader({
                 </span>
               </button>
               {menuOpen && (
-                <PopoverSurface
-                  className="workspace-branch-dropdown"
+                <div
+                  className="workspace-branch-dropdown popover-surface"
                   role="menu"
                   data-tauri-drag-region="false"
                 >
@@ -409,9 +444,6 @@ export function MainHeader({
                         }}
                         placeholder="Search or create branch"
                         className="branch-input"
-                        autoCorrect="off"
-                        autoCapitalize="none"
-                        spellCheck={false}
                         autoFocus
                         data-tauri-drag-region="false"
                         aria-label="Search branches"
@@ -453,33 +485,41 @@ export function MainHeader({
                       </div>
                     )}
                   </div>
-                  <BranchList
-                    branches={filteredBranches}
-                    currentBranch={branchName}
-                    listClassName="branch-list"
-                    listRole="none"
-                    itemClassName="branch-item"
-                    currentItemClassName="is-active"
-                    itemRole="menuitem"
-                    itemDataTauriDragRegion="false"
-                    emptyClassName="branch-empty"
-                    emptyText="No branches found"
-                    onSelect={async (branch) => {
-                      if (branch.name === branchName) {
-                        return;
-                      }
-                      try {
-                        await onCheckoutBranch(branch.name);
-                        setMenuOpen(false);
-                        setBranchQuery("");
-                        setError(null);
-                      } catch (err) {
-                        setError(err instanceof Error ? err.message : String(err));
-                      }
-                    }}
-                  />
+                  <div className="branch-list" role="none">
+                    {filteredBranches.map((branch) => (
+                      <button
+                        key={branch.name}
+                        type="button"
+                        className={`branch-item${
+                          branch.name === branchName ? " is-active" : ""
+                        }`}
+                        onClick={async () => {
+                          if (branch.name === branchName) {
+                            return;
+                          }
+                          try {
+                            await onCheckoutBranch(branch.name);
+                            setMenuOpen(false);
+                            setBranchQuery("");
+                            setError(null);
+                          } catch (err) {
+                            setError(
+                              err instanceof Error ? err.message : String(err),
+                            );
+                          }
+                        }}
+                        role="menuitem"
+                        data-tauri-drag-region="false"
+                      >
+                        {branch.name}
+                      </button>
+                    ))}
+                    {filteredBranches.length === 0 && (
+                      <div className="branch-empty">No branches found</div>
+                    )}
+                  </div>
                   {error && <div className="branch-error">{error}</div>}
-                </PopoverSurface>
+                </div>
               )}
             </div>
           )}

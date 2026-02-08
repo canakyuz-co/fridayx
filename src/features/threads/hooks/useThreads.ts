@@ -1,11 +1,7 @@
 import { useCallback, useMemo, useReducer, useRef } from "react";
 import * as Sentry from "@sentry/react";
-import type {
-  CustomPromptOption,
-  DebugEntry,
-  ThreadListSortKey,
-  WorkspaceInfo,
-} from "../../../types";
+import type { CustomPromptOption, DebugEntry, OtherAiProvider, WorkspaceInfo } from "../../../types";
+import type { ClaudeRateLimits, ClaudeUsage } from "../../../services/tauri";
 import { useAppServerEvents } from "../../app/hooks/useAppServerEvents";
 import { initialState, threadReducer } from "./useThreadsReducer";
 import { useThreadStorage } from "./useThreadStorage";
@@ -33,8 +29,10 @@ type UseThreadsOptions = {
   reviewDeliveryMode?: "inline" | "detached";
   steerEnabled?: boolean;
   customPrompts?: CustomPromptOption[];
+  otherAiProviders?: OtherAiProvider[];
   onMessageActivity?: () => void;
-  threadSortKey?: ThreadListSortKey;
+  onClaudeRateLimits?: (limits: ClaudeRateLimits) => void;
+  onClaudeUsage?: (usage: ClaudeUsage) => void;
 };
 
 export function useThreads({
@@ -48,8 +46,10 @@ export function useThreads({
   reviewDeliveryMode = "inline",
   steerEnabled = false,
   customPrompts = [],
+  otherAiProviders = [],
   onMessageActivity,
-  threadSortKey = "updated_at",
+  onClaudeRateLimits,
+  onClaudeUsage,
 }: UseThreadsOptions) {
   const [state, dispatch] = useReducer(threadReducer, initialState);
   const loadedThreadsRef = useRef<Record<string, boolean>>({});
@@ -253,7 +253,6 @@ export function useThreads({
     activeThreadIdByWorkspace: state.activeThreadIdByWorkspace,
     threadListCursorByWorkspace: state.threadListCursorByWorkspace,
     threadStatusById: state.threadStatusById,
-    threadSortKey,
     onDebug,
     getCustomName,
     threadActivityRef,
@@ -322,7 +321,6 @@ export function useThreads({
     startFork,
     startReview,
     startResume,
-    startCompact,
     startApps,
     startMcp,
     startStatus,
@@ -356,6 +354,8 @@ export function useThreads({
     reviewDeliveryMode,
     steerEnabled,
     customPrompts,
+    otherAiProviders,
+    itemsByThread: state.itemsByThread,
     threadStatusById: state.threadStatusById,
     activeTurnIdByThread: state.activeTurnIdByThread,
     rateLimitsByWorkspace: state.rateLimitsByWorkspace,
@@ -368,6 +368,8 @@ export function useThreads({
     recordThreadActivity,
     safeMessageActivity,
     onDebug,
+    onClaudeRateLimits,
+    onClaudeUsage,
     pushThreadErrorMessage,
     ensureThreadForActiveWorkspace,
     ensureThreadForWorkspace,
@@ -446,6 +448,7 @@ export function useThreads({
     activeTurnIdByThread: state.activeTurnIdByThread,
     tokenUsageByThread: state.tokenUsageByThread,
     rateLimitsByWorkspace: state.rateLimitsByWorkspace,
+    rateLimitsByWorkspaceModel: state.rateLimitsByWorkspaceModel,
     accountByWorkspace: state.accountByWorkspace,
     planByThread: state.planByThread,
     lastAgentMessageByThread: state.lastAgentMessageByThread,
@@ -470,7 +473,6 @@ export function useThreads({
     startFork,
     startReview,
     startResume,
-    startCompact,
     startApps,
     startMcp,
     startStatus,

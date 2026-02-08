@@ -48,7 +48,7 @@ type WorktreeSectionProps = {
     threadId: string,
     canPin: boolean,
   ) => void;
-  onShowWorktreeMenu: (event: MouseEvent, worktree: WorkspaceInfo) => void;
+  onShowWorktreeMenu: (event: MouseEvent, workspaceId: string) => void;
   onToggleExpanded: (workspaceId: string) => void;
   onLoadOlderThreads: (workspaceId: string) => void;
 };

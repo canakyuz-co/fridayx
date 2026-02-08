@@ -119,8 +119,6 @@ export type ThreadSummary = {
   updatedAt: number;
 };
 
-export type ThreadListSortKey = "created_at" | "updated_at";
-
 export type ReviewTarget =
   | { type: "uncommittedChanges" }
   | { type: "baseBranch"; branch: string }
@@ -178,7 +176,6 @@ export type AppSettings = {
   archiveThreadShortcut: string | null;
   toggleProjectsSidebarShortcut: string | null;
   toggleGitSidebarShortcut: string | null;
-  branchSwitcherShortcut: string | null;
   toggleDebugPanelShortcut: string | null;
   toggleTerminalShortcut: string | null;
   cycleAgentNextShortcut: string | null;
@@ -198,11 +195,10 @@ export type AppSettings = {
   notificationSoundsEnabled: boolean;
   systemNotificationsEnabled: boolean;
   preloadGitDiffs: boolean;
-  gitDiffIgnoreWhitespaceChanges: boolean;
   experimentalCollabEnabled: boolean;
   collaborationModesEnabled: boolean;
-  steerEnabled: boolean;
-  unifiedExecEnabled: boolean;
+  experimentalSteerEnabled: boolean;
+  experimentalUnifiedExecEnabled: boolean;
   experimentalAppsEnabled: boolean;
   personality: PersonalityPreference;
   dictationEnabled: boolean;
@@ -300,8 +296,6 @@ export type GitFileStatus = {
 export type GitFileDiff = {
   path: string;
   diff: string;
-  oldLines?: string[];
-  newLines?: string[];
   isBinary?: boolean;
   isImage?: boolean;
   oldImageData?: string | null;
@@ -314,8 +308,6 @@ export type GitCommitDiff = {
   path: string;
   status: string;
   diff: string;
-  oldLines?: string[];
-  newLines?: string[];
   isBinary?: boolean;
   isImage?: boolean;
   oldImageData?: string | null;

@@ -18,7 +18,6 @@ export function useComposerController({
   startFork,
   startReview,
   startResume,
-  startCompact,
   startApps,
   startMcp,
   startStatus,
@@ -45,7 +44,6 @@ export function useComposerController({
   startFork: (text: string) => Promise<void>;
   startReview: (text: string) => Promise<void>;
   startResume: (text: string) => Promise<void>;
-  startCompact: (text: string) => Promise<void>;
   startApps: (text: string) => Promise<void>;
   startMcp: (text: string) => Promise<void>;
   startStatus: (text: string) => Promise<void>;
@@ -87,7 +85,6 @@ export function useComposerController({
     startFork,
     startReview,
     startResume,
-    startCompact,
     startApps,
     startMcp,
     startStatus,

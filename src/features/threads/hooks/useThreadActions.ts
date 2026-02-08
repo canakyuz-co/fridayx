@@ -3,7 +3,6 @@ import type { Dispatch, MutableRefObject } from "react";
 import type {
   ConversationItem,
   DebugEntry,
-  ThreadListSortKey,
   ThreadSummary,
   WorkspaceInfo,
 } from "../../../types";
@@ -16,7 +15,6 @@ import {
 } from "../../../services/tauri";
 import {
   buildItemsFromThread,
-  getThreadCreatedTimestamp,
   getThreadTimestamp,
   isReviewingFromThread,
   mergeThreadItems,
@@ -36,7 +34,6 @@ type UseThreadActionsOptions = {
   activeThreadIdByWorkspace: ThreadState["activeThreadIdByWorkspace"];
   threadListCursorByWorkspace: ThreadState["threadListCursorByWorkspace"];
   threadStatusById: ThreadState["threadStatusById"];
-  threadSortKey: ThreadListSortKey;
   onDebug?: (entry: DebugEntry) => void;
   getCustomName: (workspaceId: string, threadId: string) => string | undefined;
   threadActivityRef: MutableRefObject<Record<string, Record<string, number>>>;
@@ -55,7 +52,6 @@ export function useThreadActions({
   activeThreadIdByWorkspace,
   threadListCursorByWorkspace,
   threadStatusById,
-  threadSortKey,
   onDebug,
   getCustomName,
   threadActivityRef,
@@ -360,11 +356,9 @@ export function useThreadActions({
       workspace: WorkspaceInfo,
       options?: {
         preserveState?: boolean;
-        sortKey?: ThreadListSortKey;
       },
     ) => {
       const preserveState = options?.preserveState ?? false;
-      const requestedSortKey = options?.sortKey ?? threadSortKey;
       const workspacePath = normalizeRootPath(workspace.path);
       if (!preserveState) {
         dispatch({
@@ -401,7 +395,6 @@ export function useThreadActions({
               workspace.id,
               cursor,
               pageSize,
-              requestedSortKey,
             )) as Record<string, unknown>;
           onDebug?.({
             id: `${Date.now()}-server-thread-list`,
@@ -458,27 +451,15 @@ export function useThreadActions({
           threadActivityRef.current = next;
           saveThreadActivity(next);
         }
-        if (requestedSortKey === "updated_at") {
-          uniqueThreads.sort((a, b) => {
-            const aId = String(a?.id ?? "");
-            const bId = String(b?.id ?? "");
-            const aCreated = getThreadTimestamp(a);
-            const bCreated = getThreadTimestamp(b);
-            const aActivity = Math.max(nextActivityByThread[aId] ?? 0, aCreated);
-            const bActivity = Math.max(nextActivityByThread[bId] ?? 0, bCreated);
-            return bActivity - aActivity;
-          });
-        } else {
-          uniqueThreads.sort((a, b) => {
-            const delta = getThreadCreatedTimestamp(b) - getThreadCreatedTimestamp(a);
-            if (delta !== 0) {
-              return delta;
-            }
-            const aId = String(a?.id ?? "");
-            const bId = String(b?.id ?? "");
-            return aId.localeCompare(bId);
-          });
-        }
+        uniqueThreads.sort((a, b) => {
+          const aId = String(a?.id ?? "");
+          const bId = String(b?.id ?? "");
+          const aCreated = getThreadTimestamp(a);
+          const bCreated = getThreadTimestamp(b);
+          const aActivity = Math.max(nextActivityByThread[aId] ?? 0, aCreated);
+          const bActivity = Math.max(nextActivityByThread[bId] ?? 0, bCreated);
+          return bActivity - aActivity;
+        });
         const summaries = uniqueThreads
           .slice(0, targetCount)
           .map((thread, index) => {
@@ -504,7 +485,6 @@ export function useThreadActions({
           type: "setThreads",
           workspaceId: workspace.id,
           threads: summaries,
-          sortKey: requestedSortKey,
         });
         dispatch({
           type: "setThreadListCursor",
@@ -542,12 +522,11 @@ export function useThreadActions({
         }
       }
     },
-    [dispatch, getCustomName, onDebug, threadActivityRef, threadSortKey],
+    [dispatch, getCustomName, onDebug, threadActivityRef],
   );
 
   const loadOlderThreadsForWorkspace = useCallback(
     async (workspace: WorkspaceInfo) => {
-      const requestedSortKey = threadSortKey;
       const nextCursor = threadListCursorByWorkspace[workspace.id] ?? null;
       if (!nextCursor) {
         return;
@@ -580,7 +559,6 @@ export function useThreadActions({
               workspace.id,
               cursor,
               pageSize,
-              requestedSortKey,
             )) as Record<string, unknown>;
           onDebug?.({
             id: `${Date.now()}-server-thread-list-older`,
@@ -633,7 +611,6 @@ export function useThreadActions({
             type: "setThreads",
             workspaceId: workspace.id,
             threads: [...existing, ...additions],
-            sortKey: requestedSortKey,
           });
         }
         dispatch({
@@ -670,14 +647,7 @@ export function useThreadActions({
         });
       }
     },
-    [
-      dispatch,
-      getCustomName,
-      onDebug,
-      threadListCursorByWorkspace,
-      threadsByWorkspace,
-      threadSortKey,
-    ],
+    [dispatch, getCustomName, onDebug, threadListCursorByWorkspace, threadsByWorkspace],
   );
 
   const archiveThread = useCallback(

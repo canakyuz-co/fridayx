@@ -4,7 +4,6 @@ import type {
   ConversationItem,
   RateLimitSnapshot,
   RequestUserInputRequest,
-  ThreadListSortKey,
   ThreadSummary,
   ThreadTokenUsage,
   TurnPlan,
@@ -117,6 +116,8 @@ type ThreadActivityStatus = {
   lastDurationMs: number | null;
 };
 
+export const DEFAULT_RATE_LIMIT_KEY = "__default__";
+
 export type ThreadState = {
   activeThreadIdByWorkspace: Record<string, string | null>;
   itemsByThread: Record<string, ConversationItem[]>;
@@ -128,12 +129,12 @@ export type ThreadState = {
   threadListLoadingByWorkspace: Record<string, boolean>;
   threadListPagingByWorkspace: Record<string, boolean>;
   threadListCursorByWorkspace: Record<string, string | null>;
-  threadSortKeyByWorkspace: Record<string, ThreadListSortKey>;
   activeTurnIdByThread: Record<string, string | null>;
   approvals: ApprovalRequest[];
   userInputRequests: RequestUserInputRequest[];
   tokenUsageByThread: Record<string, ThreadTokenUsage>;
   rateLimitsByWorkspace: Record<string, RateLimitSnapshot | null>;
+  rateLimitsByWorkspaceModel: Record<string, Record<string, RateLimitSnapshot | null>>;
   accountByWorkspace: Record<string, AccountSnapshot | null>;
   planByThread: Record<string, TurnPlan | null>;
   lastAgentMessageByThread: Record<string, { text: string; timestamp: number }>;
@@ -199,12 +200,7 @@ export type ThreadAction =
   | { type: "appendReasoningContent"; threadId: string; itemId: string; delta: string }
   | { type: "appendPlanDelta"; threadId: string; itemId: string; delta: string }
   | { type: "appendToolOutput"; threadId: string; itemId: string; delta: string }
-  | {
-      type: "setThreads";
-      workspaceId: string;
-      threads: ThreadSummary[];
-      sortKey: ThreadListSortKey;
-    }
+  | { type: "setThreads"; workspaceId: string; threads: ThreadSummary[] }
   | {
       type: "setThreadListLoading";
       workspaceId: string;
@@ -238,6 +234,7 @@ export type ThreadAction =
       type: "setRateLimits";
       workspaceId: string;
       rateLimits: RateLimitSnapshot | null;
+      modelId?: string | null;
     }
   | {
       type: "setAccountInfo";
@@ -267,12 +264,12 @@ export const initialState: ThreadState = {
   threadListLoadingByWorkspace: {},
   threadListPagingByWorkspace: {},
   threadListCursorByWorkspace: {},
-  threadSortKeyByWorkspace: {},
   activeTurnIdByThread: {},
   approvals: [],
   userInputRequests: [],
   tokenUsageByThread: {},
   rateLimitsByWorkspace: {},
+  rateLimitsByWorkspaceModel: {},
   accountByWorkspace: {},
   planByThread: {},
   lastAgentMessageByThread: {},
@@ -372,10 +369,6 @@ function isDuplicateReviewById(
       item.state === target.state &&
       item.text.trim() === normalizedText,
   );
-}
-
-function prefersUpdatedSort(state: ThreadState, workspaceId: string) {
-  return (state.threadSortKeyByWorkspace[workspaceId] ?? "updated_at") === "updated_at";
 }
 
 export function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
@@ -654,17 +647,11 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       if (!didChange) {
         return state;
       }
-      const sorted = prefersUpdatedSort(state, action.workspaceId)
-        ? [
-            ...next.filter((thread) => thread.id === action.threadId),
-            ...next.filter((thread) => thread.id !== action.threadId),
-          ]
-        : next;
       return {
         ...state,
         threadsByWorkspace: {
           ...state.threadsByWorkspace,
-          [action.workspaceId]: sorted,
+          [action.workspaceId]: next,
         },
       };
     }
@@ -786,13 +773,12 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
                 : thread.name;
           return { ...thread, name: nextName };
         });
-        const bumpedThreads =
-          prefersUpdatedSort(state, action.workspaceId) && updatedThreads.length
-            ? [
-                ...updatedThreads.filter((thread) => thread.id === action.threadId),
-                ...updatedThreads.filter((thread) => thread.id !== action.threadId),
-              ]
-            : updatedThreads;
+        const bumpedThreads = updatedThreads.length
+          ? [
+              ...updatedThreads.filter((thread) => thread.id === action.threadId),
+              ...updatedThreads.filter((thread) => thread.id !== action.threadId),
+            ]
+          : updatedThreads;
         nextThreadsByWorkspace = {
           ...state.threadsByWorkspace,
           [action.workspaceId]: bumpedThreads,
@@ -1023,15 +1009,17 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
     case "setThreads": {
       const hidden = state.hiddenThreadIdsByWorkspace[action.workspaceId] ?? {};
       const visibleThreads = action.threads.filter((thread) => !hidden[thread.id]);
+      const currentActive = state.activeThreadIdByWorkspace[action.workspaceId] ?? null;
+      const nextActive = currentActive ?? visibleThreads[0]?.id ?? null;
       return {
         ...state,
         threadsByWorkspace: {
           ...state.threadsByWorkspace,
           [action.workspaceId]: visibleThreads,
         },
-        threadSortKeyByWorkspace: {
-          ...state.threadSortKeyByWorkspace,
-          [action.workspaceId]: action.sortKey,
+        activeThreadIdByWorkspace: {
+          ...state.activeThreadIdByWorkspace,
+          [action.workspaceId]: nextActive,
         },
       };
     }
@@ -1081,6 +1069,13 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         rateLimitsByWorkspace: {
           ...state.rateLimitsByWorkspace,
           [action.workspaceId]: action.rateLimits,
+        },
+        rateLimitsByWorkspaceModel: {
+          ...state.rateLimitsByWorkspaceModel,
+          [action.workspaceId]: {
+            ...(state.rateLimitsByWorkspaceModel[action.workspaceId] ?? {}),
+            [action.modelId ?? DEFAULT_RATE_LIMIT_KEY]: action.rateLimits,
+          },
         },
       };
     case "setAccountInfo":

@@ -66,11 +66,10 @@ pub(crate) async fn codex_doctor(
         .or(default_args);
     let path_env = build_codex_path_env(resolved.as_deref());
     let version = check_codex_installation(resolved.clone()).await?;
-    let mut command = build_codex_command_with_bin(
-        resolved.clone(),
-        resolved_args.as_deref(),
-        vec!["app-server".to_string(), "--help".to_string()],
-    )?;
+    let mut command = build_codex_command_with_bin(resolved.clone());
+    apply_codex_args(&mut command, resolved_args.as_deref())?;
+    command.arg("app-server");
+    command.arg("--help");
     command.stdout(std::process::Stdio::piped());
     command.stderr(std::process::Stdio::piped());
     let app_server_ok = match timeout(Duration::from_secs(5), command.output()).await {
@@ -217,7 +216,6 @@ pub(crate) async fn list_threads(
     workspace_id: String,
     cursor: Option<String>,
     limit: Option<u32>,
-    sort_key: Option<String>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Value, String> {
@@ -226,17 +224,12 @@ pub(crate) async fn list_threads(
             &*state,
             app,
             "list_threads",
-            json!({
-                "workspaceId": workspace_id,
-                "cursor": cursor,
-                "limit": limit,
-                "sortKey": sort_key
-            }),
+            json!({ "workspaceId": workspace_id, "cursor": cursor, "limit": limit }),
         )
         .await;
     }
 
-    codex_core::list_threads_core(&state.sessions, workspace_id, cursor, limit, sort_key).await
+    codex_core::list_threads_core(&state.sessions, workspace_id, cursor, limit).await
 }
 
 #[tauri::command]
@@ -367,26 +360,6 @@ pub(crate) async fn archive_thread(
     }
 
     codex_core::archive_thread_core(&state.sessions, workspace_id, thread_id).await
-}
-
-#[tauri::command]
-pub(crate) async fn compact_thread(
-    workspace_id: String,
-    thread_id: String,
-    state: State<'_, AppState>,
-    app: AppHandle,
-) -> Result<Value, String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        return remote_backend::call_remote(
-            &*state,
-            app,
-            "compact_thread",
-            json!({ "workspaceId": workspace_id, "threadId": thread_id }),
-        )
-        .await;
-    }
-
-    codex_core::compact_thread_core(&state.sessions, workspace_id, thread_id).await
 }
 
 #[tauri::command]

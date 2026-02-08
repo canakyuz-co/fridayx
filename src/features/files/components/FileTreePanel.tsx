@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { MouseEvent } from "react";
 import { createPortal } from "react-dom";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
@@ -9,22 +15,22 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import ChevronsUpDown from "lucide-react/dist/esm/icons/chevrons-up-down";
-import File from "lucide-react/dist/esm/icons/file";
-import Folder from "lucide-react/dist/esm/icons/folder";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import Search from "lucide-react/dist/esm/icons/search";
+import FilePlus from "lucide-react/dist/esm/icons/file-plus";
+import FolderPlus from "lucide-react/dist/esm/icons/folder-plus";
+import RefreshCcw from "lucide-react/dist/esm/icons/refresh-ccw";
 import { PanelTabs, type PanelTabId } from "../../layout/components/PanelTabs";
 import {
-  PanelFrame,
-  PanelHeader,
-  PanelMeta,
-  PanelSearchField,
-} from "../../design-system/components/panel/PanelPrimitives";
-import { readWorkspaceFile } from "../../../services/tauri";
+  createWorkspaceDir,
+  createWorkspaceFile,
+  deleteWorkspacePath,
+  moveWorkspacePath,
+  readWorkspaceFile,
+} from "../../../services/tauri";
 import type { OpenAppTarget } from "../../../types";
-import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { languageFromPath } from "../../../utils/syntax";
-import { joinWorkspacePath, revealInFileManagerLabel } from "../../../utils/platformPaths";
+import { getFileIconDescriptor } from "../../../utils/fileIcons";
 import { getFileTypeIconUrl } from "../../../utils/fileTypeIcons";
 import { FilePreviewPopover } from "./FilePreviewPopover";
 
@@ -45,10 +51,35 @@ type FileTreePanelProps = {
   onFilePanelModeChange: (mode: PanelTabId) => void;
   onInsertText?: (text: string) => void;
   canInsertText: boolean;
+  showTabs?: boolean;
+  showMentionActions?: boolean;
+  onOpenFile?: (path: string) => void;
+  onRefreshFiles?: () => void;
+  showCreateActions?: boolean;
   openTargets: OpenAppTarget[];
   openAppIconById: Record<string, string>;
   selectedOpenAppId: string;
   onSelectOpenAppId: (id: string) => void;
+};
+
+type PendingCreateState = {
+  kind: "file" | "folder";
+  basePath: string;
+  value: string;
+  error: string | null;
+};
+
+type PendingRenameState = {
+  fromPath: string;
+  baseDir: string;
+  value: string;
+  error: string | null;
+};
+
+type PendingMoveState = {
+  fromPath: string;
+  value: string;
+  error: string | null;
 };
 
 type FileTreeBuildNode = {
@@ -58,22 +89,7 @@ type FileTreeBuildNode = {
   children: Map<string, FileTreeBuildNode>;
 };
 
-type FileEntry = {
-  path: string;
-  lower: string;
-  segments: string[];
-};
-
-type FileTreeRowEntry = {
-  node: FileTreeNode;
-  depth: number;
-  isFolder: boolean;
-  isExpanded: boolean;
-};
-
-const FILE_TREE_ROW_HEIGHT = 28;
-
-function buildTree(entries: FileEntry[]): { nodes: FileTreeNode[]; folderPaths: Set<string> } {
+function buildTree(paths: string[]): { nodes: FileTreeNode[]; folderPaths: Set<string> } {
   const root = new Map<string, FileTreeBuildNode>();
   const addNode = (
     map: Map<string, FileTreeBuildNode>,
@@ -98,14 +114,12 @@ function buildTree(entries: FileEntry[]): { nodes: FileTreeNode[]; folderPaths: 
     return node;
   };
 
-  entries.forEach(({ segments }) => {
-    if (!segments.length) {
-      return;
-    }
+  paths.forEach((path) => {
+    const parts = path.split("/").filter(Boolean);
     let currentMap = root;
     let currentPath = "";
-    segments.forEach((segment, index) => {
-      const isFile = index === segments.length - 1;
+    parts.forEach((segment, index) => {
+      const isFile = index === parts.length - 1;
       const nextPath = currentPath ? `${currentPath}/${segment}` : segment;
       const node = addNode(currentMap, segment, nextPath, isFile ? "file" : "folder");
       if (!isFile) {
@@ -161,6 +175,7 @@ function isImagePath(path: string) {
   return imageExtensions.has(ext);
 }
 
+
 export function FileTreePanel({
   workspaceId,
   workspacePath,
@@ -171,14 +186,19 @@ export function FileTreePanel({
   onFilePanelModeChange,
   onInsertText,
   canInsertText,
+  showTabs = true,
+  showMentionActions = true,
+  onOpenFile,
+  onRefreshFiles,
+  showCreateActions = false,
   openTargets,
   openAppIconById,
   selectedOpenAppId,
   onSelectOpenAppId,
 }: FileTreePanelProps) {
-  const [filterMode, setFilterMode] = useState<"all" | "modified">("all");
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
+  const [filterMode, setFilterMode] = useState<"all" | "modified">("all");
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [previewAnchor, setPreviewAnchor] = useState<{
     top: number;
@@ -194,46 +214,37 @@ export function FileTreePanel({
     start: number;
     end: number;
   } | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [pendingCreate, setPendingCreate] = useState<PendingCreateState | null>(null);
+  const [pendingRename, setPendingRename] = useState<PendingRenameState | null>(null);
+  const [pendingMove, setPendingMove] = useState<PendingMoveState | null>(null);
   const [isDragSelecting, setIsDragSelecting] = useState(false);
   const dragAnchorLineRef = useRef<number | null>(null);
   const dragMovedRef = useRef(false);
   const hasManualToggle = useRef(false);
   const showLoading = isLoading && files.length === 0;
-  const listRef = useRef<HTMLDivElement | null>(null);
-  const debouncedQuery = useDebouncedValue(query, 150);
-  const normalizedQuery = debouncedQuery.trim().toLowerCase();
+  const deferredQuery = useDeferredValue(query);
+  const normalizedQuery = deferredQuery.trim().toLowerCase();
   const modifiedPathSet = useMemo(() => new Set(modifiedFiles), [modifiedFiles]);
-  const fileEntries = useMemo(
-    () =>
-      files.map((path) => ({
-        path,
-        lower: path.toLowerCase(),
-        segments: path.split("/").filter(Boolean),
-      })),
-    [files],
-  );
-  const sourceEntries = useMemo(
-    () =>
-      filterMode === "modified"
-        ? fileEntries.filter((entry) => modifiedPathSet.has(entry.path))
-        : fileEntries,
-    [fileEntries, filterMode, modifiedPathSet],
-  );
   const previewKind = useMemo(
     () => (previewPath && isImagePath(previewPath) ? "image" : "text"),
     [previewPath],
   );
 
-  const visibleEntries = useMemo(() => {
+  const filteredFiles = useMemo(() => {
+    const baseFiles =
+      filterMode === "modified"
+        ? files.filter((path) => modifiedPathSet.has(path))
+        : files;
     if (!normalizedQuery) {
-      return sourceEntries;
+      return baseFiles;
     }
-    return sourceEntries.filter((entry) => entry.lower.includes(normalizedQuery));
-  }, [sourceEntries, normalizedQuery]);
+    return baseFiles.filter((path) => path.toLowerCase().includes(normalizedQuery));
+  }, [files, filterMode, modifiedPathSet, normalizedQuery]);
 
   const { nodes, folderPaths } = useMemo(
-    () => buildTree(visibleEntries),
-    [visibleEntries],
+    () => buildTree(filteredFiles),
+    [filteredFiles],
   );
 
   const visibleFolderPaths = folderPaths;
@@ -243,7 +254,7 @@ export function FileTreePanel({
 
   useEffect(() => {
     setExpandedFolders((prev) => {
-      if (normalizedQuery || filterMode === "modified") {
+      if (normalizedQuery) {
         return new Set(folderPaths);
       }
       const next = new Set<string>();
@@ -261,7 +272,7 @@ export function FileTreePanel({
       }
       return next;
     });
-  }, [filterMode, folderPaths, nodes, normalizedQuery]);
+  }, [folderPaths, nodes, normalizedQuery]);
 
   useEffect(() => {
     setPreviewPath(null);
@@ -275,6 +286,24 @@ export function FileTreePanel({
     dragAnchorLineRef.current = null;
     dragMovedRef.current = false;
   }, [workspaceId]);
+
+  useEffect(() => {
+    if (!pendingRename) {
+      return;
+    }
+    if (!files.includes(pendingRename.fromPath)) {
+      setPendingRename(null);
+    }
+  }, [files, pendingRename]);
+
+  useEffect(() => {
+    if (!pendingMove) {
+      return;
+    }
+    if (!files.includes(pendingMove.fromPath)) {
+      setPendingMove(null);
+    }
+  }, [files, pendingMove]);
 
   const closePreview = useCallback(() => {
     setPreviewPath(null);
@@ -333,9 +362,254 @@ export function FileTreePanel({
 
   const resolvePath = useCallback(
     (relativePath: string) => {
-      return joinWorkspacePath(workspacePath, relativePath);
+      const base = workspacePath.endsWith("/")
+        ? workspacePath.slice(0, -1)
+        : workspacePath;
+      return `${base}/${relativePath}`;
     },
     [workspacePath],
+  );
+
+  const normalizeRelativePath = useCallback((value: string | null) => {
+    if (!value) {
+      return null;
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const normalized = trimmed.replace(/^\/+/, "").replace(/\\/g, "/");
+    if (!normalized || normalized.startsWith("../") || normalized.includes("/../")) {
+      return null;
+    }
+    if (normalized.includes("://")) {
+      return null;
+    }
+    return normalized;
+  }, []);
+
+  const joinPath = useCallback((base: string, name: string) => {
+    if (!base) {
+      return name;
+    }
+    return `${base.replace(/\/$/, "")}/${name.replace(/^\//, "")}`;
+  }, []);
+
+  const runFileAction = useCallback(
+    async (action: () => Promise<void>) => {
+      if (actionBusy) {
+        return;
+      }
+      setActionBusy(true);
+      try {
+        await action();
+        onRefreshFiles?.();
+      } catch (error) {
+        alert(error instanceof Error ? error.message : String(error));
+      } finally {
+        setActionBusy(false);
+      }
+    },
+    [actionBusy, onRefreshFiles],
+  );
+
+  const handleCreateFile = useCallback(
+    async (basePath: string) => {
+      setPendingCreate({
+        kind: "file",
+        basePath,
+        value: "new-file.ts",
+        error: null,
+      });
+      setPendingRename(null);
+      setPendingMove(null);
+    },
+    [],
+  );
+
+  const handleCreateFolder = useCallback(
+    async (basePath: string) => {
+      setPendingCreate({
+        kind: "folder",
+        basePath,
+        value: "new-folder",
+        error: null,
+      });
+      setPendingRename(null);
+      setPendingMove(null);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!showCreateActions) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat || actionBusy) {
+        return;
+      }
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        const tagName = target.tagName.toLowerCase();
+        if (
+          target.isContentEditable ||
+          tagName === "input" ||
+          tagName === "textarea" ||
+          tagName === "select"
+        ) {
+          return;
+        }
+      }
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) {
+        return;
+      }
+      if (event.key.toLowerCase() !== "n") {
+        return;
+      }
+      event.preventDefault();
+      if (pendingCreate || pendingRename || pendingMove) {
+        setPendingCreate(null);
+        setPendingRename(null);
+        setPendingMove(null);
+      }
+      if (event.shiftKey) {
+        void handleCreateFolder("");
+        return;
+      }
+      void handleCreateFile("");
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [
+    actionBusy,
+    handleCreateFile,
+    handleCreateFolder,
+    pendingCreate,
+    pendingMove,
+    pendingRename,
+    showCreateActions,
+  ]);
+
+  const submitCreate = useCallback(async () => {
+    if (!pendingCreate) {
+      return;
+    }
+    const normalized = normalizeRelativePath(pendingCreate.value);
+    if (!normalized) {
+      setPendingCreate((prev) =>
+        prev
+          ? {
+              ...prev,
+              error: "Please enter a valid relative path.",
+            }
+          : prev,
+      );
+      return;
+    }
+    const targetPath = joinPath(pendingCreate.basePath, normalized);
+    await runFileAction(() =>
+      pendingCreate.kind === "file"
+        ? createWorkspaceFile(workspaceId, targetPath)
+        : createWorkspaceDir(workspaceId, targetPath),
+    );
+    setPendingCreate(null);
+  }, [joinPath, normalizeRelativePath, pendingCreate, runFileAction, workspaceId]);
+
+  const submitRename = useCallback(async () => {
+    if (!pendingRename) {
+      return;
+    }
+    const nextName = normalizeRelativePath(pendingRename.value);
+    if (!nextName) {
+      setPendingRename((prev) =>
+        prev
+          ? {
+              ...prev,
+              error: "Please enter a valid name.",
+            }
+          : prev,
+      );
+      return;
+    }
+    const nextPath = joinPath(pendingRename.baseDir, nextName);
+    if (nextPath === pendingRename.fromPath) {
+      setPendingRename(null);
+      return;
+    }
+    await runFileAction(() =>
+      moveWorkspacePath(workspaceId, pendingRename.fromPath, nextPath),
+    );
+    setPendingRename(null);
+  }, [joinPath, normalizeRelativePath, pendingRename, runFileAction, workspaceId]);
+
+  const submitMove = useCallback(async () => {
+    if (!pendingMove) {
+      return;
+    }
+    const nextPath = normalizeRelativePath(pendingMove.value);
+    if (!nextPath) {
+      setPendingMove((prev) =>
+        prev
+          ? {
+              ...prev,
+              error: "Please enter a valid path.",
+            }
+          : prev,
+      );
+      return;
+    }
+    if (nextPath === pendingMove.fromPath) {
+      setPendingMove(null);
+      return;
+    }
+    await runFileAction(() =>
+      moveWorkspacePath(workspaceId, pendingMove.fromPath, nextPath),
+    );
+    setPendingMove(null);
+  }, [normalizeRelativePath, pendingMove, runFileAction, workspaceId]);
+
+  const handleDeletePath = useCallback(
+    async (relativePath: string) => {
+      const confirmDelete = window.confirm(
+        `Silinsin mi?\n${relativePath}`,
+      );
+      if (!confirmDelete) {
+        return;
+      }
+      await runFileAction(() => deleteWorkspacePath(workspaceId, relativePath));
+    },
+    [runFileAction, workspaceId],
+  );
+
+  const handleRenamePath = useCallback(
+    async (relativePath: string) => {
+      const parts = relativePath.split("/");
+      const currentName = parts.pop() ?? relativePath;
+      const baseDir = parts.join("/");
+      setPendingRename({
+        fromPath: relativePath,
+        baseDir,
+        value: currentName,
+        error: null,
+      });
+      setPendingCreate(null);
+      setPendingMove(null);
+    },
+    [],
+  );
+
+  const handleMovePath = useCallback(
+    async (relativePath: string) => {
+      setPendingMove({
+        fromPath: relativePath,
+        value: relativePath,
+        error: null,
+      });
+      setPendingCreate(null);
+      setPendingRename(null);
+    },
+    [],
   );
 
   const previewImageSrc = useMemo(() => {
@@ -414,28 +688,6 @@ export function FileTreePanel({
       cancelled = true;
     };
   }, [previewKind, previewPath, workspaceId]);
-
-  const flatNodes = useMemo(() => {
-    const rows: FileTreeRowEntry[] = [];
-    const walk = (node: FileTreeNode, depth: number) => {
-      const isFolder = node.type === "folder";
-      const isExpanded = isFolder && expandedFolders.has(node.path);
-      rows.push({ node, depth, isFolder, isExpanded });
-      if (isFolder && isExpanded) {
-        node.children.forEach((child) => walk(child, depth + 1));
-      }
-    };
-    nodes.forEach((node) => walk(node, 0));
-    return rows;
-  }, [nodes, expandedFolders]);
-
-  const rowVirtualizer = useVirtualizer({
-    count: flatNodes.length,
-    getScrollElement: () => listRef.current,
-    estimateSize: () => FILE_TREE_ROW_HEIGHT,
-    overscan: 8,
-  });
-  const virtualRows = rowVirtualizer.getVirtualItems();
 
   useEffect(() => {
     if (!isDragSelecting) {
@@ -550,115 +802,264 @@ export function FileTreePanel({
     closePreview,
   ]);
 
-  const showMenu = useCallback(
-    async (event: MouseEvent<HTMLButtonElement>, relativePath: string) => {
+  const showNodeMenu = useCallback(
+    async (event: MouseEvent<HTMLButtonElement>, relativePath: string, isFolder: boolean) => {
       event.preventDefault();
       event.stopPropagation();
-      const menu = await Menu.new({
-        items: [
+      const items = [] as MenuItem[];
+      if (!isFolder && canInsertText && onInsertText) {
+        items.push(
           await MenuItem.new({
             text: "Add to chat",
-            enabled: canInsertText,
-            action: async () => {
-              if (!canInsertText) {
-                return;
-              }
-              onInsertText?.(relativePath);
-            },
+            action: () => onInsertText(relativePath),
+          }),
+        );
+      }
+      if (isFolder) {
+        items.push(
+          await MenuItem.new({
+            text: "New File",
+            action: () => handleCreateFile(relativePath),
           }),
           await MenuItem.new({
-            text: revealInFileManagerLabel(),
-            action: async () => {
-              await revealItemInDir(resolvePath(relativePath));
-            },
+            text: "New Folder",
+            action: () => handleCreateFolder(relativePath),
           }),
-        ],
-      });
+        );
+      }
+      items.push(
+        await MenuItem.new({
+          text: "Rename",
+          action: () => handleRenamePath(relativePath),
+        }),
+        await MenuItem.new({
+          text: "Move",
+          action: () => handleMovePath(relativePath),
+        }),
+        await MenuItem.new({
+          text: "Delete",
+          action: () => handleDeletePath(relativePath),
+        }),
+        await MenuItem.new({
+          text: "Reveal in Finder",
+          action: async () => {
+            await revealItemInDir(resolvePath(relativePath));
+          },
+        }),
+      );
+      const menu = await Menu.new({ items });
       const window = getCurrentWindow();
       const position = new LogicalPosition(event.clientX, event.clientY);
       await menu.popup(position, window);
     },
-    [canInsertText, onInsertText, resolvePath],
+    [
+      canInsertText,
+      handleCreateFile,
+      handleCreateFolder,
+      handleDeletePath,
+      handleMovePath,
+      handleRenamePath,
+      onInsertText,
+      resolvePath,
+    ],
   );
 
-  const renderRow = (entry: FileTreeRowEntry) => {
-    const { node, depth, isFolder, isExpanded } = entry;
-    const fileTypeIconUrl = isFolder ? null : getFileTypeIconUrl(node.path);
+  const renderNode = (node: FileTreeNode, depth: number) => {
+    const isFolder = node.type === "folder";
+    const isExpanded = isFolder && expandedFolders.has(node.path);
+    const fileTypeIconUrl = !isFolder ? getFileTypeIconUrl(node.path) : null;
+    const isRenaming = pendingRename?.fromPath === node.path;
+    const isMoving = pendingMove?.fromPath === node.path;
     return (
-      <div className="file-tree-row-wrap">
-        <button
-          type="button"
-          className={`file-tree-row${isFolder ? " is-folder" : " is-file"}`}
-          style={{ paddingLeft: `${depth * 10}px` }}
-          onClick={(event) => {
-            if (isFolder) {
-              toggleFolder(node.path);
-              return;
-            }
-            openPreview(node.path, event.currentTarget);
-          }}
-          onContextMenu={(event) => {
-            void showMenu(event, node.path);
-          }}
-        >
-          {isFolder ? (
-            <span className={`file-tree-chevron${isExpanded ? " is-open" : ""}`}>
-              ›
-            </span>
-          ) : (
-            <span className="file-tree-spacer" aria-hidden />
-          )}
-          <span className="file-tree-icon" aria-hidden>
-            {isFolder ? (
-              <Folder size={12} />
-            ) : fileTypeIconUrl ? (
-              <img
-                className="file-tree-icon-image"
-                src={fileTypeIconUrl}
-                alt=""
-                loading="lazy"
-                decoding="async"
+      <div key={node.path}>
+        <div className="file-tree-row-wrap">
+          {isRenaming ? (
+            <div
+              className={`file-tree-row file-tree-row--editing${isFolder ? " is-folder" : " is-file"}`}
+              style={{ paddingLeft: `${depth * 10}px` }}
+            >
+              <input
+                className="file-tree-rename-input"
+                value={pendingRename?.value ?? ""}
+                onChange={(event) =>
+                  setPendingRename((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          value: event.target.value,
+                          error: null,
+                        }
+                      : prev,
+                  )
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void submitRename();
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    setPendingRename(null);
+                  }
+                }}
+                autoFocus
               />
-            ) : (
-              <File size={12} />
-            )}
-          </span>
-          <span className="file-tree-name">{node.name}</span>
-        </button>
-        {!isFolder && (
-          <button
-            type="button"
-            className="ghost icon-button file-tree-action"
-            onClick={(event) => {
-              event.stopPropagation();
-              if (!canInsertText) {
-                return;
-              }
-              onInsertText?.(node.path);
-            }}
-            disabled={!canInsertText}
-            aria-label={`Mention ${node.name}`}
-            title="Mention in chat"
-          >
-            <Plus size={10} aria-hidden />
-          </button>
+              <button
+                type="button"
+                className="ghost file-tree-inline-action"
+                onClick={() => void submitRename()}
+                disabled={actionBusy}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                className="ghost file-tree-inline-action"
+                onClick={() => setPendingRename(null)}
+                disabled={actionBusy}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : isMoving ? (
+            <div
+              className={`file-tree-row file-tree-row--editing${isFolder ? " is-folder" : " is-file"}`}
+              style={{ paddingLeft: `${depth * 10}px` }}
+            >
+              <input
+                className="file-tree-rename-input"
+                value={pendingMove?.value ?? ""}
+                onChange={(event) =>
+                  setPendingMove((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          value: event.target.value,
+                          error: null,
+                        }
+                      : prev,
+                  )
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void submitMove();
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    setPendingMove(null);
+                  }
+                }}
+                autoFocus
+              />
+              <button
+                type="button"
+                className="ghost file-tree-inline-action"
+                onClick={() => void submitMove()}
+                disabled={actionBusy}
+              >
+                Move
+              </button>
+              <button
+                type="button"
+                className="ghost file-tree-inline-action"
+                onClick={() => setPendingMove(null)}
+                disabled={actionBusy}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={`file-tree-row${isFolder ? " is-folder" : " is-file"}`}
+              style={{ paddingLeft: `${depth * 10}px` }}
+              onClick={(event) => {
+                if (isFolder) {
+                  toggleFolder(node.path);
+                  return;
+                }
+                if (onOpenFile) {
+                  onOpenFile(node.path);
+                  return;
+                }
+                openPreview(node.path, event.currentTarget);
+              }}
+              onContextMenu={(event) => {
+                void showNodeMenu(event, node.path, isFolder);
+              }}
+            >
+              {isFolder ? (
+                <span className={`file-tree-chevron${isExpanded ? " is-open" : ""}`}>
+                  ›
+                </span>
+              ) : (
+                <span className="file-tree-spacer" aria-hidden />
+              )}
+              <span className="file-tree-icon" aria-hidden>
+                {(() => {
+                  const icon = getFileIconDescriptor(node.path, isFolder, isExpanded);
+                  return (
+                    <img
+                      className="file-tree-icon-img"
+                      src={fileTypeIconUrl ?? icon.src}
+                      alt=""
+                      loading="lazy"
+                      aria-hidden
+                    />
+                  );
+                })()}
+              </span>
+              <span className="file-tree-name">{node.name}</span>
+            </button>
+          )}
+          {!isRenaming &&
+          !isMoving &&
+          !isFolder &&
+          showMentionActions &&
+          canInsertText &&
+          onInsertText && (
+            <button
+              type="button"
+              className="ghost icon-button file-tree-action"
+              onClick={(event) => {
+                event.stopPropagation();
+                onInsertText?.(node.path);
+              }}
+              aria-label={`Mention ${node.name}`}
+              title="Mention in chat"
+            >
+              <Plus size={10} aria-hidden />
+            </button>
+          )}
+        </div>
+        {isRenaming && pendingRename?.error ? (
+          <div className="file-tree-rename-error">{pendingRename.error}</div>
+        ) : null}
+        {isMoving && pendingMove?.error ? (
+          <div className="file-tree-rename-error">{pendingMove.error}</div>
+        ) : null}
+        {isFolder && isExpanded && node.children.length > 0 && (
+          <div className="file-tree-children">
+            {node.children.map((child) => renderNode(child, depth + 1))}
+          </div>
         )}
       </div>
     );
   };
 
   return (
-    <PanelFrame className="file-tree-panel">
-      <PanelHeader className="git-panel-header">
-        <PanelTabs active={filePanelMode} onSelect={onFilePanelModeChange} />
-        <PanelMeta className="file-tree-meta">
+    <aside className="diff-panel file-tree-panel">
+      <div className="git-panel-header">
+        {showTabs ? (
+          <PanelTabs active={filePanelMode} onSelect={onFilePanelModeChange} />
+        ) : null}
+        <div className="file-tree-meta">
           <div className="file-tree-count">
-            {visibleEntries.length
+            {filteredFiles.length
               ? normalizedQuery
-                ? `${visibleEntries.length} match${visibleEntries.length === 1 ? "" : "es"}`
+                ? `${filteredFiles.length} match${filteredFiles.length === 1 ? "" : "es"}`
                 : filterMode === "modified"
-                  ? `${visibleEntries.length} modified`
-                  : `${visibleEntries.length} file${visibleEntries.length === 1 ? "" : "s"}`
+                  ? `${filteredFiles.length} modified`
+                  : `${filteredFiles.length} file${filteredFiles.length === 1 ? "" : "s"}`
               : showLoading
                 ? "Loading files"
                 : filterMode === "modified"
@@ -676,20 +1077,26 @@ export function FileTreePanel({
               <ChevronsUpDown aria-hidden />
             </button>
           ) : null}
-        </PanelMeta>
-      </PanelHeader>
-      <PanelSearchField
-        className="file-tree-search"
-        inputClassName="file-tree-search-input"
-        placeholder="Filter files and folders"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        aria-label="Filter files and folders"
-        icon={<Search aria-hidden />}
-        trailing={
+        </div>
+      </div>
+      <div className="file-tree-search">
+        <div className="file-tree-search-field">
+          <Search className="file-tree-search-icon" aria-hidden />
+          <input
+            className="file-tree-search-input"
+            type="search"
+            placeholder="Filter files and folders"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Filter files and folders"
+          />
+        </div>
+        <div className="file-tree-search-actions">
           <button
             type="button"
-            className={`ghost icon-button file-tree-search-filter${filterMode === "modified" ? " is-active" : ""}`}
+            className={`ghost icon-button file-tree-search-filter${
+              filterMode === "modified" ? " is-active" : ""
+            }`}
             onClick={() => {
               setFilterMode((prev) => (prev === "all" ? "modified" : "all"));
             }}
@@ -701,13 +1108,96 @@ export function FileTreePanel({
           >
             <GitBranch size={14} aria-hidden />
           </button>
-        }
-      />
-      <div
-        className="file-tree-list"
-        ref={listRef}
-        style={{ ["--file-tree-row-height" as string]: `${FILE_TREE_ROW_HEIGHT}px` }}
-      >
+          {showCreateActions && (
+            <>
+              <button
+                type="button"
+                className="ghost icon-button file-tree-search-action file-tree-search-action--create"
+                onClick={() => handleCreateFile("")}
+                aria-label="New file"
+                title="New file"
+                disabled={actionBusy}
+              >
+                <FilePlus size={14} aria-hidden />
+                <span>File</span>
+              </button>
+              <button
+                type="button"
+                className="ghost icon-button file-tree-search-action file-tree-search-action--create"
+                onClick={() => handleCreateFolder("")}
+                aria-label="New folder"
+                title="New folder"
+                disabled={actionBusy}
+              >
+                <FolderPlus size={14} aria-hidden />
+                <span>Folder</span>
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className="ghost icon-button file-tree-search-action"
+            onClick={() => onRefreshFiles?.()}
+            aria-label="Refresh files"
+            title="Refresh files"
+            disabled={actionBusy}
+          >
+            <RefreshCcw size={14} aria-hidden />
+          </button>
+        </div>
+      </div>
+      {pendingCreate ? (
+        <div className="file-tree-create-inline">
+          <input
+            className="file-tree-create-input"
+            value={pendingCreate.value}
+            onChange={(event) =>
+              setPendingCreate((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      value: event.target.value,
+                      error: null,
+                    }
+                  : prev,
+              )
+            }
+            placeholder={
+              pendingCreate.kind === "file" ? "new-file.ts" : "new-folder"
+            }
+            autoFocus
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void submitCreate();
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                setPendingCreate(null);
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="ghost file-tree-create-button"
+            onClick={() => void submitCreate()}
+            disabled={actionBusy}
+          >
+            Create
+          </button>
+          <button
+            type="button"
+            className="ghost file-tree-create-button"
+            onClick={() => setPendingCreate(null)}
+            disabled={actionBusy}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : null}
+      {pendingCreate?.error ? (
+        <div className="file-tree-create-error">{pendingCreate.error}</div>
+      ) : null}
+      <div className="file-tree-list">
         {showLoading ? (
           <div className="file-tree-skeleton">
             {Array.from({ length: 8 }).map((_, index) => (
@@ -729,33 +1219,7 @@ export function FileTreePanel({
                 : "No files available."}
           </div>
         ) : (
-          <div
-            className="file-tree-virtual"
-            style={{ height: rowVirtualizer.getTotalSize() }}
-          >
-            {virtualRows.map((virtualRow) => {
-              const entry = flatNodes[virtualRow.index];
-              if (!entry) {
-                return null;
-              }
-              return (
-                <div
-                  key={virtualRow.key}
-                  data-index={virtualRow.index}
-                  ref={rowVirtualizer.measureElement}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                >
-                  {renderRow(entry)}
-                </div>
-              );
-            })}
-          </div>
+          nodes.map((node) => renderNode(node, 0))
         )}
       </div>
       {previewPath && previewAnchor
@@ -778,7 +1242,6 @@ export function FileTreePanel({
               onLineMouseUp={handleLineMouseUp}
               onClearSelection={() => setPreviewSelection(null)}
               onAddSelection={handleAddSelection}
-              canInsertText={canInsertText}
               onClose={closePreview}
               selectionHints={selectionHints}
               style={{
@@ -795,6 +1258,6 @@ export function FileTreePanel({
             document.body,
           )
         : null}
-    </PanelFrame>
+    </aside>
   );
 }

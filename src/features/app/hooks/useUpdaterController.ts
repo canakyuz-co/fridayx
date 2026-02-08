@@ -13,7 +13,6 @@ type Params = {
   notificationSoundsEnabled: boolean;
   systemNotificationsEnabled: boolean;
   getWorkspaceName?: (workspaceId: string) => string | undefined;
-  onThreadNotificationSent?: (workspaceId: string, threadId: string) => void;
   onDebug: (entry: DebugEntry) => void;
   successSoundUrl: string;
   errorSoundUrl: string;
@@ -23,7 +22,6 @@ export function useUpdaterController({
   notificationSoundsEnabled,
   systemNotificationsEnabled,
   getWorkspaceName,
-  onThreadNotificationSent,
   onDebug,
   successSoundUrl,
   errorSoundUrl,
@@ -64,7 +62,6 @@ export function useUpdaterController({
     enabled: systemNotificationsEnabled,
     isWindowFocused,
     getWorkspaceName,
-    onThreadNotificationSent,
     onDebug,
   });
 

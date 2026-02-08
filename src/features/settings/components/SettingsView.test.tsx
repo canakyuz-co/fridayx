@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import {
-  act,
   cleanup,
   fireEvent,
   render,
@@ -24,6 +23,31 @@ const baseSettings: AppSettings = {
   backendMode: "local",
   remoteBackendHost: "127.0.0.1:4732",
   remoteBackendToken: null,
+  otherAiProviders: [
+    {
+      id: "claude",
+      label: "Claude",
+      provider: "claude",
+      enabled: false,
+      apiKey: null,
+      command: "claude",
+      args: null,
+      models: [],
+      defaultModel: null,
+    },
+    {
+      id: "gemini",
+      label: "Gemini",
+      provider: "gemini",
+      enabled: false,
+      apiKey: null,
+      command: "gemini",
+      args: null,
+      models: [],
+      defaultModel: null,
+    },
+  ],
+  otherAiAutoRefreshEnabled: false,
   defaultAccessMode: "current",
   reviewDeliveryMode: "inline",
   composerModelShortcut: null,
@@ -37,31 +61,31 @@ const baseSettings: AppSettings = {
   archiveThreadShortcut: null,
   toggleProjectsSidebarShortcut: null,
   toggleGitSidebarShortcut: null,
-  branchSwitcherShortcut: null,
   toggleDebugPanelShortcut: null,
   toggleTerminalShortcut: null,
   cycleAgentNextShortcut: null,
   cycleAgentPrevShortcut: null,
   cycleWorkspaceNextShortcut: null,
   cycleWorkspacePrevShortcut: null,
+  editorKeymap: "jetbrains",
   lastComposerModelId: null,
   lastComposerReasoningEffort: null,
   uiScale: 1,
   theme: "system",
   usageShowRemaining: false,
   uiFontFamily:
-    'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    "\"InterVariable\", \"Inter\", -apple-system, \"Helvetica Neue\", sans-serif",
+  interFontFeatures: {},
   codeFontFamily:
-    'ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+    "\"Geist Mono\", \"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace",
   codeFontSize: 11,
   notificationSoundsEnabled: true,
   systemNotificationsEnabled: true,
   preloadGitDiffs: true,
-  gitDiffIgnoreWhitespaceChanges: false,
   experimentalCollabEnabled: false,
   collaborationModesEnabled: true,
-  steerEnabled: true,
-  unifiedExecEnabled: true,
+  experimentalSteerEnabled: false,
+  experimentalUnifiedExecEnabled: false,
   experimentalAppsEnabled: false,
   personality: "friendly",
   dictationEnabled: false,
@@ -195,96 +219,6 @@ const renderFeaturesSection = (
   return { onUpdateAppSettings };
 };
 
-const workspace = (
-  overrides: Omit<Partial<WorkspaceInfo>, "settings"> &
-    Pick<WorkspaceInfo, "id" | "name"> & {
-      settings?: Partial<WorkspaceInfo["settings"]>;
-    },
-): WorkspaceInfo => ({
-  id: overrides.id,
-  name: overrides.name,
-  path: overrides.path ?? `/tmp/${overrides.id}`,
-  connected: overrides.connected ?? false,
-  codex_bin: overrides.codex_bin ?? null,
-  kind: overrides.kind ?? "main",
-  parentId: overrides.parentId ?? null,
-  worktree: overrides.worktree ?? null,
-  settings: {
-    sidebarCollapsed: false,
-    sortOrder: null,
-    groupId: null,
-    gitRoot: null,
-    codexHome: null,
-    codexArgs: null,
-    launchScript: null,
-    launchScripts: null,
-    worktreeSetupScript: null,
-    ...overrides.settings,
-  },
-});
-
-const renderEnvironmentsSection = (
-  options: {
-    groupedWorkspaces?: ComponentProps<typeof SettingsView>["groupedWorkspaces"];
-    onUpdateWorkspaceSettings?: ComponentProps<typeof SettingsView>["onUpdateWorkspaceSettings"];
-  } = {},
-) => {
-  cleanup();
-  const onUpdateWorkspaceSettings =
-    options.onUpdateWorkspaceSettings ?? vi.fn().mockResolvedValue(undefined);
-
-  const props: ComponentProps<typeof SettingsView> = {
-    reduceTransparency: false,
-    onToggleTransparency: vi.fn(),
-    appSettings: baseSettings,
-    openAppIconById: {},
-    onUpdateAppSettings: vi.fn().mockResolvedValue(undefined),
-    workspaceGroups: [],
-    groupedWorkspaces:
-      options.groupedWorkspaces ??
-      [
-        {
-          id: null,
-          name: "Ungrouped",
-          workspaces: [
-            workspace({
-              id: "w1",
-              name: "Project One",
-              settings: {
-                sidebarCollapsed: false,
-                worktreeSetupScript: "echo one",
-              },
-            }),
-          ],
-        },
-      ],
-    ungroupedLabel: "Ungrouped",
-    onClose: vi.fn(),
-    onMoveWorkspace: vi.fn(),
-    onDeleteWorkspace: vi.fn(),
-    onCreateWorkspaceGroup: vi.fn().mockResolvedValue(null),
-    onRenameWorkspaceGroup: vi.fn().mockResolvedValue(null),
-    onMoveWorkspaceGroup: vi.fn().mockResolvedValue(null),
-    onDeleteWorkspaceGroup: vi.fn().mockResolvedValue(null),
-    onAssignWorkspaceGroup: vi.fn().mockResolvedValue(null),
-    onRunDoctor: vi.fn().mockResolvedValue(createDoctorResult()),
-    onUpdateWorkspaceCodexBin: vi.fn().mockResolvedValue(undefined),
-    onUpdateWorkspaceSettings,
-    scaleShortcutTitle: "Scale shortcut",
-    scaleShortcutText: "Use Command +/-",
-    onTestNotificationSound: vi.fn(),
-    onTestSystemNotification: vi.fn(),
-    dictationModelStatus: null,
-    onDownloadDictationModel: vi.fn(),
-    onCancelDictationDownload: vi.fn(),
-    onRemoveDictationModel: vi.fn(),
-    initialSection: "environments",
-  };
-
-  render(<SettingsView {...props} />);
-  return { onUpdateWorkspaceSettings };
-};
-
 describe("SettingsView Display", () => {
   it("updates the theme selection", async () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
@@ -325,7 +259,7 @@ describe("SettingsView Display", () => {
     });
   });
 
-  it("toggles reduce transparency", async () => {
+  it("toggles reduce transparency", () => {
     const onToggleTransparency = vi.fn();
     renderDisplaySection({ onToggleTransparency, reduceTransparency: false });
 
@@ -343,9 +277,7 @@ describe("SettingsView Display", () => {
     }
     fireEvent.click(toggle);
 
-    await waitFor(() => {
-      expect(onToggleTransparency).toHaveBeenCalledWith(true);
-    });
+    expect(onToggleTransparency).toHaveBeenCalledWith(true);
   });
 
   it("commits interface scale on blur and enter with clamping", async () => {
@@ -377,7 +309,9 @@ describe("SettingsView Display", () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderDisplaySection({ onUpdateAppSettings });
 
-    const uiFontInput = screen.getByLabelText("UI font family");
+    const uiFontSelect = screen.getByLabelText("UI font family");
+    fireEvent.change(uiFontSelect, { target: { value: "custom" } });
+    const uiFontInput = screen.getByLabelText("Custom UI font family");
     fireEvent.change(uiFontInput, { target: { value: "Avenir, sans-serif" } });
     fireEvent.blur(uiFontInput);
 
@@ -387,7 +321,9 @@ describe("SettingsView Display", () => {
       );
     });
 
-    const codeFontInput = screen.getByLabelText("Code font family");
+    const codeFontSelect = screen.getByLabelText("Code font family");
+    fireEvent.change(codeFontSelect, { target: { value: "custom" } });
+    const codeFontInput = screen.getByLabelText("Custom code font family");
     fireEvent.change(codeFontInput, {
       target: { value: "JetBrains Mono, monospace" },
     });
@@ -411,12 +347,12 @@ describe("SettingsView Display", () => {
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({
-          uiFontFamily: expect.stringContaining("system-ui"),
+          uiFontFamily: expect.stringContaining("Inter"),
         }),
       );
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({
-          codeFontFamily: expect.stringContaining("ui-monospace"),
+          codeFontFamily: expect.stringContaining("Geist Mono"),
         }),
       );
     });
@@ -456,69 +392,6 @@ describe("SettingsView Display", () => {
         expect.objectContaining({ notificationSoundsEnabled: true }),
       );
     });
-  });
-});
-
-describe("SettingsView Environments", () => {
-  it("saves the setup script for the selected project", async () => {
-    const onUpdateWorkspaceSettings = vi.fn().mockResolvedValue(undefined);
-    renderEnvironmentsSection({ onUpdateWorkspaceSettings });
-
-    expect(
-      screen.getByText("Environments", { selector: ".settings-section-title" }),
-    ).toBeTruthy();
-    const textarea = screen.getByPlaceholderText("pnpm install");
-    expect((textarea as HTMLTextAreaElement).value).toBe("echo one");
-
-    fireEvent.change(textarea, { target: { value: "echo updated" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => {
-      expect(onUpdateWorkspaceSettings).toHaveBeenCalledWith("w1", {
-        worktreeSetupScript: "echo updated",
-      });
-    });
-  });
-
-  it("normalizes whitespace-only scripts to null", async () => {
-    const onUpdateWorkspaceSettings = vi.fn().mockResolvedValue(undefined);
-    renderEnvironmentsSection({ onUpdateWorkspaceSettings });
-
-    const textarea = screen.getByPlaceholderText("pnpm install");
-    fireEvent.change(textarea, { target: { value: "   \n\t" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => {
-      expect(onUpdateWorkspaceSettings).toHaveBeenCalledWith("w1", {
-        worktreeSetupScript: null,
-      });
-    });
-  });
-
-  it("copies the setup script to the clipboard", async () => {
-    const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText },
-      configurable: true,
-    });
-
-    try {
-      renderEnvironmentsSection();
-
-      fireEvent.click(screen.getByRole("button", { name: "Copy" }));
-
-      await waitFor(() => {
-        expect(writeText).toHaveBeenCalledWith("echo one");
-      });
-    } finally {
-      if (originalDescriptor) {
-        Object.defineProperty(navigator, "clipboard", originalDescriptor);
-      } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        delete (navigator as any).clipboard;
-      }
-    }
   });
 });
 
@@ -646,52 +519,10 @@ describe("SettingsView Features", () => {
       );
     });
   });
-
-  it("toggles steer mode in stable features", async () => {
-    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
-    renderFeaturesSection({
-      onUpdateAppSettings,
-      appSettings: { steerEnabled: true },
-    });
-
-    const steerTitle = screen.getByText("Steer mode");
-    const steerRow = steerTitle.closest(".settings-toggle-row");
-    expect(steerRow).not.toBeNull();
-
-    const toggle = within(steerRow as HTMLElement).getByRole("button");
-    fireEvent.click(toggle);
-
-    await waitFor(() => {
-      expect(onUpdateAppSettings).toHaveBeenCalledWith(
-        expect.objectContaining({ steerEnabled: false }),
-      );
-    });
-  });
-
-  it("toggles background terminal in stable features", async () => {
-    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
-    renderFeaturesSection({
-      onUpdateAppSettings,
-      appSettings: { unifiedExecEnabled: true },
-    });
-
-    const terminalTitle = screen.getByText("Background terminal");
-    const terminalRow = terminalTitle.closest(".settings-toggle-row");
-    expect(terminalRow).not.toBeNull();
-
-    const toggle = within(terminalRow as HTMLElement).getByRole("button");
-    fireEvent.click(toggle);
-
-    await waitFor(() => {
-      expect(onUpdateAppSettings).toHaveBeenCalledWith(
-        expect.objectContaining({ unifiedExecEnabled: false }),
-      );
-    });
-  });
 });
 
 describe("SettingsView Shortcuts", () => {
-  it("closes on Cmd+W", async () => {
+  it("closes on Cmd+W", () => {
     const onClose = vi.fn();
     render(
       <SettingsView
@@ -725,18 +556,14 @@ describe("SettingsView Shortcuts", () => {
       />,
     );
 
-    await act(async () => {
-      window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "w", metaKey: true, bubbles: true }),
-      );
-    });
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "w", metaKey: true, bubbles: true }),
+    );
 
-    await waitFor(() => {
-      expect(onClose).toHaveBeenCalled();
-    });
+    expect(onClose).toHaveBeenCalled();
   });
 
-  it("closes on Escape", async () => {
+  it("closes on Escape", () => {
     const onClose = vi.fn();
     render(
       <SettingsView
@@ -770,60 +597,8 @@ describe("SettingsView Shortcuts", () => {
       />,
     );
 
-    await act(async () => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    });
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 
-    await waitFor(() => {
-      expect(onClose).toHaveBeenCalled();
-    });
-  });
-
-  it("closes when clicking the modal backdrop", async () => {
-    const onClose = vi.fn();
-    const { container } = render(
-      <SettingsView
-        workspaceGroups={[]}
-        groupedWorkspaces={[]}
-        ungroupedLabel="Ungrouped"
-        onClose={onClose}
-        onMoveWorkspace={vi.fn()}
-        onDeleteWorkspace={vi.fn()}
-        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
-        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
-        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
-        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
-        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
-        reduceTransparency={false}
-        onToggleTransparency={vi.fn()}
-        appSettings={baseSettings}
-        openAppIconById={{}}
-        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
-        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
-        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
-        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
-        scaleShortcutTitle="Scale shortcut"
-        scaleShortcutText="Use Command +/-"
-        onTestNotificationSound={vi.fn()}
-        onTestSystemNotification={vi.fn()}
-        dictationModelStatus={null}
-        onDownloadDictationModel={vi.fn()}
-        onCancelDictationDownload={vi.fn()}
-        onRemoveDictationModel={vi.fn()}
-      />,
-    );
-
-    const backdrop = container.querySelector(".ds-modal-backdrop");
-    expect(backdrop).toBeTruthy();
-    if (!backdrop) {
-      throw new Error("Expected settings modal backdrop");
-    }
-
-    await act(async () => {
-      fireEvent.click(backdrop);
-    });
-    await waitFor(() => {
-      expect(onClose).toHaveBeenCalledTimes(1);
-    });
+    expect(onClose).toHaveBeenCalled();
   });
 });

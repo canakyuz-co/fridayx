@@ -1,11 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./styles/base.css";
-import "./styles/ds-tokens.css";
-import "./styles/ds-modal.css";
-import "./styles/ds-toast.css";
-import "./styles/ds-panel.css";
-import "./styles/ds-diff.css";
-import "./styles/ds-popover.css";
 import "./styles/buttons.css";
 import "./styles/sidebar.css";
 import "./styles/home.css";
@@ -30,8 +24,10 @@ import "./styles/about.css";
 import "./styles/tabbar.css";
 import "./styles/worktree-modal.css";
 import "./styles/clone-modal.css";
-import "./styles/branch-switcher-modal.css";
 import "./styles/settings.css";
+import "./styles/editor.css";
+import "./styles/editor-command-palette.css";
+import "./styles/editor-workspace-search.css";
 import "./styles/compact-base.css";
 import "./styles/compact-phone.css";
 import "./styles/compact-tablet.css";
@@ -40,6 +36,7 @@ import errorSoundUrl from "./assets/error-notification.mp3";
 import { AppLayout } from "./features/app/components/AppLayout";
 import { AppModals } from "./features/app/components/AppModals";
 import { MainHeaderActions } from "./features/app/components/MainHeaderActions";
+import { EditorView } from "./features/editor/components/EditorView";
 import { useLayoutNodes } from "./features/layout/hooks/useLayoutNodes";
 import { useWorkspaceDropZone } from "./features/workspaces/hooks/useWorkspaceDropZone";
 import { useThreads } from "./features/threads/hooks/useThreads";
@@ -58,8 +55,6 @@ import { useApps } from "./features/apps/hooks/useApps";
 import { useCustomPrompts } from "./features/prompts/hooks/useCustomPrompts";
 import { useWorkspaceFileListing } from "./features/app/hooks/useWorkspaceFileListing";
 import { useGitBranches } from "./features/git/hooks/useGitBranches";
-import { useBranchSwitcher } from "./features/git/hooks/useBranchSwitcher";
-import { useBranchSwitcherShortcut } from "./features/git/hooks/useBranchSwitcherShortcut";
 import { useDebugLog } from "./features/debug/hooks/useDebugLog";
 import { useWorkspaceRefreshOnFocus } from "./features/workspaces/hooks/useWorkspaceRefreshOnFocus";
 import { useWorkspaceRestore } from "./features/workspaces/hooks/useWorkspaceRestore";
@@ -73,7 +68,6 @@ import {
 } from "./features/layout/components/SidebarToggleControls";
 import { useAppSettingsController } from "./features/app/hooks/useAppSettingsController";
 import { useUpdaterController } from "./features/app/hooks/useUpdaterController";
-import { useResponseRequiredNotificationsController } from "./features/app/hooks/useResponseRequiredNotificationsController";
 import { useErrorToasts } from "./features/notifications/hooks/useErrorToasts";
 import { useComposerShortcuts } from "./features/composer/hooks/useComposerShortcuts";
 import { useComposerMenuActions } from "./features/composer/hooks/useComposerMenuActions";
@@ -86,6 +80,9 @@ import { useWorktreePrompt } from "./features/workspaces/hooks/useWorktreePrompt
 import { useClonePrompt } from "./features/workspaces/hooks/useClonePrompt";
 import { useWorkspaceController } from "./features/app/hooks/useWorkspaceController";
 import { useWorkspaceSelection } from "./features/workspaces/hooks/useWorkspaceSelection";
+import { useEditorState } from "./features/editor/hooks/useEditorState";
+import { useEditorLsp } from "./features/editor/hooks/useEditorLsp";
+import type { EditorMetricEventDetail } from "./features/editor/utils/perf";
 import { useLocalUsage } from "./features/home/hooks/useLocalUsage";
 import { useGitHubPanelController } from "./features/app/hooks/useGitHubPanelController";
 import { useSettingsModalState } from "./features/app/hooks/useSettingsModalState";
@@ -105,22 +102,30 @@ import { useWorkspaceLaunchScript } from "./features/app/hooks/useWorkspaceLaunc
 import { useWorkspaceLaunchScripts } from "./features/app/hooks/useWorkspaceLaunchScripts";
 import { useWorktreeSetupScript } from "./features/app/hooks/useWorktreeSetupScript";
 import { useGitCommitController } from "./features/app/hooks/useGitCommitController";
+import { useTasks } from "./features/tasks/hooks/useTasks";
 import { WorkspaceHome } from "./features/workspaces/components/WorkspaceHome";
 import { useWorkspaceHome } from "./features/workspaces/hooks/useWorkspaceHome";
 import { useWorkspaceAgentMd } from "./features/workspaces/hooks/useWorkspaceAgentMd";
 import { pickWorkspacePath } from "./services/tauri";
 import type {
   AccessMode,
+  ClaudeUsageSnapshot,
   ComposerEditorSettings,
-  ThreadListSortKey,
+  GitCommandReport,
+  ModelOption,
+  OtherAiProvider,
+  RateLimitSnapshot,
+  TaskView,
   WorkspaceInfo,
 } from "./types";
+import type { ClaudeUsage } from "./services/tauri";
 import { OPEN_APP_STORAGE_KEY } from "./features/app/constants";
 import { useOpenAppIcons } from "./features/app/hooks/useOpenAppIcons";
+import { DEFAULT_RATE_LIMIT_KEY } from "./features/threads/hooks/useThreadsReducer";
 import { useCodeCssVars } from "./features/app/hooks/useCodeCssVars";
 import { useAccountSwitching } from "./features/app/hooks/useAccountSwitching";
 import { useNewAgentDraft } from "./features/app/hooks/useNewAgentDraft";
-import { useSystemNotificationThreadLinks } from "./features/app/hooks/useSystemNotificationThreadLinks";
+import { formatOtherAiModelSlug } from "./utils/otherAiModels";
 
 const AboutView = lazy(() =>
   import("./features/about/components/AboutView").then((module) => ({
@@ -140,18 +145,58 @@ const GitHubPanelData = lazy(() =>
   })),
 );
 
-const THREAD_LIST_SORT_KEY_STORAGE_KEY = "codexmonitor.threadListSortKey";
-
-function getStoredThreadListSortKey(): ThreadListSortKey {
-  if (typeof window === "undefined") {
-    return "updated_at";
-  }
-  const stored = window.localStorage.getItem(THREAD_LIST_SORT_KEY_STORAGE_KEY);
-  if (stored === "created_at" || stored === "updated_at") {
-    return stored;
-  }
-  return "updated_at";
+function buildOtherAiModels(providers: OtherAiProvider[]): ModelOption[] {
+  const models: ModelOption[] = [];
+  const seen = new Set<string>();
+  providers.forEach((provider) => {
+    if (!provider.enabled) {
+      return;
+    }
+    const providerModels = provider.models ?? [];
+    providerModels.forEach((model) => {
+      const trimmed = model.trim();
+      if (!trimmed) {
+        return;
+      }
+      const id = `${provider.id}:${trimmed}`;
+      if (seen.has(id)) {
+        return;
+      }
+      seen.add(id);
+      const formatted = formatOtherAiModelSlug(provider.provider, trimmed);
+      models.push({
+        id,
+        model: id,
+        displayName: `${provider.label} · ${formatted || trimmed}`,
+        description: provider.provider,
+        supportedReasoningEfforts: [],
+        defaultReasoningEffort: null,
+        isDefault: false,
+      });
+    });
+  });
+  return models;
 }
+
+function resolveRateLimitsByModel(
+  rateLimitsByWorkspace: Record<string, RateLimitSnapshot | null>,
+  rateLimitsByWorkspaceModel: Record<string, Record<string, RateLimitSnapshot | null>>,
+  workspaceId: string | null,
+  modelId: string | null,
+) {
+  if (!workspaceId) {
+    return null;
+  }
+  const modelMap = rateLimitsByWorkspaceModel[workspaceId];
+  if (modelId && modelMap?.[modelId]) {
+    return modelMap[modelId] ?? null;
+  }
+  if (modelMap?.[DEFAULT_RATE_LIMIT_KEY]) {
+    return modelMap[DEFAULT_RATE_LIMIT_KEY] ?? null;
+  }
+  return rateLimitsByWorkspace[workspaceId] ?? null;
+}
+
 
 function MainApp() {
   const {
@@ -164,6 +209,8 @@ function MainApp() {
     scaleShortcutTitle,
     scaleShortcutText,
     queueSaveSettings,
+    otherAiModelsSyncPercent,
+    otherAiModelRegistryByProvider,
   } = useAppSettingsController();
   useCodeCssVars(appSettings);
   const {
@@ -188,13 +235,27 @@ function MainApp() {
     handleCopyDebug,
     clearDebugEntries,
   } = useDebugLog();
+  useEffect(() => {
+    const handleEditorMetric = (event: Event) => {
+      const detail = (event as CustomEvent<EditorMetricEventDetail>).detail;
+      if (!detail) {
+        return;
+      }
+      addDebugEntry({
+        id: `editor-metric-${detail.label}-${Date.now()}`,
+        timestamp: Date.now(),
+        source: "event",
+        label: `editor metric: ${detail.label}`,
+        payload: detail.summary,
+      });
+    };
+    window.addEventListener("fridex-editor-metric", handleEditorMetric);
+    return () => window.removeEventListener("fridex-editor-metric", handleEditorMetric);
+  }, [addDebugEntry]);
   useLiquidGlassEffect({ reduceTransparency, onDebug: addDebugEntry });
   const [accessMode, setAccessMode] = useState<AccessMode>("current");
-  const [threadListSortKey, setThreadListSortKey] = useState<ThreadListSortKey>(
-    () => getStoredThreadListSortKey(),
-  );
   const [activeTab, setActiveTab] = useState<
-    "projects" | "codex" | "git" | "log"
+    "projects" | "codex" | "git" | "log" | "editor"
   >("codex");
   const tabletTab = activeTab === "projects" ? "codex" : activeTab;
   const {
@@ -290,10 +351,6 @@ function MainApp() {
     [workspacesById],
   );
 
-  const recordPendingThreadLinkRef = useRef<
-    (workspaceId: string, threadId: string) => void
-  >(() => {});
-
   const {
     updaterState,
     startUpdate,
@@ -304,13 +361,10 @@ function MainApp() {
     notificationSoundsEnabled: appSettings.notificationSoundsEnabled,
     systemNotificationsEnabled: appSettings.systemNotificationsEnabled,
     getWorkspaceName,
-    onThreadNotificationSent: (workspaceId, threadId) =>
-      recordPendingThreadLinkRef.current(workspaceId, threadId),
     onDebug: addDebugEntry,
     successSoundUrl,
     errorSoundUrl,
   });
-
   const { errorToasts, dismissErrorToast } = useErrorToasts();
 
   useEffect(() => {
@@ -387,7 +441,6 @@ function MainApp() {
   } = useGitPanelController({
     activeWorkspace,
     gitDiffPreloadEnabled: appSettings.preloadGitDiffs,
-    gitDiffIgnoreWhitespaceChanges: appSettings.gitDiffIgnoreWhitespaceChanges,
     isCompact,
     isTablet,
     activeTab,
@@ -417,6 +470,10 @@ function MainApp() {
     setDepth: setGitRootScanDepth,
     clear: clearGitRootCandidates,
   } = useGitRepoScan(activeWorkspace);
+  const otherAiModels = useMemo(
+    () => buildOtherAiModels(appSettings.otherAiProviders),
+    [appSettings.otherAiProviders],
+  );
   const {
     models,
     selectedModel,
@@ -431,6 +488,7 @@ function MainApp() {
     onDebug: addDebugEntry,
     preferredModelId: appSettings.lastComposerModelId,
     preferredEffort: appSettings.lastComposerReasoningEffort,
+    extraModels: otherAiModels,
   });
 
   const {
@@ -444,7 +502,8 @@ function MainApp() {
     onDebug: addDebugEntry,
   });
 
-  const composerShortcuts = {
+  useComposerShortcuts({
+    textareaRef: composerInputRef,
     modelShortcut: appSettings.composerModelShortcut,
     accessShortcut: appSettings.composerAccessShortcut,
     reasoningShortcut: appSettings.composerReasoningShortcut,
@@ -463,16 +522,6 @@ function MainApp() {
     selectedEffort,
     onSelectEffort: setSelectedEffort,
     reasoningSupported,
-  };
-
-  useComposerShortcuts({
-    textareaRef: composerInputRef,
-    ...composerShortcuts,
-  });
-
-  useComposerShortcuts({
-    textareaRef: workspaceHomeTextareaRef,
-    ...composerShortcuts,
   });
 
   useComposerMenuActions({
@@ -517,24 +566,6 @@ function MainApp() {
     await createBranch(name);
     refreshGitStatus();
   };
-  const currentBranch = gitStatus.branchName ?? null;
-  const {
-    branchSwitcher,
-    openBranchSwitcher,
-    closeBranchSwitcher,
-    handleBranchSelect,
-  } = useBranchSwitcher({
-    activeWorkspace,
-    checkoutBranch: handleCheckoutBranch,
-    setActiveWorkspaceId,
-  });
-  const isBranchSwitcherEnabled =
-    Boolean(activeWorkspace?.connected) && activeWorkspace?.kind !== "worktree";
-  useBranchSwitcherShortcut({
-    shortcut: appSettings.branchSwitcherShortcut,
-    isEnabled: isBranchSwitcherEnabled,
-    onTrigger: openBranchSwitcher,
-  });
   const alertError = useCallback((error: unknown) => {
     alert(error instanceof Error ? error.message : String(error));
   }, []);
@@ -557,6 +588,32 @@ function MainApp() {
 
   const resolvedModel = selectedModel?.model ?? null;
   const resolvedEffort = reasoningSupported ? selectedEffort : null;
+
+  const isOtherAiModel = useMemo(() => {
+    if (!selectedModelId) return false;
+    return otherAiModels.some((m) => m.id === selectedModelId);
+  }, [selectedModelId, otherAiModels]);
+
+  const [claudeUsage, setClaudeUsage] = useState<ClaudeUsageSnapshot>({
+    sessionInputTokens: 0,
+    sessionOutputTokens: 0,
+    sessionCacheReadTokens: 0,
+    sessionCacheCreationTokens: 0,
+    sessionCostUsd: 0,
+    lastUpdated: 0,
+  });
+
+  const handleClaudeUsage = useCallback((usage: ClaudeUsage) => {
+    setClaudeUsage((prev) => ({
+      sessionInputTokens: prev.sessionInputTokens + usage.inputTokens,
+      sessionOutputTokens: prev.sessionOutputTokens + usage.outputTokens,
+      sessionCacheReadTokens: prev.sessionCacheReadTokens,
+      sessionCacheCreationTokens: prev.sessionCacheCreationTokens,
+      sessionCostUsd: prev.sessionCostUsd,
+      lastUpdated: Date.now(),
+    }));
+  }, []);
+
   const activeGitRoot = activeWorkspace?.settings.gitRoot ?? null;
   const normalizePath = useCallback((value: string) => {
     return value.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -674,6 +731,7 @@ function MainApp() {
     threadListCursorByWorkspace,
     tokenUsageByThread,
     rateLimitsByWorkspace,
+    rateLimitsByWorkspaceModel,
     accountByWorkspace,
     planByThread,
     lastAgentMessageByThread,
@@ -694,7 +752,6 @@ function MainApp() {
     startFork,
     startReview,
     startResume,
-    startCompact,
     startApps,
     startMcp,
     startStatus,
@@ -731,38 +788,12 @@ function MainApp() {
     collaborationMode: collaborationModePayload,
     accessMode,
     reviewDeliveryMode: appSettings.reviewDeliveryMode,
-    steerEnabled: appSettings.steerEnabled,
+    steerEnabled: appSettings.experimentalSteerEnabled,
     customPrompts: prompts,
+    otherAiProviders: appSettings.otherAiProviders,
     onMessageActivity: queueGitStatusRefresh,
-    threadSortKey: threadListSortKey,
+    onClaudeUsage: handleClaudeUsage,
   });
-
-  const handleSetThreadListSortKey = useCallback(
-    (nextSortKey: ThreadListSortKey) => {
-      if (nextSortKey === threadListSortKey) {
-        return;
-      }
-      setThreadListSortKey(nextSortKey);
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(THREAD_LIST_SORT_KEY_STORAGE_KEY, nextSortKey);
-      }
-      workspaces
-        .filter((workspace) => workspace.connected)
-        .forEach((workspace) => {
-          void listThreadsForWorkspace(workspace, { sortKey: nextSortKey });
-        });
-    },
-    [threadListSortKey, workspaces, listThreadsForWorkspace],
-  );
-
-  useResponseRequiredNotificationsController({
-    systemNotificationsEnabled: appSettings.systemNotificationsEnabled,
-    approvals,
-    userInputRequests,
-    getWorkspaceName,
-    onDebug: addDebugEntry,
-  });
-
   const {
     activeAccount,
     accountSwitching,
@@ -793,25 +824,6 @@ function MainApp() {
   useEffect(() => {
     activeThreadIdRef.current = activeThreadId ?? null;
   }, [activeThreadId]);
-
-  const { recordPendingThreadLink } = useSystemNotificationThreadLinks({
-    hasLoadedWorkspaces: hasLoaded,
-    workspacesById,
-    refreshWorkspaces,
-    connectWorkspace,
-    setActiveTab,
-    setCenterMode,
-    setSelectedDiffPath,
-    setActiveWorkspaceId,
-    setActiveThreadId,
-  });
-
-  useEffect(() => {
-    recordPendingThreadLinkRef.current = recordPendingThreadLink;
-    return () => {
-      recordPendingThreadLinkRef.current = () => {};
-    };
-  }, [recordPendingThreadLink]);
 
   useAutoExitEmptyDiff({
     centerMode,
@@ -956,9 +968,7 @@ function MainApp() {
     openPrompt: openWorktreePrompt,
     confirmPrompt: confirmWorktreePrompt,
     cancelPrompt: cancelWorktreePrompt,
-    updateName: updateWorktreeName,
     updateBranch: updateWorktreeBranch,
-    updateCopyAgentsMd: updateWorktreeCopyAgentsMd,
     updateSetupScript: updateWorktreeSetupScript,
   } = useWorktreePrompt({
     addWorktreeAgent,
@@ -1098,9 +1108,13 @@ function MainApp() {
     [hasLoaded, threadListLoadingByWorkspace, workspaces]
   );
 
-  const activeRateLimits = activeWorkspaceId
-    ? rateLimitsByWorkspace[activeWorkspaceId] ?? null
-    : null;
+  const selectedRateLimitModelId = selectedModel?.model ?? selectedModelId ?? null;
+  const activeRateLimits = resolveRateLimitsByModel(
+    rateLimitsByWorkspace,
+    rateLimitsByWorkspaceModel,
+    activeWorkspaceId,
+    selectedRateLimitModelId,
+  );
   const activeTokenUsage = activeThreadId
     ? tokenUsageByThread[activeThreadId] ?? null
     : null;
@@ -1115,7 +1129,7 @@ function MainApp() {
   const showComposer = (!isCompact
     ? centerMode === "chat" || centerMode === "diff"
     : (isTablet ? tabletTab : activeTab) === "codex") && !showWorkspaceHome;
-  const { files, isLoading: isFilesLoading, setFileAutocompleteActive } =
+  const { files, isLoading: isFilesLoading, setFileAutocompleteActive, refreshFilesLater } =
     useWorkspaceFileListing({
       activeWorkspace,
       activeWorkspaceId,
@@ -1128,6 +1142,22 @@ function MainApp() {
       hasComposerSurface: showComposer || showWorkspaceHome,
       onDebug: addDebugEntry,
     });
+  const editorDidSaveRef = useRef<(path: string) => void>(() => {});
+  const editorState = useEditorState({
+    workspaceId: activeWorkspaceId,
+    availablePaths: files,
+    filesReady: Boolean(activeWorkspaceId) && !isFilesLoading,
+    onDidSave: (path) => editorDidSaveRef.current(path),
+  });
+  const editorLsp = useEditorLsp({
+    workspaceId: activeWorkspaceId,
+    workspacePath: activeWorkspace?.path ?? null,
+    openPaths: editorState.openPaths,
+    buffersByPath: editorState.buffersByPath,
+  });
+  useEffect(() => {
+    editorDidSaveRef.current = editorLsp.onDidSave;
+  }, [editorLsp.onDidSave]);
   const [usageMetric, setUsageMetric] = useState<"tokens" | "time">("tokens");
   const [usageWorkspaceId, setUsageWorkspaceId] = useState<string | null>(null);
   const usageWorkspaceOptions = useMemo(
@@ -1162,6 +1192,42 @@ function MainApp() {
     error: localUsageError,
     refresh: refreshLocalUsage,
   } = useLocalUsage(showHome, usageWorkspacePath);
+  const {
+    tasks,
+    isLoading: isLoadingTasks,
+    error: tasksError,
+    create: createTask,
+    update: updateTask,
+    remove: deleteTask,
+    setStatus: setTaskStatus,
+  } = useTasks();
+  const [tasksView, setTasksView] = useState<TaskView>("checklist");
+  const [tasksWorkspaceId, setTasksWorkspaceId] = useState<string | null>(null);
+  const tasksWorkspaceOptions = useMemo(() => {
+    const options = workspaces.map((workspace) => {
+      const groupName = getWorkspaceGroupName(workspace.id);
+      const label = groupName
+        ? `${groupName} / ${workspace.name}`
+        : workspace.name;
+      return { id: workspace.id, label };
+    });
+    return [{ id: "", label: "All projects" }, ...options];
+  }, [getWorkspaceGroupName, workspaces]);
+  const filteredTasks = useMemo(() => {
+    if (!tasksWorkspaceId) {
+      return tasks;
+    }
+    return tasks.filter((task) => task.workspaceId === tasksWorkspaceId);
+  }, [tasks, tasksWorkspaceId]);
+  useEffect(() => {
+    if (!tasksWorkspaceId) {
+      return;
+    }
+    if (workspaces.some((workspace) => workspace.id === tasksWorkspaceId)) {
+      return;
+    }
+    setTasksWorkspaceId(null);
+  }, [tasksWorkspaceId, workspaces]);
   const canInterrupt = activeThreadId
     ? threadStatusById[activeThreadId]?.isProcessing ?? false
     : false;
@@ -1199,7 +1265,7 @@ function MainApp() {
     activeWorkspace,
     isProcessing,
     isReviewing,
-    steerEnabled: appSettings.steerEnabled,
+    steerEnabled: appSettings.experimentalSteerEnabled,
     appsEnabled: appSettings.experimentalAppsEnabled,
     connectWorkspace,
     startThreadForWorkspace,
@@ -1208,7 +1274,6 @@ function MainApp() {
     startFork,
     startReview,
     startResume,
-    startCompact,
     startApps,
     startMcp,
     startStatus,
@@ -1236,7 +1301,6 @@ function MainApp() {
     connectWorkspace,
     startThreadForWorkspace,
     sendUserMessageToThread,
-    onWorktreeCreated: handleWorktreeCreated,
   });
 
   const canInsertComposerText = showWorkspaceHome
@@ -1306,6 +1370,10 @@ function MainApp() {
     fetchError,
     pushError,
     syncError,
+    commitReport,
+    pushReport,
+    pullReport,
+    fetchReport,
     onCommitMessageChange: handleCommitMessageChange,
     onGenerateCommitMessage: handleGenerateCommitMessage,
     onCommit: handleCommit,
@@ -1323,6 +1391,67 @@ function MainApp() {
     refreshGitStatus,
     refreshGitLog,
   });
+
+  const handleFixGitError = useCallback(
+    async (payload: {
+      operation: "commit" | "push" | "pull" | "fetch";
+      report: GitCommandReport;
+    }) => {
+      const { operation, report } = payload;
+      const sections: string[] = [
+        `Git ${operation} failed while running from Fridex.`,
+        "",
+        "Please:",
+        "1) Identify the root cause from the output (husky/lefthook hooks, lint-staged, commitlint, etc).",
+        "2) Propose the minimal code/config changes to fix it (with a patch).",
+        "3) List the exact commands to verify the fix (lint/typecheck/tests if relevant), then retry the git command.",
+        "",
+        `Command: ${report.command}`,
+        `Exit code: ${typeof report.exitCode === "number" ? report.exitCode : "unknown"}`,
+        `Duration: ${Math.round(report.durationMs)}ms`,
+      ];
+
+      const stderr = report.stderr?.trim();
+      if (stderr) {
+        sections.push("", "STDERR:", "```text", stderr, "```");
+      }
+      const stdout = report.stdout?.trim();
+      if (stdout) {
+        sections.push("", "STDOUT:", "```text", stdout, "```");
+      }
+
+      await sendUserMessage(sections.join("\n"), []);
+    },
+    [sendUserMessage],
+  );
+
+  const handleShareGitError = useCallback(
+    async (payload: {
+      operation: "commit" | "push" | "pull" | "fetch";
+      report: GitCommandReport;
+    }) => {
+      const { operation, report } = payload;
+      const sections: string[] = [
+        `Git ${operation} output (from Fridex):`,
+        "",
+        `Command: ${report.command}`,
+        `Exit code: ${typeof report.exitCode === "number" ? report.exitCode : "unknown"}`,
+        `Duration: ${Math.round(report.durationMs)}ms`,
+      ];
+
+      const stderr = report.stderr?.trim();
+      if (stderr) {
+        sections.push("", "STDERR:", "```text", stderr, "```");
+      }
+      const stdout = report.stdout?.trim();
+      if (stdout) {
+        sections.push("", "STDOUT:", "```text", stdout, "```");
+      }
+
+      await sendUserMessage(sections.join("\n"), []);
+    },
+    [sendUserMessage],
+  );
 
   const handleSendPromptToNewAgent = useCallback(
     async (text: string) => {
@@ -1427,7 +1556,7 @@ function MainApp() {
     ? workspacesById.get(activeWorkspace?.parentId ?? "") ?? null
     : null;
   const worktreeLabel = isWorktreeWorkspace
-    ? (activeWorkspace?.name?.trim() || activeWorkspace?.worktree?.branch) ?? null
+    ? activeWorkspace?.worktree?.branch ?? activeWorkspace?.name ?? null
     : null;
   const activeRenamePrompt =
     renameWorktreePrompt?.workspaceId === activeWorkspace?.id
@@ -1504,6 +1633,7 @@ function MainApp() {
     handleAddWorktreeAgent,
     handleAddCloneAgent,
   } = useWorkspaceActions({
+    activeWorkspace,
     isCompact,
     addWorkspace,
     addWorkspaceFromPath,
@@ -1702,6 +1832,7 @@ function MainApp() {
   };
 
   const showGitDetail = Boolean(selectedDiffPath) && isPhone;
+
   const isThreadOpen = Boolean(activeThreadId && showComposer);
 
   useArchiveShortcut({
@@ -1761,7 +1892,7 @@ function MainApp() {
     reduceTransparency ? " reduced-transparency" : ""
   }${!isCompact && sidebarCollapsed ? " sidebar-collapsed" : ""}${
     !isCompact && rightPanelCollapsed ? " right-panel-collapsed" : ""
-  }`;
+  }${activeTab === "editor" ? " editor-active" : ""}`;
   const {
     sidebarNode,
     messagesNode,
@@ -1797,12 +1928,13 @@ function MainApp() {
     threadListLoadingByWorkspace,
     threadListPagingByWorkspace,
     threadListCursorByWorkspace,
-    threadListSortKey,
-    onSetThreadListSortKey: handleSetThreadListSortKey,
     activeWorkspaceId,
     activeThreadId,
     activeItems,
     activeRateLimits,
+    claudeUsage: isOtherAiModel ? claudeUsage : null,
+    isOtherAiModel,
+    otherAiModelsSyncPercent,
     usageShowRemaining: appSettings.usageShowRemaining,
     accountInfo: activeAccount,
     onSwitchAccount: handleSwitchAccount,
@@ -1818,6 +1950,8 @@ function MainApp() {
     handleApprovalDecision,
     handleApprovalRemember,
     handleUserInputSubmit,
+    errorToasts,
+    onDismissErrorToast: dismissErrorToast,
     onOpenSettings: () => openSettings(),
     onOpenDictationSettings: () => openSettings("dictation"),
     onOpenDebug: handleDebugClick,
@@ -1853,6 +1987,7 @@ function MainApp() {
         sidebarCollapsed: collapsed,
       });
     },
+    onRefreshFiles: refreshFilesLater,
     onSelectThread: (workspaceId, threadId) => {
       exitDiffView();
       resetPullRequestSelection();
@@ -1899,8 +2034,6 @@ function MainApp() {
     updaterState,
     onUpdate: startUpdate,
     onDismissUpdate: dismissUpdate,
-    errorToasts,
-    onDismissErrorToast: dismissErrorToast,
     latestAgentRuns,
     isLoadingLatestAgents,
     localUsageSnapshot,
@@ -1914,6 +2047,20 @@ function MainApp() {
     usageWorkspaceId,
     usageWorkspaceOptions,
     onUsageWorkspaceChange: setUsageWorkspaceId,
+    tasks: filteredTasks,
+    isLoadingTasks,
+    tasksError,
+    tasksView,
+    onTasksViewChange: setTasksView,
+    tasksWorkspaceId,
+    tasksWorkspaceOptions,
+    onTasksWorkspaceChange: setTasksWorkspaceId,
+    onTaskCreate: async ({ title, content, workspaceId }) => {
+      await createTask({ title, content, workspaceId: workspaceId ?? tasksWorkspaceId });
+    },
+    onTaskUpdate: updateTask,
+    onTaskDelete: deleteTask,
+    onTaskStatusChange: setTaskStatus,
     onSelectHomeThread: (workspaceId, threadId) => {
       exitDiffView();
       clearDraftState();
@@ -1951,6 +2098,8 @@ function MainApp() {
         centerMode={centerMode}
         gitDiffViewStyle={gitDiffViewStyle}
         onSelectDiffViewStyle={setGitDiffViewStyle}
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
         isCompact={isCompact}
         rightPanelCollapsed={rightPanelCollapsed}
         sidebarToggleProps={sidebarToggleProps}
@@ -1970,8 +2119,6 @@ function MainApp() {
     gitPanelMode,
     onGitPanelModeChange: handleGitPanelModeChange,
     gitDiffViewStyle,
-    gitDiffIgnoreWhitespaceChanges:
-      appSettings.gitDiffIgnoreWhitespaceChanges && diffSource !== "pr",
     worktreeApplyLabel: "apply",
     worktreeApplyTitle: activeParentWorkspace?.name
       ? `Apply changes to ${activeParentWorkspace.name}`
@@ -1987,7 +2134,6 @@ function MainApp() {
     selectedDiffPath,
     diffScrollRequestId,
     onSelectDiff: handleSelectDiff,
-    diffSource,
     gitLogEntries,
     gitLogTotal,
     gitLogAhead,
@@ -2043,6 +2189,7 @@ function MainApp() {
     gitDiffLoading: activeDiffLoading,
     gitDiffError: activeDiffError,
     onDiffActivePathChange: handleActiveDiffPath,
+    onOpenFile: activeTab === "editor" ? editorState.openFile : undefined,
     commitMessage,
     commitMessageLoading,
     commitMessageError,
@@ -2065,6 +2212,12 @@ function MainApp() {
     fetchError,
     pushError,
     syncError,
+    commitReport,
+    pushReport,
+    pullReport,
+    fetchReport,
+    onFixGitError: handleFixGitError,
+    onShareGitError: handleShareGitError,
     commitsAhead: gitLogAhead,
     onSendPrompt: handleSendPrompt,
     onSendPromptToNewAgent: handleSendPromptToNewAgent,
@@ -2082,7 +2235,7 @@ function MainApp() {
     onFileAutocompleteActiveChange: setFileAutocompleteActive,
     isReviewing,
     isProcessing,
-    steerEnabled: appSettings.steerEnabled,
+    steerEnabled: appSettings.experimentalSteerEnabled,
     reviewPrompt,
     onReviewPromptClose: closeReviewPrompt,
     onReviewPromptShowPreset: showPresetStep,
@@ -2255,6 +2408,39 @@ function MainApp() {
   ) : null;
 
   const mainMessagesNode = showWorkspaceHome ? workspaceHomeNode : messagesNode;
+  const editorNode = (
+    <EditorView
+      workspaceId={activeWorkspaceId}
+      openPaths={editorState.openPaths}
+      pinnedPaths={editorState.pinnedPaths}
+      activePath={editorState.activePath}
+      buffersByPath={editorState.buffersByPath}
+      availablePaths={files}
+      editorKeymap={appSettings.editorKeymap}
+      appSettings={appSettings}
+      workspacePath={activeWorkspace?.path ?? null}
+      launchScript={launchScriptState.launchScript}
+      launchScripts={launchScriptsState.launchScripts}
+      onSelectPath={editorState.setActivePath}
+      onClosePath={editorState.closeFile}
+      onCloseOtherPaths={editorState.closeOtherFiles}
+      onTogglePinPath={editorState.togglePinPath}
+      onOpenPath={editorState.openFile}
+      onContentChange={editorState.updateContent}
+      onSavePath={editorState.saveFile}
+      onUpdateAppSettings={queueSaveSettings}
+      onRunLaunchScript={launchScriptState.onRunLaunchScript}
+      onRunLaunchScriptEntry={launchScriptsState.onRunScript}
+      onMonacoReady={editorLsp.onMonacoReady}
+    />
+  );
+  const editorSidebarNode = activeWorkspace ? (
+    <div className="editor-sidebar">{gitDiffPanelNode}</div>
+  ) : (
+    sidebarNode
+  );
+  const sidebarNodeForLayout =
+    activeTab === "editor" ? editorSidebarNode : sidebarNode;
 
   const desktopTopbarLeftNodeWithToggle = !isCompact ? (
     <div className="topbar-leading">
@@ -2310,11 +2496,11 @@ function MainApp() {
         activeTab={activeTab}
         tabletTab={tabletTab}
         centerMode={centerMode}
-        preloadGitDiffs={appSettings.preloadGitDiffs}
         hasActivePlan={hasActivePlan}
         activeWorkspace={Boolean(activeWorkspace)}
-        sidebarNode={sidebarNode}
+        sidebarNode={sidebarNodeForLayout}
         messagesNode={mainMessagesNode}
+        editorNode={editorNode}
         composerNode={composerNode}
         approvalToastsNode={approvalToastsNode}
         updateToastNode={updateToastNode}
@@ -2343,9 +2529,7 @@ function MainApp() {
         onRenamePromptCancel={handleRenamePromptCancel}
         onRenamePromptConfirm={handleRenamePromptConfirm}
         worktreePrompt={worktreePrompt}
-        onWorktreePromptNameChange={updateWorktreeName}
         onWorktreePromptChange={updateWorktreeBranch}
-        onWorktreePromptCopyAgentsMdChange={updateWorktreeCopyAgentsMd}
         onWorktreeSetupScriptChange={updateWorktreeSetupScript}
         onWorktreePromptCancel={cancelWorktreePrompt}
         onWorktreePromptConfirm={confirmWorktreePrompt}
@@ -2356,13 +2540,6 @@ function MainApp() {
         onClonePromptClearCopiesFolder={clearCloneCopiesFolder}
         onClonePromptCancel={cancelClonePrompt}
         onClonePromptConfirm={confirmClonePrompt}
-        branchSwitcher={branchSwitcher}
-        branches={branches}
-        workspaces={workspaces}
-        activeWorkspace={activeWorkspace}
-        currentBranch={currentBranch}
-        onBranchSwitcherSelect={handleBranchSelect}
-        onBranchSwitcherCancel={closeBranchSwitcher}
         settingsOpen={settingsOpen}
         settingsSection={settingsSection ?? undefined}
         onCloseSettings={closeSettings}
@@ -2396,6 +2573,7 @@ function MainApp() {
           },
           scaleShortcutTitle,
           scaleShortcutText,
+          otherAiModelRegistryByProvider,
           onTestNotificationSound: handleTestNotificationSound,
           onTestSystemNotification: handleTestSystemNotification,
           dictationModelStatus: dictationModel.status,
