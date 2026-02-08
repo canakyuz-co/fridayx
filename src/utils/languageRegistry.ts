@@ -21,7 +21,7 @@ const LANGUAGE_REGISTRY: LanguageSpec[] = [
   { id: "markdown", extensions: ["md"], monaco: "markdown" },
   { id: "php", extensions: ["php"] },
   { id: "prisma", extensions: ["prisma"], monaco: "prisma" },
-  { id: "rust", extensions: ["rs"] },
+  { id: "rust", extensions: ["rs"], monaco: "rust" },
   { id: "scss", extensions: ["sass", "scss"], monaco: "scss" },
   { id: "sql", extensions: ["sql"], monaco: "sql" },
   { id: "swift", extensions: ["swift"] },
