@@ -12,6 +12,7 @@ pub(crate) mod args;
 pub(crate) mod config;
 pub(crate) mod home;
 
+use self::args::apply_codex_args;
 pub(crate) use crate::backend::app_server::WorkspaceSession;
 use crate::backend::app_server::{
     build_codex_command_with_bin, build_codex_path_env, check_codex_installation,

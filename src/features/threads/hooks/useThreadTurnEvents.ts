@@ -178,12 +178,13 @@ export function useThreadTurnEvents({
     (
       workspaceId: string,
       rateLimits: Record<string, unknown>,
-      _modelId?: string | null,
+      modelId?: string | null,
     ) => {
       dispatch({
         type: "setRateLimits",
         workspaceId,
         rateLimits: normalizeRateLimits(rateLimits),
+        modelId,
       });
     },
     [dispatch],
