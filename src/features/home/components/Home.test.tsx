@@ -113,7 +113,7 @@ describe("Home", () => {
     );
 
     const scoped = within(container);
-    fireEvent.click(scoped.getByRole("button", { name: "Time" }));
+    fireEvent.click(scoped.getByRole("tab", { name: "Usage" }));
     expect(scoped.getAllByText("agent time").length).toBeGreaterThan(0);
     expect(scoped.getByText("Runs")).toBeTruthy();
     expect(scoped.getByText("Peak day")).toBeTruthy();
