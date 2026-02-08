@@ -1371,6 +1371,9 @@ export function EditorView({
               type="button"
               className="editor-tab-close"
               aria-label={`${tab.name} dosyasini kapat`}
+              onMouseDown={(event) => {
+                event.stopPropagation();
+              }}
               onClick={(event) => {
                 event.stopPropagation();
                 onClosePath(tab.path);

@@ -148,13 +148,27 @@
   justify-content: center;
   width: 18px;
   height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
   border-radius: 4px;
   color: var(--text-muted);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transform: none;
+  box-shadow: none;
 }
 
 .editor-tab-close:hover {
   color: var(--text-strong);
   background: var(--surface-hover);
+  transform: none;
+  box-shadow: none;
+}
+
+.editor-tab-close:focus-visible {
+  outline: 1px solid var(--border-strong);
+  outline-offset: 1px;
 }
 
 .editor-tab-context-menu {
