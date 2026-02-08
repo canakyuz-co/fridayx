@@ -624,16 +624,18 @@
 }
 
 .app.editor-active .main-header-actions {
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
 }
 
 .app.editor-active .main-header-action,
 .app.editor-active .editor-toggle,
 .app.editor-active .launch-script-button,
 .app.editor-active .launch-script-entry-button {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   border: 1px solid var(--border-subtle);
   background: color-mix(in srgb, var(--surface-card) 84%, transparent);
   color: var(--text-muted);
@@ -652,6 +654,30 @@
 .app.editor-active .editor-toggle.is-active {
   border-color: var(--border-strong);
   color: var(--text-stronger);
+}
+
+.app.editor-active .main-header-action svg,
+.app.editor-active .editor-toggle svg {
+  width: 14px;
+  height: 14px;
+}
+
+.app.editor-active.right-panel-collapsed .main-topbar {
+  padding-right: calc(
+    12px
+    + var(--titlebar-toggle-size, 28px)
+    + var(--titlebar-toggle-side-gap, 12px)
+    + 10px
+  );
+}
+
+.app.editor-active.sidebar-collapsed .main-topbar {
+  padding-left: calc(
+    12px
+    + var(--titlebar-inset-left, 0px)
+    + var(--titlebar-toggle-size, 28px)
+    + 8px
+  );
 }
 
 .app.editor-active .editor-sidebar {
