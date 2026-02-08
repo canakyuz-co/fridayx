@@ -24,7 +24,6 @@ import type {
   AccessMode,
   ApprovalRequest,
   BranchInfo,
-  ClaudeUsageSnapshot,
   CollaborationModeOption,
   ConversationItem,
   ComposerEditorSettings,
@@ -34,7 +33,6 @@ import type {
   DebugEntry,
   DictationSessionState,
   DictationTranscript,
-  GitCommandReport,
   GitFileStatus,
   GitHubIssue,
   GitHubPullRequestComment,
@@ -48,9 +46,7 @@ import type {
   RequestUserInputRequest,
   RequestUserInputResponse,
   SkillOption,
-  TaskEntry,
-  TaskStatus,
-  TaskView,
+  ThreadListSortKey,
   ThreadSummary,
   ThreadTokenUsage,
   TurnPlan,
@@ -117,13 +113,12 @@ type LayoutNodesOptions = {
   threadListLoadingByWorkspace: Record<string, boolean>;
   threadListPagingByWorkspace: Record<string, boolean>;
   threadListCursorByWorkspace: Record<string, string | null>;
+  threadListSortKey: ThreadListSortKey;
+  onSetThreadListSortKey: (sortKey: ThreadListSortKey) => void;
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   activeItems: ConversationItem[];
   activeRateLimits: RateLimitSnapshot | null;
-  claudeUsage?: ClaudeUsageSnapshot | null;
-  isOtherAiModel?: boolean;
-  otherAiModelsSyncPercent?: number | null;
   usageShowRemaining: boolean;
   accountInfo: AccountSnapshot | null;
   onSwitchAccount: () => void;
@@ -134,7 +129,6 @@ type LayoutNodesOptions = {
   openAppIconById: Record<string, string>;
   selectedOpenAppId: string;
   onSelectOpenAppId: (id: string) => void;
-  onRefreshFiles?: () => void;
   approvals: ApprovalRequest[];
   userInputRequests: RequestUserInputRequest[];
   handleApprovalDecision: (
@@ -205,22 +199,6 @@ type LayoutNodesOptions = {
   usageWorkspaceId: string | null;
   usageWorkspaceOptions: Array<{ id: string; label: string }>;
   onUsageWorkspaceChange: (workspaceId: string | null) => void;
-  tasks: TaskEntry[];
-  isLoadingTasks: boolean;
-  tasksError: string | null;
-  tasksView: TaskView;
-  onTasksViewChange: (view: TaskView) => void;
-  tasksWorkspaceId: string | null;
-  tasksWorkspaceOptions: Array<{ id: string; label: string }>;
-  onTasksWorkspaceChange: (workspaceId: string | null) => void;
-  onTaskCreate: (input: {
-    title: string;
-    content: string;
-    workspaceId?: string | null;
-  }) => Promise<void>;
-  onTaskUpdate: (input: { id: string; title: string; content: string }) => Promise<void>;
-  onTaskDelete: (id: string) => void | Promise<void>;
-  onTaskStatusChange: (id: string, status: TaskStatus) => Promise<void>;
   onSelectHomeThread: (workspaceId: string, threadId: string) => void;
   activeWorkspace: WorkspaceInfo | null;
   activeParentWorkspace: WorkspaceInfo | null;
@@ -248,12 +226,13 @@ type LayoutNodesOptions = {
   mainHeaderActionsNode?: ReactNode;
   centerMode: "chat" | "diff";
   onExitDiff: () => void;
-  activeTab: "projects" | "codex" | "git" | "log" | "editor";
-  onSelectTab: (tab: "projects" | "codex" | "git" | "log" | "editor") => void;
-  tabletNavTab: "codex" | "git" | "log" | "editor";
+  activeTab: "projects" | "codex" | "git" | "log";
+  onSelectTab: (tab: "projects" | "codex" | "git" | "log") => void;
+  tabletNavTab: "codex" | "git" | "log";
   gitPanelMode: "diff" | "log" | "issues" | "prs";
   onGitPanelModeChange: (mode: "diff" | "log" | "issues" | "prs") => void;
   gitDiffViewStyle: "split" | "unified";
+  gitDiffIgnoreWhitespaceChanges: boolean;
   worktreeApplyLabel: string;
   worktreeApplyTitle: string | null;
   worktreeApplyLoading: boolean;
@@ -318,11 +297,11 @@ type LayoutNodesOptions = {
   onUnstageGitFile: (path: string) => Promise<void>;
   onRevertGitFile: (path: string) => Promise<void>;
   onRevertAllGitChanges: () => Promise<void>;
+  diffSource: "local" | "pr" | "commit";
   gitDiffs: GitDiffViewerItem[];
   gitDiffLoading: boolean;
   gitDiffError: string | null;
   onDiffActivePathChange?: (path: string) => void;
-  onOpenFile?: (path: string) => void;
   commitMessage: string;
   commitMessageLoading: boolean;
   commitMessageError: string | null;
@@ -345,18 +324,6 @@ type LayoutNodesOptions = {
   fetchError?: string | null;
   pushError?: string | null;
   syncError?: string | null;
-  commitReport?: GitCommandReport | null;
-  pushReport?: GitCommandReport | null;
-  pullReport?: GitCommandReport | null;
-  fetchReport?: GitCommandReport | null;
-  onFixGitError?: (payload: {
-    operation: "commit" | "push" | "pull" | "fetch";
-    report: GitCommandReport;
-  }) => void | Promise<void>;
-  onShareGitError?: (payload: {
-    operation: "commit" | "push" | "pull" | "fetch";
-    report: GitCommandReport;
-  }) => void | Promise<void>;
   commitsAhead?: number;
   onSendPrompt: (text: string) => void | Promise<void>;
   onSendPromptToNewAgent: (text: string) => void | Promise<void>;
@@ -521,12 +488,11 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       threadListLoadingByWorkspace={options.threadListLoadingByWorkspace}
       threadListPagingByWorkspace={options.threadListPagingByWorkspace}
       threadListCursorByWorkspace={options.threadListCursorByWorkspace}
+      threadListSortKey={options.threadListSortKey}
+      onSetThreadListSortKey={options.onSetThreadListSortKey}
       activeWorkspaceId={options.activeWorkspaceId}
       activeThreadId={options.activeThreadId}
       accountRateLimits={options.activeRateLimits}
-      claudeUsage={options.claudeUsage}
-      isOtherAiModel={options.isOtherAiModel}
-      otherAiModelsSyncPercent={options.otherAiModelsSyncPercent}
       usageShowRemaining={options.usageShowRemaining}
       accountInfo={options.accountInfo}
       onSwitchAccount={options.onSwitchAccount}
@@ -634,6 +600,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       prompts={options.prompts}
       files={options.files}
       textareaRef={options.textareaRef}
+      historyKey={options.activeWorkspace?.id ?? null}
       editorSettings={options.composerEditorSettings}
       editorExpanded={options.composerEditorExpanded}
       onToggleEditorExpanded={options.onToggleComposerEditorExpanded}
@@ -706,18 +673,6 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       usageWorkspaceId={options.usageWorkspaceId}
       usageWorkspaceOptions={options.usageWorkspaceOptions}
       onUsageWorkspaceChange={options.onUsageWorkspaceChange}
-      tasks={options.tasks}
-      isLoadingTasks={options.isLoadingTasks}
-      tasksError={options.tasksError}
-      tasksView={options.tasksView}
-      onTasksViewChange={options.onTasksViewChange}
-      tasksWorkspaceId={options.tasksWorkspaceId}
-      tasksWorkspaceOptions={options.tasksWorkspaceOptions}
-      onTasksWorkspaceChange={options.onTasksWorkspaceChange}
-      onTaskCreate={options.onTaskCreate}
-      onTaskUpdate={options.onTaskUpdate}
-      onTaskDelete={options.onTaskDelete}
-      onTaskStatusChange={options.onTaskStatusChange}
       onSelectThread={options.onSelectHomeThread}
     />
   );
@@ -802,14 +757,11 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         filePanelMode={options.filePanelMode}
         onFilePanelModeChange={options.onFilePanelModeChange}
         onInsertText={options.onInsertComposerText}
-        onOpenFile={options.onOpenFile}
         canInsertText={options.canInsertComposerText}
-        showCreateActions={options.activeTab === "editor"}
         openTargets={options.openAppTargets}
         openAppIconById={options.openAppIconById}
         selectedOpenAppId={options.selectedOpenAppId}
         onSelectOpenAppId={options.onSelectOpenAppId}
-        onRefreshFiles={options.onRefreshFiles}
       />
     );
   } else if (options.filePanelMode === "prompts") {
@@ -834,6 +786,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
     gitDiffPanelNode = (
       <GitDiffPanel
         workspaceId={options.activeWorkspace?.id ?? null}
+        workspacePath={options.activeWorkspace?.path ?? null}
         mode={options.gitPanelMode}
         onModeChange={options.onGitPanelModeChange}
         filePanelMode={options.filePanelMode}
@@ -913,12 +866,6 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         fetchError={options.fetchError}
         pushError={options.pushError}
         syncError={options.syncError}
-        commitReport={options.commitReport ?? null}
-        pushReport={options.pushReport ?? null}
-        pullReport={options.pullReport ?? null}
-        fetchReport={options.fetchReport ?? null}
-        onFixGitError={options.onFixGitError}
-        onShareGitError={options.onShareGitError}
         commitsAhead={options.commitsAhead}
       />
     );
@@ -932,10 +879,13 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       isLoading={options.gitDiffLoading}
       error={options.gitDiffError}
       diffStyle={options.gitDiffViewStyle}
+      ignoreWhitespaceChanges={options.gitDiffIgnoreWhitespaceChanges}
       pullRequest={options.selectedPullRequest}
       pullRequestComments={options.selectedPullRequestComments}
       pullRequestCommentsLoading={options.selectedPullRequestCommentsLoading}
       pullRequestCommentsError={options.selectedPullRequestCommentsError}
+      canRevert={options.diffSource === "local"}
+      onRevertFile={options.onRevertGitFile}
       onActivePathChange={options.onDiffActivePathChange}
     />
   );

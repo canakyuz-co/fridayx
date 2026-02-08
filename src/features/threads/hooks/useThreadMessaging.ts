@@ -12,6 +12,7 @@ import type {
   WorkspaceInfo,
 } from "../../../types";
 import {
+  compactThread as compactThreadService,
   sendUserMessage as sendUserMessageService,
   startReview as startReviewService,
   interruptTurn as interruptTurnService,
@@ -1927,6 +1928,37 @@ export function useThreadMessaging({
     ],
   );
 
+  const startCompact = useCallback(
+    async (_text: string) => {
+      if (!activeWorkspace) {
+        return;
+      }
+      const threadId = activeThreadId ?? (await ensureThreadForActiveWorkspace());
+      if (!threadId) {
+        return;
+      }
+      try {
+        await compactThreadService(activeWorkspace.id, threadId);
+      } catch (error) {
+        pushThreadErrorMessage(
+          threadId,
+          error instanceof Error
+            ? error.message
+            : "Failed to start context compaction.",
+        );
+      } finally {
+        safeMessageActivity();
+      }
+    },
+    [
+      activeThreadId,
+      activeWorkspace,
+      ensureThreadForActiveWorkspace,
+      pushThreadErrorMessage,
+      safeMessageActivity,
+    ],
+  );
+
   return {
     interruptTurn,
     sendUserMessage,
@@ -1934,6 +1966,7 @@ export function useThreadMessaging({
     startFork,
     startReview,
     startResume,
+    startCompact,
     startApps,
     startMcp,
     startStatus,

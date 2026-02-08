@@ -2,6 +2,7 @@ import type {
   AccountSnapshot,
   ClaudeUsageSnapshot,
   RateLimitSnapshot,
+  ThreadListSortKey,
   ThreadSummary,
   WorkspaceInfo,
 } from "../../../types";
@@ -9,7 +10,14 @@ import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { FolderOpen } from "lucide-react";
+import Copy from "lucide-react/dist/esm/icons/copy";
+import GitBranch from "lucide-react/dist/esm/icons/git-branch";
+import Plus from "lucide-react/dist/esm/icons/plus";
 import X from "lucide-react/dist/esm/icons/x";
+import {
+  PopoverMenuItem,
+  PopoverSurface,
+} from "../../design-system/components/popover/PopoverPrimitives";
 import { SidebarCornerActions } from "./SidebarCornerActions";
 import { SidebarFooter } from "./SidebarFooter";
 import { SidebarHeader } from "./SidebarHeader";
@@ -23,6 +31,7 @@ import { useCollapsedGroups } from "../hooks/useCollapsedGroups";
 import { useSidebarMenus } from "../hooks/useSidebarMenus";
 import { useSidebarScrollFade } from "../hooks/useSidebarScrollFade";
 import { useThreadRows } from "../hooks/useThreadRows";
+import { useDismissibleMenu } from "../hooks/useDismissibleMenu";
 import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { getUsageLabels } from "../utils/usageLabels";
 import { formatRelativeTimeShort } from "../../../utils/time";
@@ -53,6 +62,8 @@ type SidebarProps = {
   threadListLoadingByWorkspace: Record<string, boolean>;
   threadListPagingByWorkspace: Record<string, boolean>;
   threadListCursorByWorkspace: Record<string, string | null>;
+  threadListSortKey: ThreadListSortKey;
+  onSetThreadListSortKey: (sortKey: ThreadListSortKey) => void;
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   accountRateLimits: RateLimitSnapshot | null;
@@ -109,6 +120,8 @@ export function Sidebar({
   threadListLoadingByWorkspace,
   threadListPagingByWorkspace,
   threadListCursorByWorkspace,
+  threadListSortKey,
+  onSetThreadListSortKey,
   activeWorkspaceId,
   activeThreadId,
   accountRateLimits,
@@ -368,22 +381,22 @@ export function Sidebar({
     [],
   );
 
+  useDismissibleMenu({
+    isOpen: Boolean(addMenuAnchor),
+    containerRef: addMenuRef,
+    onClose: () => setAddMenuAnchor(null),
+  });
+
   useEffect(() => {
     if (!addMenuAnchor) {
       return;
     }
-    function handlePointerDown(event: Event) {
-      const target = event.target as Node | null;
-      if (addMenuRef.current && target && addMenuRef.current.contains(target)) {
-        return;
-      }
+    function handleScroll() {
       setAddMenuAnchor(null);
     }
-    window.addEventListener("mousedown", handlePointerDown);
-    window.addEventListener("scroll", handlePointerDown, true);
+    window.addEventListener("scroll", handleScroll, true);
     return () => {
-      window.removeEventListener("mousedown", handlePointerDown);
-      window.removeEventListener("scroll", handlePointerDown, true);
+      window.removeEventListener("scroll", handleScroll, true);
     };
   }, [addMenuAnchor]);
 
@@ -407,6 +420,8 @@ export function Sidebar({
         onAddWorkspace={onAddWorkspace}
         onToggleSearch={() => setIsSearchOpen((prev) => !prev)}
         isSearchOpen={isSearchOpen}
+        threadListSortKey={threadListSortKey}
+        onSetThreadListSortKey={onSetThreadListSortKey}
       />
       <div className={`sidebar-search${isSearchOpen ? " is-open" : ""}`}>
         {isSearchOpen && (
@@ -542,8 +557,8 @@ export function Sidebar({
                     >
                       {addMenuOpen && addMenuAnchor &&
                         createPortal(
-                          <div
-                            className="workspace-add-menu popover-surface"
+                          <PopoverSurface
+                            className="workspace-add-menu"
                             ref={addMenuRef}
                             style={{
                               top: addMenuAnchor.top,
@@ -551,37 +566,40 @@ export function Sidebar({
                               width: addMenuAnchor.width,
                             }}
                           >
-                            <button
+                            <PopoverMenuItem
                               className="workspace-add-option"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setAddMenuAnchor(null);
                                 onAddAgent(entry);
                               }}
+                              icon={<Plus aria-hidden />}
                             >
                               New agent
-                            </button>
-                            <button
+                            </PopoverMenuItem>
+                            <PopoverMenuItem
                               className="workspace-add-option"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setAddMenuAnchor(null);
                                 onAddWorktreeAgent(entry);
                               }}
+                              icon={<GitBranch aria-hidden />}
                             >
                               New worktree agent
-                            </button>
-                            <button
+                            </PopoverMenuItem>
+                            <PopoverMenuItem
                               className="workspace-add-option"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setAddMenuAnchor(null);
                                 onAddCloneAgent(entry);
                               }}
+                              icon={<Copy aria-hidden />}
                             >
                               New clone agent
-                            </button>
-                          </div>,
+                            </PopoverMenuItem>
+                          </PopoverSurface>,
                           document.body,
                         )}
                       {isDraftNewAgent && (

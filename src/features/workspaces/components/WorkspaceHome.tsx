@@ -17,7 +17,6 @@ import type {
   SkillOption,
   WorkspaceInfo,
 } from "../../../types";
-import { formatCollaborationModeLabel } from "../../../utils/collaborationModes";
 import { ComposerInput } from "../../composer/components/ComposerInput";
 import { useComposerImages } from "../../composer/hooks/useComposerImages";
 import { useComposerAutocompleteState } from "../../composer/hooks/useComposerAutocompleteState";
@@ -33,10 +32,16 @@ import Laptop from "lucide-react/dist/esm/icons/laptop";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
+import Cpu from "lucide-react/dist/esm/icons/cpu";
 import { computeDictationInsertion } from "../../../utils/dictation";
 import { getCaretPosition } from "../../../utils/caretPosition";
 import { isComposingEvent } from "../../../utils/keys";
 import { FileEditorCard } from "../../shared/components/FileEditorCard";
+import {
+  PopoverMenuItem,
+  PopoverSurface,
+} from "../../design-system/components/popover/PopoverPrimitives";
+import { useDismissibleMenu } from "../../app/hooks/useDismissibleMenu";
 
 type ThreadStatus = {
   isProcessing: boolean;
@@ -290,23 +295,17 @@ export function WorkspaceHome({
     });
   }, [autocompleteAnchorIndex, isAutocompleteOpen, prompt, selectionStart, textareaRef]);
 
-  useEffect(() => {
-    const handleClick = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (target && runModeRef.current?.contains(target)) {
-        return;
-      }
-      if (target && modelsRef.current?.contains(target)) {
-        return;
-      }
-      setRunModeOpen(false);
-      setModelsOpen(false);
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-    };
-  }, []);
+  useDismissibleMenu({
+    isOpen: runModeOpen,
+    containerRef: runModeRef,
+    onClose: () => setRunModeOpen(false),
+  });
+
+  useDismissibleMenu({
+    isOpen: modelsOpen,
+    containerRef: modelsRef,
+    onClose: () => setModelsOpen(false),
+  });
 
   useEffect(() => {
     if (!dictationTranscript) {
@@ -574,36 +573,32 @@ export function WorkspaceHome({
               </button>
             </div>
             {runModeOpen && (
-              <div className="open-app-dropdown workspace-home-dropdown" role="menu">
-                <button
-                  type="button"
-                  className={`open-app-option${
-                    runMode === "local" ? " is-active" : ""
-                  }`}
+              <PopoverSurface className="open-app-dropdown workspace-home-dropdown" role="menu">
+                <PopoverMenuItem
+                  className="open-app-option"
                   onClick={() => {
                     onRunModeChange("local");
                     setRunModeOpen(false);
                     setModelsOpen(false);
                   }}
+                  icon={<Laptop className="workspace-home-mode-icon" aria-hidden />}
+                  active={runMode === "local"}
                 >
-                  <Laptop className="workspace-home-mode-icon" aria-hidden />
                   Local
-                </button>
-                <button
-                  type="button"
-                  className={`open-app-option${
-                    runMode === "worktree" ? " is-active" : ""
-                  }`}
+                </PopoverMenuItem>
+                <PopoverMenuItem
+                  className="open-app-option"
                   onClick={() => {
                     onRunModeChange("worktree");
                     setRunModeOpen(false);
                     setModelsOpen(false);
                   }}
+                  icon={<GitBranch className="workspace-home-mode-icon" aria-hidden />}
+                  active={runMode === "worktree"}
                 >
-                  <GitBranch className="workspace-home-mode-icon" aria-hidden />
                   Worktree
-                </button>
-              </div>
+                </PopoverMenuItem>
+              </PopoverSurface>
             )}
           </div>
         )}
@@ -640,7 +635,7 @@ export function WorkspaceHome({
             </button>
           </div>
           {modelsOpen && (
-            <div
+            <PopoverSurface
               className="open-app-dropdown workspace-home-dropdown workspace-home-model-dropdown"
               role="menu"
             >
@@ -662,11 +657,8 @@ export function WorkspaceHome({
                       isSelected ? " is-active" : ""
                     }`}
                   >
-                    <button
-                      type="button"
-                      className={`open-app-option workspace-home-model-toggle${
-                        isSelected ? " is-active" : ""
-                      }`}
+                    <PopoverMenuItem
+                      className="open-app-option workspace-home-model-toggle"
                       onClick={() => {
                         if (runMode === "local") {
                           onSelectModel(model.id);
@@ -675,16 +667,18 @@ export function WorkspaceHome({
                         }
                         onToggleModel(model.id);
                       }}
+                      icon={<Cpu className="workspace-home-mode-icon" aria-hidden />}
+                      active={isSelected}
                     >
-                      <span>{resolveModelLabel(model)}</span>
-                    </button>
+                      {resolveModelLabel(model)}
+                    </PopoverMenuItem>
                     {runMode === "worktree" && (
                       <>
                         <div className="workspace-home-model-meta" aria-hidden>
                           <span>{count}x</span>
                           <ChevronRight size={14} />
                         </div>
-                        <div className="workspace-home-model-submenu">
+                        <div className="workspace-home-model-submenu ds-popover">
                           {INSTANCE_OPTIONS.map((option) => (
                             <button
                               key={option}
@@ -706,7 +700,7 @@ export function WorkspaceHome({
                   </div>
                 );
               })}
-            </div>
+            </PopoverSurface>
           )}
         </div>
         {collaborationModes.length > 0 && (
@@ -733,7 +727,7 @@ export function WorkspaceHome({
               >
                 {collaborationModes.map((mode) => (
                   <option key={mode.id} value={mode.id}>
-                    {formatCollaborationModeLabel(mode.label || mode.id)}
+                    {mode.label || mode.id}
                   </option>
                 ))}
               </select>

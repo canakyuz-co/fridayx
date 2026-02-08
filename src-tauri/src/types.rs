@@ -1,25 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum TaskStatus {
-    Todo,
-    Doing,
-    Done,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct TaskEntry {
-    pub(crate) id: String,
-    pub(crate) title: String,
-    pub(crate) content: String,
-    pub(crate) status: TaskStatus,
-    pub(crate) workspace_id: Option<String>,
-    pub(crate) created_at: i64,
-    pub(crate) updated_at: i64,
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct GitFileStatus {
@@ -30,20 +9,13 @@ pub(crate) struct GitFileStatus {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct GitCommandReport {
-    pub(crate) ok: bool,
-    pub(crate) command: String,
-    pub(crate) exit_code: Option<i32>,
-    pub(crate) duration_ms: u64,
-    pub(crate) stdout: String,
-    pub(crate) stderr: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct GitFileDiff {
     pub(crate) path: String,
     pub(crate) diff: String,
+    #[serde(default, rename = "oldLines")]
+    pub(crate) old_lines: Option<Vec<String>>,
+    #[serde(default, rename = "newLines")]
+    pub(crate) new_lines: Option<Vec<String>>,
     #[serde(default, rename = "isBinary")]
     pub(crate) is_binary: bool,
     #[serde(default, rename = "isImage")]
@@ -63,6 +35,10 @@ pub(crate) struct GitCommitDiff {
     pub(crate) path: String,
     pub(crate) status: String,
     pub(crate) diff: String,
+    #[serde(default, rename = "oldLines")]
+    pub(crate) old_lines: Option<Vec<String>>,
+    #[serde(default, rename = "newLines")]
+    pub(crate) new_lines: Option<Vec<String>>,
     #[serde(default, rename = "isBinary")]
     pub(crate) is_binary: bool,
     #[serde(default, rename = "isImage")]
@@ -212,13 +188,6 @@ pub(crate) struct LocalUsageSnapshot {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct WorktreeSetupStatus {
-    pub(crate) should_run: bool,
-    pub(crate) script: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct BranchInfo {
     pub(crate) name: String,
     pub(crate) last_commit: i64,
@@ -323,6 +292,13 @@ pub(crate) struct LaunchScriptEntry {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct WorktreeSetupStatus {
+    #[serde(rename = "shouldRun")]
+    pub(crate) should_run: bool,
+    pub(crate) script: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct OpenAppTarget {
     pub(crate) id: String,
     pub(crate) label: String,
@@ -333,28 +309,6 @@ pub(crate) struct OpenAppTarget {
     pub(crate) command: Option<String>,
     #[serde(default)]
     pub(crate) args: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub(crate) struct OtherAiProvider {
-    pub(crate) id: String,
-    pub(crate) label: String,
-    pub(crate) provider: String,
-    pub(crate) enabled: bool,
-    #[serde(default, rename = "apiKey")]
-    pub(crate) api_key: Option<String>,
-    #[serde(default)]
-    pub(crate) command: Option<String>,
-    #[serde(default)]
-    pub(crate) args: Option<String>,
-    #[serde(default)]
-    pub(crate) models: Vec<String>,
-    #[serde(default, rename = "defaultModel")]
-    pub(crate) default_model: Option<String>,
-    #[serde(default)]
-    pub(crate) protocol: Option<String>,
-    #[serde(default)]
-    pub(crate) env: Option<std::collections::HashMap<String, String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -369,13 +323,6 @@ pub(crate) struct AppSettings {
     pub(crate) remote_backend_host: String,
     #[serde(default, rename = "remoteBackendToken")]
     pub(crate) remote_backend_token: Option<String>,
-    #[serde(default = "default_other_ai_providers", rename = "otherAiProviders")]
-    pub(crate) other_ai_providers: Vec<OtherAiProvider>,
-    #[serde(
-        default = "default_other_ai_auto_refresh_enabled",
-        rename = "otherAiAutoRefreshEnabled"
-    )]
-    pub(crate) other_ai_auto_refresh_enabled: bool,
     #[serde(default = "default_access_mode", rename = "defaultAccessMode")]
     pub(crate) default_access_mode: String,
     #[serde(default = "default_review_delivery_mode", rename = "reviewDeliveryMode")]
@@ -459,8 +406,6 @@ pub(crate) struct AppSettings {
         rename = "cycleWorkspacePrevShortcut"
     )]
     pub(crate) cycle_workspace_prev_shortcut: Option<String>,
-    #[serde(default = "default_editor_keymap", rename = "editorKeymap")]
-    pub(crate) editor_keymap: String,
     #[serde(default, rename = "lastComposerModelId")]
     pub(crate) last_composer_model_id: Option<String>,
     #[serde(default, rename = "lastComposerReasoningEffort")]
@@ -473,8 +418,6 @@ pub(crate) struct AppSettings {
     pub(crate) usage_show_remaining: bool,
     #[serde(default = "default_ui_font_family", rename = "uiFontFamily")]
     pub(crate) ui_font_family: String,
-    #[serde(default = "default_inter_font_features", rename = "interFontFeatures")]
-    pub(crate) inter_font_features: HashMap<String, bool>,
     #[serde(default = "default_code_font_family", rename = "codeFontFamily")]
     pub(crate) code_font_family: String,
     #[serde(default = "default_code_font_size", rename = "codeFontSize")]
@@ -486,6 +429,11 @@ pub(crate) struct AppSettings {
     pub(crate) notification_sounds_enabled: bool,
     #[serde(default = "default_preload_git_diffs", rename = "preloadGitDiffs")]
     pub(crate) preload_git_diffs: bool,
+    #[serde(
+        default = "default_git_diff_ignore_whitespace_changes",
+        rename = "gitDiffIgnoreWhitespaceChanges"
+    )]
+    pub(crate) git_diff_ignore_whitespace_changes: bool,
     #[serde(
         default = "default_system_notifications_enabled",
         rename = "systemNotificationsEnabled"
@@ -502,15 +450,17 @@ pub(crate) struct AppSettings {
     )]
     pub(crate) collaboration_modes_enabled: bool,
     #[serde(
-        default = "default_experimental_steer_enabled",
-        rename = "experimentalSteerEnabled"
+        default = "default_steer_enabled",
+        rename = "steerEnabled",
+        alias = "experimentalSteerEnabled"
     )]
-    pub(crate) experimental_steer_enabled: bool,
+    pub(crate) steer_enabled: bool,
     #[serde(
-        default = "default_experimental_unified_exec_enabled",
-        rename = "experimentalUnifiedExecEnabled"
+        default = "default_unified_exec_enabled",
+        rename = "unifiedExecEnabled",
+        alias = "experimentalUnifiedExecEnabled"
     )]
-    pub(crate) experimental_unified_exec_enabled: bool,
+    pub(crate) unified_exec_enabled: bool,
     #[serde(
         default = "default_experimental_apps_enabled",
         rename = "experimentalAppsEnabled"
@@ -601,61 +551,12 @@ fn default_usage_show_remaining() -> bool {
     false
 }
 
-fn default_editor_keymap() -> String {
-    "jetbrains".to_string()
-}
-
 fn default_ui_font_family() -> String {
-    "\"InterVariable\", \"Inter\", -apple-system, \"Helvetica Neue\", sans-serif".to_string()
-}
-
-fn default_inter_font_features() -> HashMap<String, bool> {
-    let mut features = HashMap::new();
-    features.insert("aalt".into(), false);
-    features.insert("c2sc".into(), false);
-    features.insert("calt".into(), true);
-    features.insert("case".into(), false);
-    features.insert("ccmp".into(), true);
-    features.insert("cpsp".into(), false);
-    features.insert("cv01".into(), false);
-    features.insert("cv02".into(), false);
-    features.insert("cv03".into(), false);
-    features.insert("cv04".into(), false);
-    features.insert("cv05".into(), false);
-    features.insert("cv06".into(), false);
-    features.insert("cv07".into(), false);
-    features.insert("cv08".into(), false);
-    features.insert("cv09".into(), false);
-    features.insert("cv10".into(), false);
-    features.insert("cv11".into(), false);
-    features.insert("cv12".into(), false);
-    features.insert("cv13".into(), false);
-    features.insert("dlig".into(), false);
-    features.insert("dnom".into(), false);
-    features.insert("frac".into(), false);
-    features.insert("locl".into(), false);
-    features.insert("numr".into(), false);
-    features.insert("ordn".into(), false);
-    features.insert("pnum".into(), false);
-    features.insert("salt".into(), false);
-    features.insert("sinf".into(), false);
-    features.insert("ss01".into(), false);
-    features.insert("ss02".into(), false);
-    features.insert("ss03".into(), false);
-    features.insert("ss04".into(), false);
-    features.insert("ss05".into(), false);
-    features.insert("ss06".into(), false);
-    features.insert("ss07".into(), false);
-    features.insert("ss08".into(), false);
-    features.insert("subs".into(), false);
-    features.insert("sups".into(), false);
-    features.insert("tnum".into(), false);
-    features.insert("zero".into(), false);
-    features
+    "system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif".to_string()
 }
 
 fn default_code_font_family() -> String {
-    "\"Geist Mono\", \"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace".to_string()
+    "ui-monospace, \"Cascadia Mono\", \"Segoe UI Mono\", Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace".to_string()
 }
 
 fn default_code_font_size() -> u8 {
@@ -663,15 +564,30 @@ fn default_code_font_size() -> u8 {
 }
 
 fn default_composer_model_shortcut() -> Option<String> {
-    Some("cmd+shift+m".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+m"
+    } else {
+        "ctrl+shift+m"
+    };
+    Some(value.to_string())
 }
 
 fn default_composer_access_shortcut() -> Option<String> {
-    Some("cmd+shift+a".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+a"
+    } else {
+        "ctrl+shift+a"
+    };
+    Some(value.to_string())
 }
 
 fn default_composer_reasoning_shortcut() -> Option<String> {
-    Some("cmd+shift+r".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+r"
+    } else {
+        "ctrl+shift+r"
+    };
+    Some(value.to_string())
 }
 
 fn default_interrupt_shortcut() -> Option<String> {
@@ -688,51 +604,107 @@ fn default_composer_collaboration_shortcut() -> Option<String> {
 }
 
 fn default_new_agent_shortcut() -> Option<String> {
-    Some("cmd+n".to_string())
+    let value = if cfg!(target_os = "macos") { "cmd+n" } else { "ctrl+n" };
+    Some(value.to_string())
 }
 
 fn default_new_worktree_agent_shortcut() -> Option<String> {
-    Some("cmd+shift+n".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+n"
+    } else {
+        "ctrl+shift+n"
+    };
+    Some(value.to_string())
 }
 
 fn default_new_clone_agent_shortcut() -> Option<String> {
-    Some("cmd+alt+n".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+alt+n"
+    } else {
+        "ctrl+alt+n"
+    };
+    Some(value.to_string())
 }
 
 fn default_archive_thread_shortcut() -> Option<String> {
-    Some("cmd+ctrl+a".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+ctrl+a"
+    } else {
+        "ctrl+alt+a"
+    };
+    Some(value.to_string())
 }
 
 fn default_toggle_projects_sidebar_shortcut() -> Option<String> {
-    Some("cmd+shift+p".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+p"
+    } else {
+        "ctrl+shift+p"
+    };
+    Some(value.to_string())
 }
 
 fn default_toggle_git_sidebar_shortcut() -> Option<String> {
-    Some("cmd+shift+g".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+g"
+    } else {
+        "ctrl+shift+g"
+    };
+    Some(value.to_string())
 }
 
 fn default_toggle_debug_panel_shortcut() -> Option<String> {
-    Some("cmd+shift+d".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+d"
+    } else {
+        "ctrl+shift+d"
+    };
+    Some(value.to_string())
 }
 
 fn default_toggle_terminal_shortcut() -> Option<String> {
-    Some("cmd+shift+t".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+t"
+    } else {
+        "ctrl+shift+t"
+    };
+    Some(value.to_string())
 }
 
 fn default_cycle_agent_next_shortcut() -> Option<String> {
-    Some("cmd+ctrl+down".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+ctrl+down"
+    } else {
+        "ctrl+alt+down"
+    };
+    Some(value.to_string())
 }
 
 fn default_cycle_agent_prev_shortcut() -> Option<String> {
-    Some("cmd+ctrl+up".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+ctrl+up"
+    } else {
+        "ctrl+alt+up"
+    };
+    Some(value.to_string())
 }
 
 fn default_cycle_workspace_next_shortcut() -> Option<String> {
-    Some("cmd+shift+down".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+down"
+    } else {
+        "ctrl+alt+shift+down"
+    };
+    Some(value.to_string())
 }
 
 fn default_cycle_workspace_prev_shortcut() -> Option<String> {
-    Some("cmd+shift+up".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+up"
+    } else {
+        "ctrl+alt+shift+up"
+    };
+    Some(value.to_string())
 }
 
 fn default_notification_sounds_enabled() -> bool {
@@ -747,6 +719,10 @@ fn default_preload_git_diffs() -> bool {
     true
 }
 
+fn default_git_diff_ignore_whitespace_changes() -> bool {
+    false
+}
+
 fn default_experimental_collab_enabled() -> bool {
     false
 }
@@ -755,12 +731,12 @@ fn default_collaboration_modes_enabled() -> bool {
     true
 }
 
-fn default_experimental_steer_enabled() -> bool {
-    false
+fn default_steer_enabled() -> bool {
+    true
 }
 
-fn default_experimental_unified_exec_enabled() -> bool {
-    false
+fn default_unified_exec_enabled() -> bool {
+    true
 }
 
 fn default_experimental_apps_enabled() -> bool {
@@ -824,50 +800,109 @@ fn default_workspace_groups() -> Vec<WorkspaceGroup> {
 }
 
 fn default_open_app_targets() -> Vec<OpenAppTarget> {
+    if cfg!(target_os = "macos") {
+        return vec![
+            OpenAppTarget {
+                id: "vscode".to_string(),
+                label: "VS Code".to_string(),
+                kind: "app".to_string(),
+                app_name: Some("Visual Studio Code".to_string()),
+                command: None,
+                args: Vec::new(),
+            },
+            OpenAppTarget {
+                id: "cursor".to_string(),
+                label: "Cursor".to_string(),
+                kind: "app".to_string(),
+                app_name: Some("Cursor".to_string()),
+                command: None,
+                args: Vec::new(),
+            },
+            OpenAppTarget {
+                id: "zed".to_string(),
+                label: "Zed".to_string(),
+                kind: "app".to_string(),
+                app_name: Some("Zed".to_string()),
+                command: None,
+                args: Vec::new(),
+            },
+            OpenAppTarget {
+                id: "ghostty".to_string(),
+                label: "Ghostty".to_string(),
+                kind: "app".to_string(),
+                app_name: Some("Ghostty".to_string()),
+                command: None,
+                args: Vec::new(),
+            },
+            OpenAppTarget {
+                id: "antigravity".to_string(),
+                label: "Antigravity".to_string(),
+                kind: "app".to_string(),
+                app_name: Some("Antigravity".to_string()),
+                command: None,
+                args: Vec::new(),
+            },
+            OpenAppTarget {
+                id: "finder".to_string(),
+                label: "Finder".to_string(),
+                kind: "finder".to_string(),
+                app_name: None,
+                command: None,
+                args: Vec::new(),
+            },
+        ];
+    }
+
+    let file_manager_label = if cfg!(target_os = "windows") {
+        "Explorer"
+    } else {
+        "File Manager"
+    };
+
     vec![
         OpenAppTarget {
             id: "vscode".to_string(),
             label: "VS Code".to_string(),
-            kind: "app".to_string(),
-            app_name: Some("Visual Studio Code".to_string()),
-            command: None,
+            kind: "command".to_string(),
+            app_name: None,
+            command: Some("code".to_string()),
             args: Vec::new(),
         },
         OpenAppTarget {
             id: "cursor".to_string(),
             label: "Cursor".to_string(),
-            kind: "app".to_string(),
-            app_name: Some("Cursor".to_string()),
-            command: None,
+            kind: "command".to_string(),
+            app_name: None,
+            command: Some("cursor".to_string()),
             args: Vec::new(),
         },
         OpenAppTarget {
             id: "zed".to_string(),
             label: "Zed".to_string(),
-            kind: "app".to_string(),
-            app_name: Some("Zed".to_string()),
-            command: None,
+            kind: "command".to_string(),
+            app_name: None,
+            command: Some("zed".to_string()),
             args: Vec::new(),
         },
         OpenAppTarget {
             id: "ghostty".to_string(),
             label: "Ghostty".to_string(),
-            kind: "app".to_string(),
-            app_name: Some("Ghostty".to_string()),
-            command: None,
+            kind: "command".to_string(),
+            app_name: None,
+            command: Some("ghostty".to_string()),
             args: Vec::new(),
         },
         OpenAppTarget {
             id: "antigravity".to_string(),
             label: "Antigravity".to_string(),
-            kind: "app".to_string(),
-            app_name: Some("Antigravity".to_string()),
-            command: None,
+            kind: "command".to_string(),
+            app_name: None,
+            command: Some("antigravity".to_string()),
             args: Vec::new(),
         },
         OpenAppTarget {
             id: "finder".to_string(),
-            label: "Finder".to_string(),
+            label: file_manager_label.to_string(),
             kind: "finder".to_string(),
             app_name: None,
             command: None,
@@ -877,50 +912,11 @@ fn default_open_app_targets() -> Vec<OpenAppTarget> {
 }
 
 fn default_selected_open_app_id() -> String {
-    "vscode".to_string()
-}
-
-fn default_other_ai_providers() -> Vec<OtherAiProvider> {
-    vec![
-        OtherAiProvider {
-            id: "claude".to_string(),
-            label: "Claude".to_string(),
-            provider: "claude".to_string(),
-            enabled: false,
-            api_key: None,
-            command: Some("claude".to_string()),
-            args: None,
-            models: vec![
-                "claude-sonnet-4-5".to_string(),
-                "claude-opus-4-5".to_string(),
-                "claude-haiku-4-5".to_string(),
-            ],
-            default_model: None,
-            protocol: Some("cli".to_string()),
-            env: None,
-        },
-        OtherAiProvider {
-            id: "gemini".to_string(),
-            label: "Gemini".to_string(),
-            provider: "gemini".to_string(),
-            enabled: false,
-            api_key: None,
-            command: Some("gemini".to_string()),
-            args: None,
-            models: vec![
-                "gemini-3-pro-preview".to_string(),
-                "gemini-3-flash-preview".to_string(),
-                "gemini-2.5-pro".to_string(),
-            ],
-            default_model: None,
-            protocol: Some("cli".to_string()),
-            env: None,
-        },
-    ]
-}
-
-fn default_other_ai_auto_refresh_enabled() -> bool {
-    false
+    if cfg!(target_os = "windows") {
+        "finder".to_string()
+    } else {
+        "vscode".to_string()
+    }
 }
 
 impl Default for AppSettings {
@@ -931,8 +927,6 @@ impl Default for AppSettings {
             backend_mode: BackendMode::Local,
             remote_backend_host: default_remote_backend_host(),
             remote_backend_token: None,
-            other_ai_providers: default_other_ai_providers(),
-            other_ai_auto_refresh_enabled: default_other_ai_auto_refresh_enabled(),
             default_access_mode: "current".to_string(),
             review_delivery_mode: default_review_delivery_mode(),
             composer_model_shortcut: default_composer_model_shortcut(),
@@ -952,23 +946,22 @@ impl Default for AppSettings {
             cycle_agent_prev_shortcut: default_cycle_agent_prev_shortcut(),
             cycle_workspace_next_shortcut: default_cycle_workspace_next_shortcut(),
             cycle_workspace_prev_shortcut: default_cycle_workspace_prev_shortcut(),
-            editor_keymap: default_editor_keymap(),
             last_composer_model_id: None,
             last_composer_reasoning_effort: None,
             ui_scale: 1.0,
             theme: default_theme(),
             usage_show_remaining: default_usage_show_remaining(),
             ui_font_family: default_ui_font_family(),
-            inter_font_features: default_inter_font_features(),
             code_font_family: default_code_font_family(),
             code_font_size: default_code_font_size(),
             notification_sounds_enabled: true,
             system_notifications_enabled: true,
             preload_git_diffs: default_preload_git_diffs(),
+            git_diff_ignore_whitespace_changes: default_git_diff_ignore_whitespace_changes(),
             experimental_collab_enabled: false,
             collaboration_modes_enabled: true,
-            experimental_steer_enabled: false,
-            experimental_unified_exec_enabled: false,
+            steer_enabled: true,
+            unified_exec_enabled: true,
             experimental_apps_enabled: false,
             personality: default_personality(),
             dictation_enabled: false,
@@ -1004,22 +997,25 @@ mod tests {
         assert!(matches!(settings.backend_mode, BackendMode::Local));
         assert_eq!(settings.remote_backend_host, "127.0.0.1:4732");
         assert!(settings.remote_backend_token.is_none());
-        assert_eq!(settings.other_ai_providers.len(), 2);
-        assert_eq!(settings.other_ai_providers[0].id, "claude");
-        assert_eq!(settings.other_ai_providers[1].id, "gemini");
         assert_eq!(settings.default_access_mode, "current");
         assert_eq!(settings.review_delivery_mode, "inline");
+        let expected_primary = if cfg!(target_os = "macos") { "cmd" } else { "ctrl" };
+        let expected_model = format!("{expected_primary}+shift+m");
+        let expected_access = format!("{expected_primary}+shift+a");
+        let expected_reasoning = format!("{expected_primary}+shift+r");
+        let expected_toggle_debug = format!("{expected_primary}+shift+d");
+        let expected_toggle_terminal = format!("{expected_primary}+shift+t");
         assert_eq!(
             settings.composer_model_shortcut.as_deref(),
-            Some("cmd+shift+m")
+            Some(expected_model.as_str())
         );
         assert_eq!(
             settings.composer_access_shortcut.as_deref(),
-            Some("cmd+shift+a")
+            Some(expected_access.as_str())
         );
         assert_eq!(
             settings.composer_reasoning_shortcut.as_deref(),
-            Some("cmd+shift+r")
+            Some(expected_reasoning.as_str())
         );
         assert_eq!(
             settings.composer_collaboration_shortcut.as_deref(),
@@ -1033,46 +1029,67 @@ mod tests {
         assert_eq!(settings.interrupt_shortcut.as_deref(), Some(expected_interrupt));
         assert_eq!(
             settings.archive_thread_shortcut.as_deref(),
-            Some("cmd+ctrl+a")
+            Some(if cfg!(target_os = "macos") {
+                "cmd+ctrl+a"
+            } else {
+                "ctrl+alt+a"
+            })
         );
         assert_eq!(
             settings.toggle_debug_panel_shortcut.as_deref(),
-            Some("cmd+shift+d")
+            Some(expected_toggle_debug.as_str())
         );
         assert_eq!(
             settings.toggle_terminal_shortcut.as_deref(),
-            Some("cmd+shift+t")
+            Some(expected_toggle_terminal.as_str())
         );
         assert_eq!(
             settings.cycle_agent_next_shortcut.as_deref(),
-            Some("cmd+ctrl+down")
+            Some(if cfg!(target_os = "macos") {
+                "cmd+ctrl+down"
+            } else {
+                "ctrl+alt+down"
+            })
         );
         assert_eq!(
             settings.cycle_agent_prev_shortcut.as_deref(),
-            Some("cmd+ctrl+up")
+            Some(if cfg!(target_os = "macos") {
+                "cmd+ctrl+up"
+            } else {
+                "ctrl+alt+up"
+            })
         );
         assert_eq!(
             settings.cycle_workspace_next_shortcut.as_deref(),
-            Some("cmd+shift+down")
+            Some(if cfg!(target_os = "macos") {
+                "cmd+shift+down"
+            } else {
+                "ctrl+alt+shift+down"
+            })
         );
         assert_eq!(
             settings.cycle_workspace_prev_shortcut.as_deref(),
-            Some("cmd+shift+up")
+            Some(if cfg!(target_os = "macos") {
+                "cmd+shift+up"
+            } else {
+                "ctrl+alt+shift+up"
+            })
         );
-        assert_eq!(settings.editor_keymap, "jetbrains");
         assert!(settings.last_composer_model_id.is_none());
         assert!(settings.last_composer_reasoning_effort.is_none());
         assert!((settings.ui_scale - 1.0).abs() < f64::EPSILON);
         assert_eq!(settings.theme, "system");
         assert!(!settings.usage_show_remaining);
-        assert!(settings.ui_font_family.contains("Inter"));
-        assert!(settings.code_font_family.contains("Geist Mono"));
+        assert!(settings.ui_font_family.contains("system-ui"));
+        assert!(settings.code_font_family.contains("ui-monospace"));
         assert_eq!(settings.code_font_size, 11);
         assert!(settings.notification_sounds_enabled);
         assert!(settings.system_notifications_enabled);
         assert!(settings.preload_git_diffs);
+        assert!(!settings.git_diff_ignore_whitespace_changes);
         assert!(settings.collaboration_modes_enabled);
-        assert!(!settings.experimental_steer_enabled);
+        assert!(settings.steer_enabled);
+        assert!(settings.unified_exec_enabled);
         assert!(!settings.experimental_apps_enabled);
         assert_eq!(settings.personality, "friendly");
         assert!(!settings.dictation_enabled);
@@ -1089,7 +1106,12 @@ mod tests {
         assert!(!settings.composer_list_continuation);
         assert!(!settings.composer_code_block_copy_use_modifier);
         assert!(settings.workspace_groups.is_empty());
-        assert_eq!(settings.selected_open_app_id, "vscode");
+        let expected_open_id = if cfg!(target_os = "windows") {
+            "finder"
+        } else {
+            "vscode"
+        };
+        assert_eq!(settings.selected_open_app_id, expected_open_id);
         assert_eq!(settings.open_app_targets.len(), 6);
         assert_eq!(settings.open_app_targets[0].id, "vscode");
     }
