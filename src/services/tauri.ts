@@ -1369,6 +1369,12 @@ export type ClaudeCliEventHandler = {
   onError?: (error: string) => void;
 };
 
+export type ClaudeCliSessionOptions = {
+  sessionId?: string | null;
+  resumeSessionId?: string | null;
+  systemPrompt?: string | null;
+};
+
 export async function sendClaudeCliMessage(
   command: string,
   args: string | null,
@@ -1377,6 +1383,7 @@ export async function sendClaudeCliMessage(
   cwd: string | null,
   env: Record<string, string> | null,
   handlers: ClaudeCliEventHandler,
+  session?: ClaudeCliSessionOptions,
 ): Promise<void> {
   const channel = new Channel<ClaudeCliEvent>();
 
@@ -1412,6 +1419,9 @@ export async function sendClaudeCliMessage(
     model,
     cwd,
     env,
+    sessionId: session?.sessionId ?? null,
+    resumeSessionId: session?.resumeSessionId ?? null,
+    systemPrompt: session?.systemPrompt ?? null,
     onEvent: channel,
   });
 }

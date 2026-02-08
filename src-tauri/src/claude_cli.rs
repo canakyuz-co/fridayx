@@ -99,6 +99,9 @@ pub async fn send_claude_cli_message(
     model: Option<String>,
     cwd: Option<String>,
     env: Option<HashMap<String, String>>,
+    session_id: Option<String>,
+    resume_session_id: Option<String>,
+    system_prompt: Option<String>,
     on_event: Channel<ClaudeCliEvent>,
 ) -> Result<(), String> {
     let command = command.trim();
@@ -111,14 +114,36 @@ pub async fn send_claude_cli_message(
         return Err("Prompt is required".to_string());
     }
 
+    let is_resume = resume_session_id.is_some();
+
     // Build command
     let mut cmd = Command::new(command);
 
-    // Add default args for stream-json output
+    // Core flags: --print for non-interactive, streaming output
     cmd.arg("--print");
     cmd.arg("--verbose");
     cmd.arg("--output-format");
     cmd.arg("stream-json");
+    cmd.arg("--include-partial-messages");
+
+    // Session management: resume existing session or create a new one
+    if let Some(ref rid) = resume_session_id {
+        cmd.arg("--resume");
+        cmd.arg(rid);
+    } else if let Some(ref sid) = session_id {
+        cmd.arg("--session-id");
+        cmd.arg(sid);
+    }
+
+    // System prompt: only on first call (session creation), not on resume
+    if !is_resume {
+        if let Some(ref sp) = system_prompt {
+            if !sp.trim().is_empty() {
+                cmd.arg("--system-prompt");
+                cmd.arg(sp);
+            }
+        }
+    }
 
     // Add custom args if provided
     if let Some(args_str) = args {
@@ -129,19 +154,22 @@ pub async fn send_claude_cli_message(
     }
 
     // Add model if provided and not already set by args.
-    if let Some(model) = model
-        .as_ref()
-        .map(|value| normalize_claude_model_for_cli(value))
-        .filter(|value| !value.is_empty())
-    {
-        let args_str = cmd
-            .get_args()
-            .map(|value| value.to_string_lossy().to_string())
-            .collect::<Vec<String>>();
-        let has_model_flag = args_str.iter().any(|arg| arg == "--model");
-        if !has_model_flag {
-            cmd.arg("--model");
-            cmd.arg(&model);
+    // On resume, Claude CLI inherits the model from the session.
+    if !is_resume {
+        if let Some(model) = model
+            .as_ref()
+            .map(|value| normalize_claude_model_for_cli(value))
+            .filter(|value| !value.is_empty())
+        {
+            let args_str = cmd
+                .get_args()
+                .map(|value| value.to_string_lossy().to_string())
+                .collect::<Vec<String>>();
+            let has_model_flag = args_str.iter().any(|arg| arg == "--model");
+            if !has_model_flag {
+                cmd.arg("--model");
+                cmd.arg(&model);
+            }
         }
     }
 

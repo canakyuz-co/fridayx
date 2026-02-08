@@ -1,0 +1,1619 @@
+\documentclass[12pt,a4paper]{article}
+
+% ── Encoding & Language ──
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[turkish,english]{babel}
+
+% ── Layout ──
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+
+% ── Header / Footer: Author on every page ──
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textit{Fridex Cognos --- Kişisel Otonom AI Asistan Modülü}}
+\fancyhead[R]{\small\textit{Bekircan Akyüz}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Title page also gets author
+\fancypagestyle{plain}{%
+  \fancyhf{}
+  \fancyhead[L]{\small\textit{Fridex Cognos}}
+  \fancyhead[R]{\small\textit{Bekircan Akyüz}}
+  \fancyfoot[C]{\thepage}
+  \renewcommand{\headrulewidth}{0.4pt}
+}
+
+% ── Math ──
+\usepackage{amsmath,amssymb,amsfonts,mathtools}
+
+% ── Tables ──
+\usepackage{booktabs,longtable,array,tabularx}
+
+% ── Graphics & Colors ──
+\usepackage{graphicx,xcolor}
+\definecolor{codeblue}{RGB}{41,98,255}
+\definecolor{codegray}{RGB}{100,100,100}
+\definecolor{codebg}{RGB}{248,248,248}
+
+% ── Code Listings ──
+\usepackage{listings}
+\lstset{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{codegray},
+  xleftmargin=1em,
+  framexleftmargin=0.5em,
+  tabsize=2,
+  showstringspaces=false,
+}
+
+% ── Hyperlinks ──
+\usepackage[colorlinks=true,linkcolor=codeblue,urlcolor=codeblue,citecolor=codeblue]{hyperref}
+
+% ── Misc ──
+\usepackage{enumitem}
+\usepackage{parskip}
+
+% ══════════════════════════════════════════════════════════════
+\begin{document}
+
+% ── Title Page ──
+\begin{titlepage}
+\centering
+\vspace*{4cm}
+{\Huge\bfseries Fridex Cognos\\[0.3em]}
+{\Large Kişisel Otonom AI Asistan Modülü\\[2em]}
+{\large Draft v2 --- Cognitive Evolution\\[3em]}
+
+\begin{tabular}{rl}
+\textbf{Yazar:}         & Bekircan Akyüz \\
+\textbf{Tarih:}         & 2025-02-08 \\
+\textbf{Durum:}         & Tasarım Dokümanı \\
+\textbf{Bağımlılıklar:} & \texttt{fridex-cognos-os-spec.tex} \\
+                         & \texttt{ai-providers.md} \\
+                         & \texttt{maestro-mvp.md} \\
+\end{tabular}
+\vfill
+{\small FridayX Ekosistemi --- Bilişsel İşletim Sistemi Projesi}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ══════════════════════════════════════════════════════════════
+% KISIM I
+% ══════════════════════════════════════════════════════════════
+\part{Temel Mimari ve Yetenekler}
+
+% ──────────────────────────────────────────────────────────────
+\section{Vizyon}
+
+Cognos, FridayX ekosistemi içinde çalışan bağımsız bir AI asistan modülüdür.
+Bir chatbot değil, Bilişsel İşletim Sistemi (Cognos-OS) ajanlarının kullanıcıya dönük yüzeyidir.
+
+JARVIS/FRIDAY vizyonunda: kullanıcı ile simbiyotik bağ kuran, görev alan, araştıran,
+kod yazan, test eden, tasarlayan, form dolduran, gerektiğinde Companion App üzerinden soran bir kişisel asistan.
+
+\textbf{Temel ayrım:} Cognos bir LLM wrapper değil, kendi algı, anlama, karar ve öğrenme
+pipeline'larına sahip bir \textbf{bilişsel sistem}dir. LLM'ler bu sistemin bir \emph{bileşeni}dir,
+tamamı değildir.
+
+\subsection{Temel İlkeler}
+
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{İlke} & \textbf{Açıklama} \\
+\midrule
+Active Inference & Komut beklemez, belirsizliği azaltmak için epistemik bilgi toplar \\
+Privacy-by-Architecture & Veri mümkün olduğunca local işlenir \\
+Deny-Default & Her araç/erişim izni açıkça verilmeli \\
+Audit Trail & Her eylem loglanır, PII maskelenir \\
+Kullanıcı Otoritesi & Kullanıcı her zaman son onay mercii \\
+Hierarchical Cognition & Her sorgu en ucuz/hızlı katmanda çözülür, gerekirse tırmandırılır \\
+Continuous Learning & Sistem her etkileşimden öğrenir, zamanla daha iyi olur \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Bu Neden ``Just Another Chatbot'' Değil}
+
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Chatbot} & \textbf{Cognos} \\
+\midrule
+Komut bekler & Sürekli algılar, proaktif önerir \\
+Her şeyi LLM'e gönderir & Hiyerarşik: çoğunluk local'de çözülür \\
+İstekler arası stateless & Sürekli dünya modeli, her an güncellenir \\
+Tek model & Ensemble: doğru göreve doğru model \\
+Öğrenme yok & Sürekli adaptasyon \\
+Sadece metin algısı & Multi-modal: metin + ses + ekran + sistem \\
+Reaktif & Proaktif: ihtiyacı önceden tahmin eder \\
+Session bazlı hafıza & Kalıcı, yapısal, çizge tabanlı hafıza \\
+\bottomrule
+\end{tabularx}
+
+% ──────────────────────────────────────────────────────────────
+\section{Mimari}
+
+Cognos, FridayX uygulamasının içinde yaşayan ama bağımsız bir modüldür.
+Mevcut Codex app-server akışı \textbf{bozulmaz}.
+
+\subsection{Katman Diyagramı}
+
+\begin{lstlisting}
++-------------------------------------------------------------+
+|    KULLANICI (Ses / Metin / Companion App / Davranis)         |
++----------------------------+--------------------------------+
+                             |
++----------------------------v--------------------------------+
+|  PERCEPTION PIPELINE (Always-On)                             |
+|  Ses Akisi | Ekran Farkindaligi | Sistem Telemetri | Dissal  |
++----------------------------+--------------------------------+
+                             |
++----------------------------v--------------------------------+
+|  LOCAL NLP PIPELINE                                          |
+|  Intent Classifier | NER | Sentiment | Dialogue State        |
++----------------------------+--------------------------------+
+                             |
++----------------------------v--------------------------------+
+|                    UI KATMANI                                 |
+|  Chat Modu | Companion Overlay | Background + Notification   |
++----------------------------+--------------------------------+
+                             | Tauri IPC
++----------------------------v--------------------------------+
+|                  ORCHESTRATOR (Rust)                          |
+|  Task Queue | Policy Engine | World Model                    |
+|  Hierarchical Decision Engine (L0-L3)                        |
+|  Provider Router | Tool Layer | Continuous Learning          |
++-------------------------------------------------------------+
+\end{lstlisting}
+
+\subsection{Orchestrator (Rust, Tauri Backend)}
+
+Tüm karar ve koordinasyonun merkezi. Mevcut Tauri backend'ine yeni bir modül olarak eklenir.
+
+\textbf{Sorumluluklar:}
+\begin{itemize}[nosep]
+  \item Görev kuyruğu yönetimi (task queue, tokio async)
+  \item Araç çağrı izin motoru (policy engine, deny-default)
+  \item Provider routing: hangi LLM'e gidecek, maliyet/kalite optimizasyonu
+  \item World model yönetimi: algı $\to$ güncelleme $\to$ tahmin döngüsü
+  \item Event hub: tüm modüllerle iletişim (Tauri IPC)
+\end{itemize}
+
+\subsection{Provider Katmanı ve Model Seçim Teorisi}
+
+Mevcut \texttt{ai-providers.md} dokümanındaki sistem \textbf{aynen korunur}.
+Cognos bu katmanı kullanır ama değiştirmez.
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Provider} & \textbf{Protokol} & \textbf{Kullanım Alanı} \\
+\midrule
+Claude Opus/Sonnet & API / CLI & Kod yazma, karmaşık reasoning \\
+Gemini & API / CLI & Uzun doküman analizi (1M context) \\
+Ollama (local) & OpenAI-compat. & Offline, gizli veri, hızlı sorgu \\
+OpenAI & API & OpenAI-compatible endpoint'ler \\
+Custom & API / CLI / ACP & Kullanıcı tanımlı \\
+\bottomrule
+\end{tabularx}
+
+\subsubsection{Multi-Armed Bandit ile Model Seçimi}
+
+Model seçimi bir \textbf{Contextual Multi-Armed Bandit} problemi olarak modellenir.
+Her model bir ``kol'', her görev tipi bir ``bağlam''dır.
+
+\textbf{Tanım:} $K$ adet model (kol), $d$ boyutlu bağlam vektörü $\mathbf{x}_t \in \mathbb{R}^d$.
+
+Bağlam vektörü:
+\[
+  \mathbf{x}_t = [\text{task\_type},\; \text{complexity},\; \text{privacy\_level},\;
+                   \text{urgency},\; \text{context\_length}]
+\]
+
+Her model $k$ için beklenen ödül (LinUCB algoritmasıyla):
+\[
+  \hat{r}_{t,k} = \mathbf{x}_t^\top \hat{\boldsymbol{\theta}}_k
+    + \alpha \sqrt{\mathbf{x}_t^\top \mathbf{A}_k^{-1} \mathbf{x}_t}
+\]
+
+Burada:
+\begin{itemize}[nosep]
+  \item $\hat{\boldsymbol{\theta}}_k$: model $k$ için öğrenilmiş parametre vektörü
+  \item $\mathbf{A}_k = \mathbf{I}_d + \sum_{\tau} \mathbf{x}_\tau \mathbf{x}_\tau^\top$: tasarım matrisi
+  \item $\alpha$: exploration--exploitation dengesi parametresi
+\end{itemize}
+
+\textbf{Seçim kuralı:}
+\[
+  k^* = \arg\max_k \hat{r}_{t,k}
+\]
+
+\textbf{Ödül fonksiyonu:}
+\[
+  r_t = w_1 \cdot Q(k, \text{task}) + w_2 \cdot \frac{1}{L(k)}
+      - w_3 \cdot C(k) + w_4 \cdot P(k)
+\]
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Sembol} & \textbf{Anlam} & \textbf{Ölçüm} \\
+\midrule
+$Q(k,\text{task})$ & Kalite skoru & Görev başarı oranı (0--1) \\
+$L(k)$ & Latency & Yanıt süresi (saniye) \\
+$C(k)$ & Maliyet & Dolar / 1K token \\
+$P(k)$ & Privacy bonusu & Local = 1.0, Cloud = 0.0 \\
+\bottomrule
+\end{tabularx}
+
+\textbf{Parametre güncelleme (her etkileşim sonrası):}
+\begin{align}
+  \mathbf{A}_k &\leftarrow \mathbf{A}_k + \mathbf{x}_t \mathbf{x}_t^\top \\
+  \mathbf{b}_k &\leftarrow \mathbf{b}_k + r_t \mathbf{x}_t \\
+  \hat{\boldsymbol{\theta}}_k &\leftarrow \mathbf{A}_k^{-1} \mathbf{b}_k
+\end{align}
+
+\subsection{Tool Layer}
+
+Her araç bir MCP server veya Tauri command olarak çalışır. Her biri bağımsız, izole, izin kontrollü.
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Araç} & \textbf{Tanım} & \textbf{İzin Seviyesi} \\
+\midrule
+\texttt{code} & Dosya okuma/yazma/düzenleme (workspace içi) & Okuma: S1, Yazma: S2 \\
+\texttt{test} & Maestro MCP üzerinden test çalıştırma & S2 \\
+\texttt{design} & Pencil MCP üzerinden .pen okuma/yazma & S2 \\
+\texttt{web} & Arama, sayfa okuma, link toplama & S1 \\
+\texttt{shell} & Terminal komutu çalıştırma & S3 \\
+\texttt{git} & Branch, commit, PR işlemleri & Commit: S2, Push/PR: S3 \\
+\texttt{notify} & Companion App / macOS bildirim & S3 \\
+\texttt{browser} & URL açma, form doldurma & S3 \\
+\texttt{file} & Dosya sistemi (workspace dışı) & S3 \\
+\texttt{calendar} & Takvim okuma/yazma & S3 (ileride) \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Memory Layer ve Çizge Tabanlı Hafıza Matematiği}
+
+\subsubsection{Hafıza Uzayı Tanımı}
+
+Cognos-OS spec'teki çizge tabanlı hafıza:
+\[
+  G = (V, E, \mathcal{A}, \mathcal{R})
+\]
+
+\begin{itemize}[nosep]
+  \item $V$: Varlıklar kümesi --- User, Project, File, Task, Contact, Preference, Document
+  \item $E \subseteq V \times V$: Varlık ilişkileri
+  \item $\mathcal{A}: V \to \mathbb{R}^d$: Düğüm öznitelik vektörleri (embeddings)
+  \item $\mathcal{R}$: İlişki tipleri --- \texttt{OWNS}, \texttt{DEPENDS\_ON}, \texttt{PREFERS}, \texttt{WORKED\_ON}, \texttt{KNOWS\_ABOUT}
+\end{itemize}
+
+\subsubsection{TransE: Bilgi Çizgesi Gömme}
+
+İlişkiler vektör uzayında modellenir. Bir $(h, r, t)$ üçlüsü (head, relation, tail) için:
+\[
+  \mathbf{h} + \mathbf{r} \approx \mathbf{t}
+\]
+
+\textbf{Kayıp fonksiyonu (margin-based):}
+\[
+  \mathcal{L} = \sum_{(h,r,t) \in S} \sum_{(h',r,t') \in S'}
+    \max\!\bigl(0,\; \gamma + d(\mathbf{h}+\mathbf{r}, \mathbf{t})
+                         - d(\mathbf{h'}+\mathbf{r}, \mathbf{t'})\bigr)
+\]
+
+Burada $S$ pozitif üçlüler, $S'$ negatif (bozulmuş) üçlüler, $\gamma$ margin, $d(\cdot,\cdot)$ L1 veya L2 mesafe.
+
+\subsubsection{GNN ile Çizge Üzerinde Mesaj Geçişi}
+
+Düğüm temsilleri komşuluk bilgisiyle zenginleştirilir:
+\[
+  \mathbf{h}_v^{(l+1)} = \sigma\!\left(
+    \mathbf{W}^{(l)} \cdot \text{AGG}\!\bigl(\{\mathbf{h}_u^{(l)} : u \in \mathcal{N}(v)\}\bigr) + \mathbf{b}^{(l)}
+  \right)
+\]
+
+\textbf{Attention-based toplama (GAT):}
+\[
+  \alpha_{vu} = \frac{
+    \exp\!\bigl(\text{LeakyReLU}(\mathbf{a}^\top [\mathbf{W}\mathbf{h}_v \| \mathbf{W}\mathbf{h}_u])\bigr)
+  }{
+    \sum_{k \in \mathcal{N}(v)} \exp\!\bigl(\text{LeakyReLU}(\mathbf{a}^\top [\mathbf{W}\mathbf{h}_v \| \mathbf{W}\mathbf{h}_k])\bigr)
+  }
+\]
+\[
+  \mathbf{h}_v^{(l+1)} = \sigma\!\left(\sum_{u \in \mathcal{N}(v)} \alpha_{vu}\, \mathbf{W}\, \mathbf{h}_u^{(l)}\right)
+\]
+
+\subsubsection{Hibrit Erişim Skorlaması}
+
+Bir sorgu $q$ ile düğüm $v$ arasındaki alaka düzeyi:
+\[
+  S(q, v) = \alpha \cdot \frac{\mathbf{e}_q \cdot \mathbf{e}_v}{\|\mathbf{e}_q\|\, \|\mathbf{e}_v\|}
+           + (1-\alpha) \cdot e^{-\lambda \cdot d(v, v_{\text{focus}})}
+\]
+
+\textbf{Temporal Decay:}
+\[
+  S_{\text{temporal}}(q, v) = S(q, v) \cdot e^{-\mu \cdot (t_{\text{now}} - t_{\text{last\_access}}(v))}
+\]
+
+\subsection{Voice Layer}
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Bileşen} & \textbf{Teknoloji} & \textbf{Notlar} \\
+\midrule
+STT & Whisper.cpp (local) & Privacy-first, offline çalışır \\
+TTS & macOS AVSpeechSynthesizer & Sistem sesi, sıfır maliyet \\
+TTS (alt.) & ElevenLabs API & Doğal ses, bulut, maliyet var \\
+Wake word & Opsiyonel (``Hey Friday'') & İleride \\
+Varsayılan mod & Push-to-talk & Kullanıcı basılı tutarak konuşur \\
+\bottomrule
+\end{tabularx}
+
+% ──────────────────────────────────────────────────────────────
+\section{Yetenek Alanları}
+
+\subsection{Kod Yazma ve Düzenleme}
+
+Kullanıcı doğal dille anlatır, Cognos kodu yazar, test eder, raporlar.
+
+\textbf{Operasyonel Sözleşme (Cognos-OS spec):}
+\begin{itemize}[nosep]
+  \item Algoritmik analiz zorunlu: her kritik fonksiyon için time/space (Big-O)
+  \item Minimal diff: sadece gerekli satırlar değişir
+  \item Yasaklar: brute-force, gereksiz nested loop, global state mutasyonu
+  \item Güvenlik: PII maskeleme, log kısıntısı, secret yönetimi
+  \item Doğrulama: lint + typecheck + ilgili testler; backend değiştiyse \texttt{cargo check}
+  \item Self-review: edge-case + performans + güvenlik + karmaşıklık
+\end{itemize}
+
+\textbf{Workflow (hiyerarşik karar ile):}
+
+\begin{lstlisting}
+1. Kullanici istegi
+   |
+2. Local intent classifier (Seviye 1, <10ms)
+   -> intent = code_write | code_fix | code_explain | ...
+   -> confidence < threshold? -> Seviye 3'e tirmandir
+   |
+3. NER ile varlik cikarimi
+   -> dosya adi, fonksiyon adi, degisken adi, hata mesaji
+   |
+4. Knowledge graph'tan baglam topla
+   -> ilgili dosyalar, bagimliliklar, test dosyalari
+   |
+5. Uygun model sec (Bandit veya kural tabanli)
+   -> basit fix? -> Ollama local
+   -> karmasik mimari? -> Claude Opus
+   |
+6. Plan oner -> kullanici onaylari
+   |
+7. Kod yaz -> lint + typecheck -> test yaz -> test calistir
+   |
+8. Sonuc raporla + ogrenme pipeline'a geri bildirim
+\end{lstlisting}
+
+\subsection{Test Yazma ve Çalıştırma}
+
+Maestro MCP entegrasyonu ile platform bazlı test.
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Tip} & \textbf{Araç} & \textbf{Format} \\
+\midrule
+Unit & Vitest & TypeScript (*.test.ts) \\
+E2E & Maestro & YAML flow (*.yml) \\
+Integration & Vitest + API & TypeScript \\
+Visual Regression & Maestro screenshot & PNG kıyaslama \\
+\bottomrule
+\end{tabularx}
+
+\subsubsection{Görsel Regresyon Testi --- Perceptual Hash}
+
+Screenshot karşılaştırması için \textbf{perceptual hashing}:
+\[
+  h(I) = \text{sign}\!\bigl(\text{DCT}(\text{resize}(I, 32\!\times\!32)) - \text{median}(\text{DCT})\bigr)
+\]
+\[
+  d(I_1, I_2) = \frac{\text{hamming}(h(I_1), h(I_2))}{|h|}
+\]
+
+\begin{itemize}[nosep]
+  \item $d < 0.1$: aynı görüntü (test geçti)
+  \item $0.1 \leq d < 0.3$: küçük fark (inceleme gerekir)
+  \item $d \geq 0.3$: önemli fark (test kaldı)
+\end{itemize}
+
+\subsection{Tasarım (Pencil Entegrasyonu)}
+
+\texttt{.pen} dosyalarını okur, analiz eder, tasarlar, doğrular.
+
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Araç} & \textbf{Amaç} \\
+\midrule
+\texttt{batch\_get} & Mevcut komponentleri keşfet \\
+\texttt{get\_guidelines} & Tasarım kurallarını oku \\
+\texttt{get\_style\_guide} & Stil rehberi al \\
+\texttt{batch\_design} & Tasarım uygula (I/U/D/R/C/M/G) \\
+\texttt{get\_screenshot} & Görsel doğrulama \\
+\texttt{snapshot\_layout} & Layout sorunlarını tespit et \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Araştırma ve Bilgi Toplama}
+
+Web araması, doküman analizi, kaynak doğrulama.
+
+\subsubsection{Kaynak Güvenilirlik Skorlaması}
+
+Birden fazla kaynaktan gelen bilgi çapraz doğrulanır:
+\[
+  \text{Reliability}(c) = \frac{1}{N} \sum_{i=1}^{N}
+    \mathbb{1}[\text{source}_i \text{ confirms } c] \cdot w(\text{source}_i)
+\]
+\[
+  w(s) = \text{domain\_authority}(s) \cdot \text{recency}(s) \cdot \text{relevance}(s)
+\]
+
+\subsection{Uzun Süreli Görev Yönetimi}
+
+\subsubsection{Görev Dekompozisyonu --- HTN}
+
+Görevin boyutundan bağımsız, gün boyu çalışan bir asistan.
+
+Büyük görevler otomatik olarak alt görevlere ayrıştırılır:
+\[
+  \text{Task}(T) = \{t_1, t_2, \ldots, t_n\}
+\]
+\[
+  \text{effort}(t_i) = f\!\bigl(\text{complexity}(t_i),\; \text{dependencies}(t_i),\; \text{risk}(t_i)\bigr)
+\]
+
+\textbf{Sıralama (topological sort + öncelik):}
+\[
+  \text{order} = \text{TopSort}(\text{DAG}(T))
+    \;\text{weighted by}\; \text{priority}(t_i) \cdot \text{urgency}(t_i)
+\]
+
+Bağımlılık çizgesi bir DAG (Directed Acyclic Graph) olarak modellenir. Döngüsel bağımlılık
+tespit edilirse kullanıcıya uyarı verilir.
+
+\textbf{Checkpoint Mekanizması:}
+\begin{itemize}[nosep]
+  \item Her alt görev tamamlandığında durum kaydedilir
+  \item Uygulama kapatılsa bile kaldığı yerden devam eder
+  \item Checkpoint: SQLite'a görev durumu + context snapshot
+\end{itemize}
+
+\subsection{Bildirim ve İletişim}
+
+Cognos, kullanıcıya ulaşmanın birden fazla kanalını kullanır.
+
+\textbf{Kanal Önceliği (aciliyet sırası):}
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Seviye} & \textbf{Kanal} & \textbf{Örnek} \\
+\midrule
+Low & UI log / notification center & ``Görev tamamlandı'' \\
+Medium & macOS notification & ``Test başarısız, müdahale gerekebilir'' \\
+High & Companion App push & ``2 seçenekten birini seçmen lazım'' \\
+Critical & Companion App + macOS alert & ``Güvenlik sorunu tespit edildi'' \\
+\bottomrule
+\end{tabularx}
+
+\textbf{Companion App Entegrasyonu (bkz.\ Bölüm~15):}
+\begin{itemize}[nosep]
+  \item FCM + Supabase Realtime ile çift yönlü iletişim
+  \item Mesaj tipleri:
+    \begin{itemize}[nosep]
+      \item Soru: ``X konusunda şu 2 seçenek var, hangisi?''
+      \item Durum: ``Y görevi tamamlandı, sonuç: \ldots''
+      \item Onay: ``Z işlemini yapmamı istiyor musun? [Evet/Hayır]''
+      \item Uyarı: ``Hata oluştu, müdahale gerekiyor''
+    \end{itemize}
+  \item Kullanıcı Companion App'ten cevap verir $\to$ Cognos devam eder
+\end{itemize}
+
+\subsection{Form Doldurma ve Belge İşlemleri}
+
+\textbf{Güvenlik Kuralı:} ASLA otomatik submit ETMEZ. Kullanıcı her zaman son kontrol yapar.
+
+\textbf{Workflow (örnek: vize başvurusu):}
+
+\begin{lstlisting}
+1. Girdi: ulke + vize tipi
+   |
+2. Web'den gereksinimler arastir
+   -> Konsolosluk sitesi, resmi kaynaklar
+   -> Capraz dogrulama (Reliability skoru)
+   |
+3. Gerekli belge kontrol listesi olustur
+   |
+4. Hafizadan (Knowledge Graph) bilinen bilgileri doldur
+   -> Ad, soyad, dogum tarihi, pasaport no...
+   -> Bilinmeyen alanlari kullaniciya sor
+   |
+5. Form alanlarini doldur (browser automation)
+   |
+6. Kullaniciya goster -> "Kontrol et, duzeltmemi istedigin yer var mi?"
+   |
+7. Kullanici onaylar -> AMA SUBMIT ETMEZ, kullanici kendisi yapar
+\end{lstlisting}
+
+% ──────────────────────────────────────────────────────────────
+\section{Karar Mekanizması: Matematiksel Temeller}
+
+\subsection{Varyasyonel Serbest Enerji (VFE) --- Active Inference}
+
+Cognos-OS spec'teki temel prensip. Sistem, duyusal girdi ile içsel dünya modeli arasındaki
+``sürprizi'' minimize eder:
+\[
+  \mathcal{F} = \mathrm{D}_{KL}\bigl[Q(s) \| P(s, o)\bigr]
+    = \underbrace{\mathbb{E}_Q[-\ln P(o|s)]}_{\text{Reconstruction Error}}
+    + \underbrace{\mathrm{D}_{KL}\bigl[Q(s) \| P(s)\bigr]}_{\text{Complexity}}
+\]
+
+Burada:
+\begin{itemize}[nosep]
+  \item $Q(s)$: sistemin inancı (approximate posterior)
+  \item $P(s, o)$: gerçek dünya modeli (generative model)
+  \item $o$: gözlem (kullanıcı girdisi, dosya değişikliği, sistem durumu)
+  \item $s$: gizli durum (kullanıcının niyeti, projenin durumu)
+\end{itemize}
+
+\subsection{Beklenen Serbest Enerji (EFE) --- Karar}
+
+Bir politika $\pi$ seçilirken:
+\[
+  G(\pi) = \sum_{\tau=t}^{T} G(\pi, \tau)
+\]
+\[
+  G(\pi, \tau) \approx
+    \underbrace{-\mathbb{E}_{Q}[\ln P(o_\tau | C)]}_{\text{Pragmatic Value (Goal)}}
+  - \underbrace{\mathbb{E}_{Q}\bigl[\mathrm{D}_{KL}[Q(s_\tau | o_\tau, \pi) \| Q(s_\tau | \pi)]\bigr]}_{\text{Epistemic Value (Curiosity)}}
+\]
+
+\begin{itemize}[nosep]
+  \item \textbf{Pragmatic value:} Hedefe ne kadar yaklaşıyoruz?
+  \item \textbf{Epistemic value:} Bu eylem ne kadar bilgi kazandırır? (merak mekanizması)
+\end{itemize}
+
+\subsection{İnanç Güncelleme (POMDP)}
+
+Durum tamamen gözlemlenemez. İnanç durumu:
+\[
+  B_t(s) = P(S_t = s \mid o_{1:t}, a_{1:t-1})
+\]
+
+\textbf{Bayesyen güncelleme:}
+\[
+  B_{t+1}(s') = \eta \cdot
+    \underbrace{P(o_{t+1} | s')}_{\text{Observation Model}} \cdot
+    \sum_{s} \underbrace{P(s' | s, a_t)}_{\text{Transition Model}} \cdot B_t(s)
+\]
+
+\textbf{Pratik uygulama:}
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Gözlem $o_t$} & \textbf{Durum $s$} & \textbf{Güncelleme} \\
+\midrule
+Kullanıcı auth.ts açtı & $P(\text{auth\_work}) \uparrow$ & Proje bağlamı güncelle \\
+Hızlı yazım, sık silme & $P(\text{frustrated}) \uparrow$ & Yanıt tonunu ayarla \\
+3 saat aynı dosyada & $P(\text{deep\_focus}) \uparrow$ & Rahatsız etme \\
+``neden çalışmıyor'' yazdı & $P(\text{debugging}) \uparrow$ & Debug araçları öner \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Bayesyen Niyet Çözümleme}
+
+\[
+  P(\text{Intent} \mid \text{Prompt}, \text{Context}) =
+    \frac{P(\text{Prompt} \mid \text{Intent}) \cdot P(\text{Intent} \mid \text{Context})}{P(\text{Prompt})}
+\]
+
+\textbf{Prior $P(\text{Intent} \mid \text{Context})$:} World model'den gelir.
+\begin{itemize}[nosep]
+  \item Saat 09:00, auth.ts açık, dünkü bug issue var $\to$ $P(\text{bug\_fix})$ yüksek prior
+  \item Cuma 17:00, refactor branch'inde $\to$ $P(\text{refactor})$ yüksek prior
+\end{itemize}
+
+\textbf{Likelihood $P(\text{Prompt} \mid \text{Intent})$:} Intent classifier'dan gelir.
+\begin{itemize}[nosep]
+  \item ``düzelt'' $\to$ $P(\text{bug\_fix}) = 0.7$, $P(\text{refactor}) = 0.2$, $P(\text{typo}) = 0.1$
+\end{itemize}
+
+\textbf{Posterior:} Hepsini çarpar, normalize eder $\to$ en yüksek posterior olan niyet seçilir.
+
+\subsection{Utility Fonksiyonu}
+
+EFE'nin pratik yaklaşımlaması:
+\[
+  U(a) = w_1 \cdot \text{Sim}(\text{Result}(a), \text{Goal})
+       + w_2 \cdot \text{InfoGain}(a)
+       - w_3 \cdot \text{Cost}(a)
+       - w_4 \cdot \text{Risk}(a)
+\]
+
+% ──────────────────────────────────────────────────────────────
+\section{Güvenlik ve İzin Modeli}
+
+\subsection{İzin Seviyeleri}
+
+\textbf{SEVİYE~1 --- Otomatik:} Dosya okuma (workspace içi), web araması, hafıza okuma, kod analizi.
+
+\textbf{SEVİYE~2 --- Bildirimli:} Dosya yazma/düzenleme, test çalıştırma, git commit, tasarım düzenleme.
+
+\textbf{SEVİYE~3 --- Onay gerekli:} Shell komutu, git push/PR, Companion App mesaj, browser URL, workspace dışı dosya, form doldurma, API key kullanımı.
+
+\textbf{SEVİYE~4 --- Yasak:} Credential loglama, kullanıcı adına submit/ödeme, workspace dışı dosya silme, başka kullanıcı verisi, PII dışarıya gönderme.
+
+\subsection{Anomali Tespiti}
+
+Normal kullanım kalıplarını öğrenip sapmaları tespit:
+\[
+  z_t = \frac{x_t - \mu_{\text{window}}}{\sigma_{\text{window}}}
+\]
+
+$|z_t| > 3$ ise anomali alarmı:
+\begin{itemize}[nosep]
+  \item Normalden fazla shell komutu çalıştırma
+  \item Alışık olunmayan saatte yüksek izin seviyesi isteme
+  \item Workspace dışı dosya erişim paterni
+\end{itemize}
+
+\subsection{Audit Trail}
+
+Her eylem loglanır:
+
+\begin{lstlisting}
+{
+  "timestamp": "2025-02-08T14:32:00Z",
+  "action": "file_write",
+  "tool": "code",
+  "target": "src/components/App.tsx",
+  "permission_level": 2,
+  "user_notified": true,
+  "result": "success",
+  "pii_detected": false,
+  "model_used": "ollama:codellama",
+  "decision_level": 1,
+  "confidence": 0.94
+}
+\end{lstlisting}
+
+% ──────────────────────────────────────────────────────────────
+\section{Kullanıcı Deneyimi (UI Modları)}
+
+\subsection{Chat Modu (Ana Ekran)}
+Mevcut FridayX chat arayüzü üzerinden çalışır. Ek olarak: ses giriş butonu, görev ilerleme barı, zengin yanıtlar, model badge, karar seviyesi göstergesi.
+
+\subsection{Companion Modu (Overlay)}
+Ekranın köşesinde küçük floating widget. Durumu gösterir: idle / working / waiting / learning. Tıklayınca genişler. macOS'ta NSPanel veya overlay window.
+
+\subsection{Background Modu}
+Arka planda görev çalıştırır. Sadece bildirim ile iletişim. Menu bar'da küçük ikon.
+
+% ──────────────────────────────────────────────────────────────
+\section{Teknik Stack}
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Katman} & \textbf{Teknoloji} & \textbf{Notlar} \\
+\midrule
+Orchestrator & Rust (Tauri backend) & Mevcut altyapıya modül olarak eklenir \\
+Task Queue & Rust tokio async & Uzun süreli görevler için \\
+Local ML & candle (Rust, HuggingFace) & Metal acceleration \\
+Apple Silicon ML & Core ML / MLX & Neural Engine üzerinde <10ms \\
+Memory (yapısal) & SQLite & Profil, geçmiş, tercihler \\
+Memory (çizge) & oxigraph (Rust, embedded) & SPARQL destekli KG \\
+Memory (vektörel) & Local vector store + HNSW & Embedding tabanlı benzerlik \\
+LLM Routing & Mevcut provider katmanı & API / CLI / ACP \\
+Tools & MCP protocol & Maestro, Pencil, özel araçlar \\
+STT & Whisper.cpp / mlx-whisper & Privacy-first, offline \\
+TTS & macOS AVSpeechSynthesizer & Sıfır maliyet \\
+VAD & silero-vad (ONNX, <5MB) & Konuşma/sessizlik tespiti \\
+Intent Classifier & DistilBERT $\to$ Core ML & <100MB, <10ms \\
+NER & spaCy small / custom CRF & Varlık çıkarımı \\
+Notifications & Companion App (FCM + Supabase) & Asenkron iletişim \\
+Browser & Playwright / AppleScript & Form doldurma, URL açma \\
+Frontend & React (mevcut FridayX) & Yeni komponentler eklenir \\
+\bottomrule
+\end{tabularx}
+
+% ──────────────────────────────────────────────────────────────
+\section{Faz Planı}
+
+\begin{description}[style=nextline, leftmargin=2em]
+  \item[Faz 0 --- Temel İskelet]
+    Orchestrator modülü, provider routing, basit chat, izin motoru iskeleti.
+  \item[Faz 1 --- Araç Katmanı]
+    \texttt{code}, \texttt{test}, \texttt{git}, \texttt{shell} araçları. İzin motoru tam çalışma.
+  \item[Faz 2 --- Araştırma + Hafıza]
+    \texttt{web}, \texttt{browser} araçları. SQLite + vector store. Güvenilirlik skoru.
+  \item[Faz 3 --- Tasarım]
+    Pencil MCP okuma/yazma. Screenshot + perceptual hash doğrulama.
+  \item[Faz 4 --- Local NLP]
+    Intent classifier, NER, hiyerarşik karar motoru, bandit veri toplama.
+  \item[Faz 5 --- Ses + Algı]
+    Whisper.cpp, silero-vad, macOS TTS, push-to-talk, companion overlay, ekran farkındalığı.
+  \item[Faz 6 --- Bildirim + Uzun Görev]
+    Companion App, bildirim öncelik sistemi, HTN dekompozisyon, background modu.
+  \item[Faz 7 --- Form + Belge]
+    Browser automation, form alan tespiti, belge araştırma, kullanıcı onay akışı.
+  \item[Faz 8 --- Knowledge Graph + Dünya Modeli]
+    oxigraph, TransE, GNN mesaj geçişi, temporal model, predictive state.
+  \item[Faz 9 --- Sürekli Öğrenme]
+    Tercih öğrenme, LoRA, knowledge distillation, bandit model seçimi, anomali tespiti.
+  \item[Faz 10 --- Proaktif Zeka]
+    Proaktif öneriler, duygu analizi, bağlam duyarlı bildirim, wake word, tam otonom mod.
+\end{description}
+
+% ──────────────────────────────────────────────────────────────
+\section{Mevcut Sistemle İlişki}
+
+\subsection{Codex App-Server}
+\textbf{Değişmez.} Cognos, Codex akışını kullanmaz ve bozmaz. İkisi paralel çalışır.
+
+\subsection{AI Providers}
+Cognos, \texttt{ai-providers.md}'deki katmanı \textbf{kullanır ama değiştirmez}.
+
+\subsection{Maestro Test Runner}
+\texttt{maestro-mvp.md}'deki MCP entegrasyonu \textbf{aynen kullanılır}.
+
+\subsection{FridayX UI}
+Cognos, mevcut UI'a 3 yeni bileşen ekler: (1) chat modunda ses butonu + görev barı + badge;
+(2) companion overlay; (3) menu bar ikonu.
+
+% ──────────────────────────────────────────────────────────────
+\section{Başarı Metrikleri}
+
+\begin{tabularx}{\textwidth}{lrX}
+\toprule
+\textbf{Metrik} & \textbf{Hedef} & \textbf{Ölçüm} \\
+\midrule
+Task success rate & $>$90\% & Onaylanan görevlerde başarı \\
+Halüsinasyon oranı & $<$5\% & Kaynak doğrulama bazlı \\
+P95 yanıt (L0--L1) & $<$50ms & Local inference zamanı \\
+P95 yanıt (L2) & $<$500ms & Ollama inference zamanı \\
+P95 yanıt (L3) & $<$5s & Cloud LLM zamanı \\
+Local çözüm oranı & $>$70\% & L0+L1'de çözülen oran \\
+Cost per request & $<$\$0.005 & API maliyeti / toplam istek \\
+Checkpoint recovery & 100\% & Görev kaybı yok \\
+İzin ihlali & 0 & Deny-default garanti \\
+Öğrenme iyileştirmesi & $>$10\%/ay & Aylık başarı oranı artışı \\
+\bottomrule
+\end{tabularx}
+
+% ──────────────────────────────────────────────────────────────
+\section{Riskler ve Önlemler}
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Risk} & \textbf{Etki} & \textbf{Önlem} \\
+\midrule
+API maliyet patlaması & Yüksek & Budget limiti + local-first + bandit \\
+Halüsinasyon & Orta & Kaynak doğrulama + ``bilmiyorum'' politikası \\
+PII sızıntısı & Yüksek & Local-first + maskeleme + audit trail \\
+Local model kalitesi & Orta & Confidence threshold + LLM fallback \\
+Companion App kopması & Düşük & FCM offline queue + Supabase retry \\
+Maestro/Pencil MCP kopması & Orta & Health check + graceful fallback \\
+Uzun görev timeout & Orta & Checkpoint + resume mekanizması \\
+Yanlış form doldurma & Yüksek & Asla otomatik submit + kullanıcı kontrol \\
+LoRA overfitting & Orta & Validation set + early stopping \\
+Adversarial input & Yüksek & Input sanitization + anomali tespiti \\
+\bottomrule
+\end{tabularx}
+
+% ──────────────────────────────────────────────────────────────
+\section{Kapsam Dışı}
+
+Bu modülde \textbf{olmayacak} şeyler: Codex akışını değiştirmek, foundation model eğitmek,
+ödeme/finansal işlem, çok kullanıcılı çalışma, workspace dışı dosya silme,
+kullanıcı adına form submit, credential loglama.
+
+% ──────────────────────────────────────────────────────────────
+\section{Referanslar}
+
+\begin{itemize}[nosep]
+  \item \texttt{docs/fridex-cognos-os-spec.tex} --- Cognos-OS kanonik spesifikasyon
+  \item \texttt{docs/ai-providers.md} --- AI provider entegrasyon mimarisi
+  \item \texttt{docs/maestro-mvp.md} --- Maestro test runner MVP
+  \item \texttt{docs/roadmap/ai/own-ai.md} --- LLM olgunlaşma notları
+  \item \texttt{docs/zed-yol-haritasi.md} --- Zed esinli editor yol haritası
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+% KISIM II
+% ══════════════════════════════════════════════════════════════
+\part{Platform Altyapısı ve Entegrasyon}
+
+% ──────────────────────────────────────────────────────────────
+\section{Ses Sistemi: Karakter, Teknoloji ve Seçim}
+
+\subsection{TTS (Text-to-Speech) Seçenekleri}
+
+\begin{tabularx}{\textwidth}{lllllll}
+\toprule
+\textbf{Seçenek} & \textbf{Kalite} & \textbf{Maliyet} & \textbf{Latency} & \textbf{Privacy} & \textbf{Offline} & \textbf{Boyut} \\
+\midrule
+macOS System & Robotik & Ücretsiz & <100ms & Local & Evet & 0 \\
+Apple Personal & Kendi sesi & Ücretsiz & <200ms & Local & Evet & $\sim$1GB \\
+Coqui XTTS v2 & Doğala yakın & Ücretsiz & 300--500ms & Local & Evet & $\sim$1.5GB \\
+Bark & Doğal & Ücretsiz & 500--1000ms & Local & Evet & $\sim$5GB \\
+ElevenLabs & En doğal & \$5--22/ay & 200--400ms & Cloud & Hayır & 0 \\
+OpenAI TTS & Çok doğal & \$15/1M char & 300--500ms & Cloud & Hayır & 0 \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Önerilen Katmanlı Yaklaşım}
+
+\begin{description}[style=nextline, leftmargin=2em]
+  \item[Faz 0--3 (başlangıç)] macOS AVSpeechSynthesizer --- sıfır maliyet, sıfır latency, offline.
+  \item[Faz 4--5 (geçiş)] Coqui XTTS v2 --- 6 saniyelik ses örneğiyle voice cloning, tamamen offline.
+  \item[Opsiyonel] ElevenLabs API --- sunum/demo için, günlük kullanım için pahalı.
+\end{description}
+
+\subsection{Ses Karakteri Kararı}
+
+JARVIS/FRIDAY vizyonunda sesin bir \textbf{kimlik} taşıması gerekir:
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Karar} & \textbf{Seçenekler} & \textbf{Not} \\
+\midrule
+Cinsiyet & Erkek (JARVIS) / Kadın (FRIDAY) / Nötr & Kullanıcı tercihi \\
+Dil & Türkçe / İngilizce / Çift dilli & Whisper ikisini de destekler \\
+Ton & Profesyonel-sakin / Samimi-sıcak / Nötr & XTTS referans sesiyle belirlenir \\
+Adaptasyon & Bağlama göre ton değişimi & Acil $\to$ ciddi, casual $\to$ rahat \\
+\bottomrule
+\end{tabularx}
+
+\subsection{STT (Speech-to-Text) Detayları}
+
+\begin{tabularx}{\textwidth}{lllll}
+\toprule
+\textbf{Model} & \textbf{Boyut} & \textbf{Doğruluk} & \textbf{Latency} & \textbf{RAM} \\
+\midrule
+Whisper tiny & 39MB & Düşük & <1s & $\sim$200MB \\
+Whisper small & 244MB & Orta & 1--2s & $\sim$500MB \\
+Whisper medium & 769MB & Yüksek & 2--4s & $\sim$1.5GB \\
+Whisper large-v3 & 1.5GB & En yüksek & 4--8s & $\sim$3GB \\
+\bottomrule
+\end{tabularx}
+
+\textbf{Öneri:} \texttt{whisper small} ile başla. \textbf{mlx-whisper} Apple Silicon'da $\sim$2x hızlı.
+
+\subsection{Always-On Mikrofon Politikası}
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Mod} & \textbf{Davranış} & \textbf{Privacy Riski} \\
+\midrule
+Push-to-talk (varsayılan) & Butona basınca dinler & Sıfır \\
+Wake word & Sadece wake word dinler & Düşük \\
+Always-on & Sürekli dinler, VAD ile tespit & Yüksek \\
+App-only & Sadece FridayX/Companion açıkken & Düşük \\
+\bottomrule
+\end{tabularx}
+
+% ──────────────────────────────────────────────────────────────
+\section{Cognos Companion App (Mobil Bildirim ve İletişim)}
+
+WhatsApp/Telegram'a bağımlılık yerine, kendi companion app'imiz.
+
+\subsection{Neden Kendi App?}
+
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{WhatsApp Business API} & \textbf{Cognos Companion App} \\
+\midrule
+Kurumsal onay gerektirir & Sadece EAS staging build \\
+Mesaj formatı sınırlı & Zengin UI: butonlar, formlar, kod blokları \\
+API maliyeti var (\$0.005/mesaj) & Ücretsiz \\
+Üçüncü parti bağımlılık & Tam kontrol \\
+Rate limit var & Limit yok \\
+Sadece metin + resim & Ses, video, interaktif onay paneli \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Teknik Mimari}
+
+\begin{lstlisting}
+FridayX (Desktop)              Cognos Companion (Mobil)
+Tauri + React                  Expo + React Native
+  Orchestrator ---WS----------- Push Handler
+  Task Queue   ---------------- Notification Center
+  World Model                   Mini Chat UI
+                                Onay/Red Butonlari
+      |                              |
+      +---- Supabase / FCM ----------+
+\end{lstlisting}
+
+\subsection{Build ve Dağıtım}
+
+\begin{lstlisting}
+Teknoloji: Expo (React Native)
+Build:     eas build --profile staging --platform ios
+           eas build --profile staging --platform android
+Update:    eas update --branch staging (OTA)
+Maliyet:   $0 (Expo ucretsiz tier, tek kullanici)
+\end{lstlisting}
+
+\subsection{Desktop $\leftrightarrow$ Mobil İletişim}
+
+\textbf{Öneri:} Firebase Cloud Messaging (push) + Supabase Realtime (iki yönlü chat).
+İkisi de ücretsiz tier'da yeterli.
+
+\subsection{Güvenlik}
+
+\begin{itemize}[nosep]
+  \item End-to-end encryption: desktop $\leftrightarrow$ mobil arasında şifreleme
+  \item Device pairing: QR kod ile eşleşme
+  \item Session token: her oturumda yenilenen JWT
+  \item Biometric: Face ID / Touch ID ile giriş
+  \item Uzaktan kilitleme: desktop'tan companion'ı devre dışı bırakma
+\end{itemize}
+
+% ──────────────────────────────────────────────────────────────
+\section{Sistem Gereksinimleri ve Maliyet Analizi}
+
+\subsection{Donanım Gereksinimleri}
+
+\textbf{Minimum (Faz 0--3):}
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Bileşen} & \textbf{Gereksinim} & \textbf{Not} \\
+\midrule
+İşlemci & Apple Silicon M1+ & Neural Engine zorunlu \\
+RAM & 16GB & Ollama 7B + Whisper small + sistem \\
+Depolama & 256GB+ SSD & Modeller $\sim$10GB yer kaplar \\
+Ağ & İnternet gerekli & Cloud LLM'ler için \\
+\bottomrule
+\end{tabularx}
+
+\textbf{Model Bellek Kullanımı (Faz 0--3):}
+
+\begin{lstlisting}
+Whisper small  :  ~500MB
+Intent clf     :  ~250MB
+Ollama 7B Q4   : ~4.0GB
+Vector store   :  ~100MB
+SQLite + KG    :   ~50MB
+--------------------------
+Toplam         : ~4.9GB  -> 16GB RAM'de rahat calisir
+\end{lstlisting}
+
+\textbf{İdeal (Faz 4--10):}
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Bileşen} & \textbf{Gereksinim} & \textbf{Not} \\
+\midrule
+İşlemci & Apple Silicon M3 Pro+ / M4 & Daha güçlü Neural Engine \\
+RAM & 32GB+ (ideal: 64GB) & Büyük local modeller için \\
+Depolama & 512GB+ SSD & Modeller + eğitim verisi $\sim$30GB \\
+Ağ & Opsiyonel & Çoğunluk local'de çözülür \\
+\bottomrule
+\end{tabularx}
+
+\textbf{Model Bellek Kullanımı (Faz 4--10):}
+
+\begin{lstlisting}
+Whisper medium : ~1.5GB
+Intent + NER   :  ~500MB
+Sentiment      :  ~250MB
+XTTS v2 (TTS)  : ~1.5GB
+Ollama 13B Q4  : ~8.0GB
+GNN + KG embed :  ~500MB
+Vector store   :  ~500MB
+LoRA adapters  :  ~200MB
+--------------------------
+Toplam         : ~13.0GB -> 32GB'da rahat, 16GB'da dar
+\end{lstlisting}
+
+\subsection{Yazılım Gereksinimleri}
+
+\begin{lstlisting}
+KATMAN 0 -- Zaten var (FridayX mevcut):
+|-- Tauri 2 + Rust backend
+|-- React 19 + Vite frontend
+|-- Node.js runtime
+|-- SQLite (Tauri icinde)
++-- Xcode Command Line Tools
+
+KATMAN 1 -- Faz 0 icin eklenecek:
+|-- Ollama                       -> brew install ollama
+|   |-- codellama:7b-q4          -> ollama pull codellama:7b
+|   +-- llama3.2:3b              -> ollama pull llama3.2:3b
+|-- Claude CLI                   -> zaten entegre
++-- Gemini CLI                   -> zaten entegre
+
+KATMAN 2 -- Faz 4 icin eklenecek (Local NLP):
+|-- whisper.cpp veya whisper-rs   -> Cargo dependency
+|-- candle (Rust ML, HuggingFace) -> Cargo dependency
+|   +-- DistilBERT model          -> HF'den indir (~250MB)
+|-- silero-vad                    -> ONNX model (~5MB)
+|-- ort (ONNX Runtime for Rust)   -> Cargo dependency
++-- tokenizers (HF Rust)          -> Cargo dependency
+
+KATMAN 3 -- Faz 5 icin eklenecek (Ses):
+|-- Coqui XTTS v2                 -> Python sidecar veya mlx-audio
+|-- macOS AVSpeechSynthesizer     -> Native Swift/ObjC bridge
++-- Core Audio (mic capture)      -> Tauri plugin
+
+KATMAN 4 -- Faz 8 icin eklenecek (Knowledge Graph):
+|-- oxigraph                      -> Cargo dependency (embedded)
++-- usearch veya hnsw_rs          -> Cargo dependency (vector index)
+
+KATMAN 5 -- Faz 9 icin eklenecek (Ogrenme):
+|-- MLX (Apple ML framework)      -> pip install mlx
+|   +-- mlx-lm (LoRA fine-tuning) -> pip install mlx-lm
++-- Core ML Tools                 -> Model export pipeline
+
+KATMAN 6 -- Companion App:
+|-- Expo / React Native           -> npx create-expo-app
+|-- EAS CLI                       -> npm install -g eas-cli
+|-- Firebase (push notification)  -> expo-notifications
++-- Supabase (realtime + auth)    -> @supabase/supabase-js
+\end{lstlisting}
+
+\subsection{Maliyet Analizi}
+
+\textbf{Faz 0--3 (ilk 6 ay): TOPLAM \$0.}
+Claude CLI + Gemini CLI ücretsiz. Ollama ücretsiz. macOS TTS ücretsiz. SQLite embedded.
+
+\textbf{Faz 4--7 (6--18 ay): TOPLAM $\sim$\$50--200/yıl.}
+ElevenLabs opsiyonel (\$60/yıl), Firebase/Supabase/EAS ücretsiz tier.
+
+\textbf{Faz 8--10 (18--24 ay): TOPLAM $\sim$\$0--360/yıl.}
+Cloud API fallback <\$30/ay. LoRA eğitim local.
+
+\textbf{Kritik nokta:} Sistemin çekirdeği \textbf{sıfır bulut maliyetiyle} çalışabilir.
+
+% ──────────────────────────────────────────────────────────────
+\section{Açık Kararlar ve Tartışma Konuları}
+
+\begin{tabularx}{\textwidth}{clXl}
+\toprule
+\textbf{\#} & \textbf{Karar} & \textbf{Seçenekler} & \textbf{Varsayılan} \\
+\midrule
+1 & Ses cinsiyet & Erkek / Kadın / Nötr & Kullanıcı belirler \\
+2 & Birincil dil & Türkçe / İngilizce / Çift dilli & Çift dilli \\
+3 & Mikrofon & Push-to-talk / Wake word / Always-on & Push-to-talk \\
+4 & Companion platform & iOS / Android / Her ikisi & iOS (EAS staging) \\
+5 & İletişim & FCM+Supabase / Kendi WS / Sadece FCM & FCM+Supabase \\
+6 & Başlangıç local LLM & codellama:7b / llama3.2:3b / mistral:7b & llama3.2:3b \\
+7 & KG DB & oxigraph / SQLite JSON / Custom Rust & oxigraph \\
+8 & XTTS referans ses & Seçilecek ses örneği & Faz 4'te belirlenir \\
+9 & Cognos ismi & Cognos / Friday / Özel isim & Kullanıcı belirler \\
+\bottomrule
+\end{tabularx}
+
+% ══════════════════════════════════════════════════════════════
+% KISIM III
+% ══════════════════════════════════════════════════════════════
+\part{Bilişsel Evrim --- LLM Wrapper'dan Kognitif Sisteme}
+
+% ──────────────────────────────────────────────────────────────
+\section{Algı Pipeline'ı (Perception)}
+
+JARVIS komut beklemez, sürekli algılar. Cognos'un ``duyuları'':
+
+\subsection{Ses İşlemcisi}
+
+\subsubsection{Ses Aktivite Tespiti (VAD)}
+
+Ham ses sinyali $x[n]$ üzerinde enerji tabanlı VAD:
+\[
+  E_{\text{frame}}(k) = \sum_{n=kH}^{kH+N-1} x[n]^2 \cdot w[n - kH]
+\]
+
+Burada $N$: pencere boyutu (25ms = 400 sample @ 16kHz),
+$H$: hop boyutu (10ms = 160 sample),
+$w[n]$: Hamming pencere fonksiyonu:
+\[
+  w[n] = 0.54 - 0.46 \cos\!\left(\frac{2\pi n}{N-1}\right)
+\]
+
+\textbf{Karar:}
+\[
+  \text{is\_speech}(k) = \begin{cases} 1 & \text{if } E_{\text{frame}}(k) > \theta_{\text{adaptive}} \\ 0 & \text{otherwise} \end{cases}
+\]
+
+Adaptif eşik:
+\[
+  \theta_{\text{adaptive}} = \alpha \cdot \theta_{\text{adaptive}} + (1-\alpha) \cdot \text{percentile}(E_{\text{recent}}, 90)
+\]
+
+\subsubsection{MFCC --- Mel-Frequency Cepstral Coefficients}
+
+\textbf{Adım 1: Güç Spektrumu}
+\[
+  P(k, f) = |X(k, f)|^2 \quad \text{where } X = \text{STFT}(x)
+\]
+
+\textbf{Adım 2: Mel Filtre Bankası} ---
+Mel ölçeği insan kulak algısını modeller:
+\[
+  m = 2595 \cdot \log_{10}\!\left(1 + \frac{f}{700}\right)
+  \qquad
+  f = 700 \cdot \left(10^{m/2595} - 1\right)
+\]
+\[
+  S(k, m) = \sum_{f} P(k, f) \cdot H_m(f) \quad m = 1, 2, \ldots, M
+\]
+
+\textbf{Adım 3: Log + DCT}
+\[
+  \text{MFCC}(k, c) = \sum_{m=1}^{M} \log(S(k, m)) \cdot \cos\!\left(\frac{\pi c (m - 0.5)}{M}\right)
+\]
+
+\subsubsection{CTC Loss --- Whisper/STT Eğitimi}
+
+Connectionist Temporal Classification:
+\[
+  P(\mathbf{y} | \mathbf{x}) = \sum_{\boldsymbol{\pi} \in \mathcal{B}^{-1}(\mathbf{y})}
+    \prod_{t=1}^{T} P(\pi_t | \mathbf{x})
+\]
+\[
+  \mathcal{L}_{\text{CTC}} = -\ln P(\mathbf{y} | \mathbf{x})
+\]
+
+Forward-backward algoritması ile $O(T \cdot |\mathbf{y}|)$.
+
+\subsection{Ekran Farkındalığı}
+
+macOS Accessibility API üzerinden aktif uygulama, pencere başlığı, kullanıcı idle süresi.
+
+\textbf{Idle durum tahmini:}
+\[
+  P(\text{idle}) = \sigma\!\left(\frac{t_{\text{idle}} - \mu_{\text{idle}}}{\tau}\right)
+    = \frac{1}{1 + e^{-(t_{\text{idle}} - \mu_{\text{idle}})/\tau}}
+\]
+
+\subsection{Algı Füzyonu (Sensor Fusion)}
+
+Birden fazla algı kanalını birleştirmek için \textbf{Bayesian Sensor Fusion}:
+\[
+  P(s \mid o_1, o_2, \ldots, o_K) \propto P(s) \prod_{k=1}^{K} P(o_k \mid s)
+\]
+
+Her kanal bağımsız ama birleşimleri güçlü bir durum tahmini verir.
+
+% ──────────────────────────────────────────────────────────────
+\section{Local NLP Pipeline --- Derin Öğrenme Matematiği}
+
+\subsection{Transformer Mimarisi}
+
+\subsubsection{Self-Attention Mekanizması}
+
+Girdi dizisi $\mathbf{X} \in \mathbb{R}^{n \times d}$ için:
+\[
+  \mathbf{Q} = \mathbf{X}\mathbf{W}_Q, \quad
+  \mathbf{K} = \mathbf{X}\mathbf{W}_K, \quad
+  \mathbf{V} = \mathbf{X}\mathbf{W}_V
+\]
+\[
+  \text{Attention}(\mathbf{Q}, \mathbf{K}, \mathbf{V})
+    = \text{softmax}\!\left(\frac{\mathbf{Q}\mathbf{K}^\top}{\sqrt{d_k}}\right)\mathbf{V}
+\]
+
+\textbf{Multi-Head Attention:}
+\[
+  \text{MultiHead}(\mathbf{Q}, \mathbf{K}, \mathbf{V})
+    = \text{Concat}(\text{head}_1, \ldots, \text{head}_h)\,\mathbf{W}_O
+\]
+
+Karmaşıklık: $O(n^2 \cdot d)$.
+
+\subsubsection{Position Encoding}
+\[
+  \text{PE}(pos, 2i) = \sin\!\left(\frac{pos}{10000^{2i/d}}\right)
+  \qquad
+  \text{PE}(pos, 2i+1) = \cos\!\left(\frac{pos}{10000^{2i/d}}\right)
+\]
+
+\subsection{Intent Classifier}
+
+\subsubsection{Model Mimarisi}
+
+\begin{lstlisting}
+Input Tokens -> DistilBERT Encoder -> [CLS] Token
+  -> Dense(768, 256) -> ReLU -> Dropout(0.1)
+  -> Dense(256, K) -> Softmax
+\end{lstlisting}
+
+\textbf{Softmax:}
+\[
+  P(y = k \mid \mathbf{x}) = \frac{e^{z_k}}{\sum_{j=1}^{K} e^{z_j}}
+\]
+
+\textbf{Cross-Entropy Loss:}
+\[
+  \mathcal{L}_{\text{CE}} = -\sum_{k=1}^{K} y_k \cdot \ln P(y = k \mid \mathbf{x})
+\]
+
+\subsubsection{Confidence Threshold ve Escalation}
+
+\[
+  \text{decision} = \begin{cases}
+    \text{L0: Pattern Match} & \text{if rule-based match} \\
+    \text{L1: Local Action} & \text{if } \max_k P(y\!=\!k|\mathbf{x}) > \theta_{\text{high}} \\
+    \text{L2: Ollama} & \text{if } \max_k P(y\!=\!k|\mathbf{x}) > \theta_{\text{low}} \\
+    \text{L3: Cloud LLM} & \text{otherwise}
+  \end{cases}
+\]
+
+Tipik değerler: $\theta_{\text{high}} = 0.85$, $\theta_{\text{low}} = 0.5$.
+
+\subsection{Named Entity Recognition (NER)}
+
+\subsubsection{BIO Tagging}
+
+\begin{lstlisting}
+Kullanici: "auth.ts dosyasindaki login fonksiyonunu duzelt"
+
+Tokenler:  [auth.ts]   [dosyasindaki] [login]      [fonksiyonunu] [duzelt]
+BIO Tags:  [B-FILE]    [O]            [B-FUNCTION]  [O]            [O]
+\end{lstlisting}
+
+\subsubsection{Conditional Random Field (CRF)}
+
+Dizi etiketleme olasılığı:
+\[
+  P(\mathbf{y} | \mathbf{x}) = \frac{1}{Z(\mathbf{x})}
+    \exp\!\left(\sum_{t=1}^{T} \bigl(E(y_t, \mathbf{x}, t) + T(y_{t-1}, y_t)\bigr)\right)
+\]
+
+\textbf{Viterbi Decoding:}
+\[
+  \mathbf{y}^* = \arg\max_{\mathbf{y}} P(\mathbf{y} | \mathbf{x})
+\]
+
+Dinamik programlama ile $O(T \cdot K^2)$.
+
+\subsection{Duygu/Ton Analizi}
+
+\subsubsection{Metin Bazlı}
+\[
+  P(\text{sentiment} = s \mid \mathbf{x})
+    = \text{softmax}(\mathbf{W}_s \cdot \mathbf{h}_{\text{[CLS]}} + \mathbf{b}_s)
+\]
+
+Sınıflar: \texttt{neutral}, \texttt{frustrated}, \texttt{urgent}, \texttt{casual}, \texttt{focused}, \texttt{confused}.
+
+\subsubsection{Ses Bazlı (Paralinguistic Features)}
+
+\textbf{Fusion (metin + ses):}
+\[
+  P(\text{emotion} \mid \text{text}, \text{audio})
+    = \sigma(\mathbf{w}_t^\top \mathbf{f}_{\text{text}} + \mathbf{w}_a^\top \mathbf{f}_{\text{audio}} + b)
+\]
+
+\subsection{Dialogue State Tracker (DST)}
+
+Durum temsili:
+\[
+  \mathbf{s}_t = (\text{goal}_t,\; \text{subgoals}_t,\; \text{entities}_t,\;
+                   \text{pending\_questions}_t,\; \text{user\_state}_t)
+\]
+
+\textbf{GRU tabanlı güncelleme:}
+\begin{align}
+  \mathbf{z}_t &= \sigma(\mathbf{W}_z [\mathbf{h}_{t-1}, \mathbf{x}_t]) \\
+  \mathbf{r}_t &= \sigma(\mathbf{W}_r [\mathbf{h}_{t-1}, \mathbf{x}_t]) \\
+  \tilde{\mathbf{h}}_t &= \tanh(\mathbf{W} [\mathbf{r}_t \odot \mathbf{h}_{t-1}, \mathbf{x}_t]) \\
+  \mathbf{h}_t &= (1 - \mathbf{z}_t) \odot \mathbf{h}_{t-1} + \mathbf{z}_t \odot \tilde{\mathbf{h}}_t
+\end{align}
+
+% ──────────────────────────────────────────────────────────────
+\section{Sürekli Öğrenme Pipeline'ı (Continuous Learning)}
+
+\subsection{Tercih Öğrenimi (Preference Learning)}
+
+\subsubsection{Bradley-Terry Modeli}
+
+Kullanıcı iki yanıt arasında tercih yaptığında:
+\[
+  P(y_w \succ y_l \mid \mathbf{x})
+    = \sigma\!\bigl(r_\theta(y_w, \mathbf{x}) - r_\theta(y_l, \mathbf{x})\bigr)
+\]
+
+\textbf{Kayıp:}
+\[
+  \mathcal{L}_{\text{pref}} = -\mathbb{E}_{(y_w, y_l)}
+    \bigl[\ln \sigma(r_\theta(y_w) - r_\theta(y_l))\bigr]
+\]
+
+\subsubsection{Implicit Feedback}
+
+\[
+  r_{\text{implicit}} = \begin{cases}
+    +1.0 & \text{accepted as-is} \\
+    +0.5 & \text{accepted with minor edits} \\
+    -0.3 & \text{ignored} \\
+    -0.7 & \text{rejected / major rewrite} \\
+    -1.0 & \text{explicit negative feedback}
+  \end{cases}
+\]
+
+\subsection{LoRA --- Low-Rank Adaptation}
+
+Foundation model ağırlıklarını dondurup, küçük adapter matrisleri eklenir:
+\[
+  \mathbf{W}' = \mathbf{W}_0 + \Delta\mathbf{W} = \mathbf{W}_0 + \mathbf{B}\mathbf{A}
+\]
+
+Burada $\mathbf{B} \in \mathbb{R}^{d \times r}$, $\mathbf{A} \in \mathbb{R}^{r \times k}$,
+$r \ll \min(d, k)$.
+
+\textbf{Parametre tasarrufu:}
+$d = k = 4096$, $r = 16$ için: $4096^2 = 16.7\text{M}$ yerine
+$2 \times 4096 \times 16 = 131\text{K}$ parametre. \textbf{\%99.2 tasarruf.}
+
+\textbf{QLoRA:}
+\[
+  \mathbf{W}_0^{\text{4bit}} = \text{NF4}(\mathbf{W}_0)
+  \qquad
+  \mathbf{W}' = \text{dequant}(\mathbf{W}_0^{\text{4bit}}) + \mathbf{B}\mathbf{A}
+\]
+
+\subsection{Knowledge Distillation (Bilgi Damıtma)}
+
+\textbf{Soft Target Distillation:}
+\[
+  \mathcal{L}_{\text{distill}} = (1-\alpha) \cdot \mathcal{L}_{\text{CE}}(\mathbf{y}, \hat{\mathbf{y}}_S)
+    + \alpha \cdot T^2 \cdot \mathrm{D}_{KL}(\hat{\mathbf{p}}_T^{(T)} \| \hat{\mathbf{p}}_S^{(T)})
+\]
+
+\textbf{Soft probabilities:}
+\[
+  p_i^{(T)} = \frac{e^{z_i / T}}{\sum_j e^{z_j / T}}
+\]
+
+\subsection{Online Öğrenme --- EMA}
+
+\[
+  \boldsymbol{\theta}_{\text{EMA}} = \beta \cdot \boldsymbol{\theta}_{\text{EMA}}
+    + (1-\beta) \cdot \boldsymbol{\theta}_{\text{new}}
+\]
+
+Tipik: $\beta = 0.999$.
+
+\subsection{Beceri Kazanımı --- Progressive Skill Transfer}
+
+Her görev türü için bir ``skill level'' takip edilir:
+\[
+  \text{skill\_level}(\text{task}) = \min\!\left(1.0,\;
+    \frac{\text{successful\_local}}{\text{total\_attempts}}
+    \cdot \ln(1 + \text{total\_attempts})\right)
+\]
+
+$\text{skill\_level} > 0.8$ olduğunda görev tamamen local model'e devredilir.
+
+% ──────────────────────────────────────────────────────────────
+\section{Dünya Modeli (World Model)}
+
+\subsection{Üç Katmanlı Model}
+
+\textbf{Katman 1: Knowledge Graph} --- Bölüm 2.5'te tanımlanan $G = (V, E, \mathcal{A}, \mathcal{R})$.
+
+\textbf{Katman 2: Temporal Model} --- Kullanıcı davranışlarının zamansal kalıpları.
+
+\textbf{Periodic Pattern Detection (Fourier):}
+\[
+  X(f) = \sum_{n=0}^{N-1} x[n] \cdot e^{-j2\pi fn/N}
+\]
+
+\textbf{HMM ile Aktivite Dizisi:}
+\[
+  P(S_{1:T}, O_{1:T}) = P(S_1) \prod_{t=2}^{T} P(S_t | S_{t-1}) \prod_{t=1}^{T} P(O_t | S_t)
+\]
+
+Baum-Welch algoritması ile kullanıcı verisinden öğrenilir.
+
+\textbf{Katman 3: Predictive State} --- Bir sonraki eylemi tahmin:
+\[
+  P(a_{t+1} | \text{file}_t, \text{hour}_t, a_{t-2:t}, \text{project\_state}_t)
+\]
+
+Lightweight LSTM ile:
+\[
+  \mathbf{h}_t = \text{LSTM}\!\bigl([\mathbf{e}_{\text{file}}, \mathbf{e}_{\text{hour}},
+    \mathbf{e}_{a_{t-1}}],\; \mathbf{h}_{t-1}\bigr)
+\]
+\[
+  P(a_{t+1}) = \text{softmax}(\mathbf{W}_a \mathbf{h}_t + \mathbf{b}_a)
+\]
+
+\subsection{Proaktif Öneri Sistemi}
+
+\[
+  \text{Proactive\_Score}(\text{suggestion})
+    = \text{confidence} \cdot \text{utility} \cdot (1 - \text{interruption\_cost})
+\]
+
+\[
+  \text{suggest\_if} \quad \text{Proactive\_Score} > \theta_{\text{proactive}}
+\]
+
+$\theta_{\text{proactive}}$ kullanıcı geri bildirimine göre adapte edilir.
+
+% ──────────────────────────────────────────────────────────────
+\section{Hiperboyutlu Hesaplama (VSA/HDC)}
+
+Cognos-OS spec'ten. $D \approx 10{,}000$ boyutlu ikili vektörlerle:
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Operasyon} & \textbf{Formül} & \textbf{Anlam} \\
+\midrule
+Binding (XOR) & $\mathbf{u} \otimes \mathbf{v} \Rightarrow u_i \oplus v_i$ & İki kavramı birleştir \\
+Bundling (Majority) & $\mathbf{u} + \mathbf{v} \Rightarrow [u_i + v_i > 1]$ & Küme oluştur \\
+Permutation (Shift) & $\Pi(\mathbf{u}) \Rightarrow \text{rotate}(\mathbf{u})$ & Sıra/rol kodla \\
+\bottomrule
+\end{tabularx}
+
+\textbf{Yapısal kodlama:}
+\[
+  V_{\text{task}} = (R_{\text{type}} \otimes V_{\text{bug}})
+    + (R_{\text{project}} \otimes V_{\text{fridex}})
+    + (R_{\text{status}} \otimes V_{\text{pending}})
+\]
+
+\textbf{Sorgulama (unbinding):}
+\[
+  \hat{V}_{\text{project}} = V_{\text{task}} \otimes R_{\text{project}}^{-1}
+  \qquad
+  \text{nearest}(\hat{V}_{\text{project}}, \text{vocabulary}) = V_{\text{fridex}}
+\]
+
+% ──────────────────────────────────────────────────────────────
+\section{Embedding ve Benzerlik Matematiği}
+
+\subsection{Sentence Embedding Üretimi}
+
+\textbf{Mean Pooling:}
+\[
+  \mathbf{e}_{\text{sentence}} = \frac{1}{T} \sum_{t=1}^{T} \mathbf{h}_t \odot \mathbf{m}_t
+\]
+
+\subsection{Benzerlik Metrikleri}
+
+\textbf{Cosine Similarity:}
+\[
+  \cos(\mathbf{a}, \mathbf{b}) = \frac{\mathbf{a} \cdot \mathbf{b}}{\|\mathbf{a}\|\, \|\mathbf{b}\|}
+    = \frac{\sum_i a_i b_i}{\sqrt{\sum_i a_i^2}\, \sqrt{\sum_i b_i^2}}
+\]
+
+\textbf{Euclidean Distance (L2):}
+\[
+  d_2(\mathbf{a}, \mathbf{b}) = \sqrt{\sum_i (a_i - b_i)^2}
+\]
+
+\subsection{HNSW --- Hierarchical Navigable Small World}
+
+Vektör veritabanında yaklaşık en yakın komşu araması.
+Arama ve ekleme karmaşıklığı: $O(\log N)$.
+Parametreler: $M$ (düğüm başına maks.\ kenar, tipik: 16), $\text{ef}$ (aday sayısı, tipik: 200).
+
+% ──────────────────────────────────────────────────────────────
+\section{Bilişsel Evrim Yol Haritası}
+
+\begin{description}[style=nextline, leftmargin=2em]
+  \item[Şimdi (v0): LLM Wrapper]
+    Prompt $\to$ API $\to$ Response. Tek kanal (metin), tek yönlü, reaktif.
+  \item[6 ay (v1): Akıllı Router]
+    Intent classifier (local) $\to$ doğru model seçimi. \%70 sorgu local. Maliyet \%80 düşer.
+  \item[12 ay (v2): Algılayan Sistem]
+    Perception pipeline. World model. Proaktif öneriler başlar. ``Seni anlayan'' asistan.
+  \item[18 ay (v3): Öğrenen Sistem]
+    LoRA kişiselleştirme. Beceri kazanma. Kullanıcı kalıp tanıma. KG canlı ve zengin.
+  \item[24 ay (v4): Otonom Ajan]
+    Uzun görevlerde bağımsız çalışma. Multi-modal algı + çıktı. Tahmine dayalı proaktif aksiyon.
+    ``Gerçek JARVIS'' hissi.
+\end{description}
+
+\subsection{Olgunluk Metrikleri}
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Aşama} & \textbf{Metrik} & \textbf{Hedef} \\
+\midrule
+v0 & Yanıt doğru oranı & $>$85\% \\
+v1 & Local çözüm oranı & $>$70\% \\
+v1 & Ortalama yanıt süresi (L0--L1) & $<$200ms \\
+v2 & Proaktif öneri kabul oranı & $>$40\% \\
+v2 & Durum tahmini doğruluğu & $>$75\% \\
+v3 & Aylık iyileştirme & $>$10\% başarı artışı \\
+v3 & Distilled model başarısı & $>$80\% (teacher'a göre) \\
+v4 & Otonom görev tamamlama & $>$90\% \\
+v4 & Kullanıcı memnuniyeti & $>$4.5/5 \\
+\bottomrule
+\end{tabularx}
+
+% ══════════════════════════════════════════════════════════════
+% EKLER
+% ══════════════════════════════════════════════════════════════
+
+\appendix
+
+\section{Notasyon Rehberi}
+
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Sembol} & \textbf{Anlam} \\
+\midrule
+$\mathbf{x}$ & Girdi vektörü \\
+$\mathbf{h}$ & Gizli durum vektörü \\
+$\mathbf{W}$ & Ağırlık matrisi \\
+$\sigma(\cdot)$ & Sigmoid fonksiyonu: $\frac{1}{1+e^{-x}}$ \\
+$\text{softmax}(\cdot)$ & Normalize edilmiş üstel fonksiyon \\
+$\mathrm{D}_{KL}[\cdot \| \cdot]$ & Kullback-Leibler diverjans \\
+$\mathcal{L}$ & Kayıp (loss) fonksiyonu \\
+$\theta$ & Model parametreleri \\
+$\alpha, \beta, \gamma, \lambda, \mu$ & Hiperparametreler \\
+$\odot$ & Element-wise (Hadamard) çarpım \\
+$\otimes$ & Binding / dış çarpım \\
+$\mathcal{N}(v)$ & Düğüm $v$'nin komşuları \\
+$B_t(s)$ & Zaman $t$'deki inanç durumu \\
+$G(\pi)$ & Politika $\pi$'nin beklenen serbest enerjisi \\
+$U(a)$ & Eylem $a$'nın faydası \\
+$P(\cdot | \cdot)$ & Koşullu olasılık \\
+\bottomrule
+\end{tabularx}
+
+\section{Algoritma Karmaşıklıkları Özeti}
+
+\begin{tabularx}{\textwidth}{lllX}
+\toprule
+\textbf{Algoritma} & \textbf{Zaman} & \textbf{Uzay} & \textbf{Kullanım} \\
+\midrule
+Self-Attention & $O(n^2 d)$ & $O(n^2)$ & Intent classifier, NER \\
+CRF Viterbi & $O(T K^2)$ & $O(TK)$ & NER etiket dizisi \\
+CTC Forward & $O(T|\mathbf{y}|)$ & $O(T|\mathbf{y}|)$ & STT hizalama \\
+TransE & $O(|E| d)$ & $O((|V|+|E|)d)$ & KG embedding \\
+GNN Message Passing & $O(|E| d)$ & $O(|V| d)$ & Çizge bağlam yayılımı \\
+HNSW Search & $O(\log N)$ & $O(NM)$ & Vektör benzerlik \\
+Baum-Welch & $O(T K^2)$ & $O(TK)$ & HMM parametre öğrenme \\
+LoRA Forward & $O(r(d+k))$ & $O(r(d+k))$ & Fine-tuning \\
+Bayesian Update & $O(K)$ & $O(K)$ & İnanç güncelleme \\
+VSA Binding & $O(D)$ & $O(D)$ & Hiperboyutlu işlem \\
+Perceptual Hash & $O(N^2 \log N)$ & $O(N^2)$ & Görsel regresyon \\
+LinUCB & $O(d^2 K)$ & $O(Kd^2)$ & Model seçimi \\
+\bottomrule
+\end{tabularx}
+
+\section{Referanslar ve Teorik Kaynaklar}
+
+\begin{enumerate}[nosep]
+  \item \textbf{Friston, K.} (2010). ``The free-energy principle: a unified brain theory?'' --- Active Inference temeli
+  \item \textbf{Vaswani, A. et al.} (2017). ``Attention Is All You Need'' --- Transformer mimarisi
+  \item \textbf{Hu, E. et al.} (2021). ``LoRA: Low-Rank Adaptation of Large Language Models''
+  \item \textbf{Hinton, G. et al.} (2015). ``Distilling the Knowledge in a Neural Network'' --- Knowledge Distillation
+  \item \textbf{Bordes, A. et al.} (2013). ``Translating Embeddings for Modeling Multi-relational Data'' --- TransE
+  \item \textbf{Velickovic, P. et al.} (2018). ``Graph Attention Networks'' --- GAT
+  \item \textbf{Malkov, Y. \& Yashunin, D.} (2018). ``Efficient and robust approximate nearest neighbor using HNSW''
+  \item \textbf{Graves, A. et al.} (2006). ``Connectionist Temporal Classification'' --- CTC Loss
+  \item \textbf{Lafferty, J. et al.} (2001). ``Conditional Random Fields'' --- CRF for sequence labeling
+  \item \textbf{Kanerva, P.} (2009). ``Hyperdimensional Computing'' --- VSA/HDC
+  \item \textbf{Li, L. et al.} (2010). ``A Contextual-Bandit Approach to Personalized News Article Recommendation'' --- LinUCB
+  \item \textbf{Rabiner, L.} (1989). ``A Tutorial on Hidden Markov Models'' --- HMM
+\end{enumerate}
+
+\end{document}

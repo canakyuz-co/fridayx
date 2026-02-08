@@ -44,6 +44,7 @@ import {
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
 import { useReviewPrompt } from "./useReviewPrompt";
 import { formatRelativeTime } from "../../../utils/time";
+import { buildClaudeSessionContext } from "../../../utils/claudeSessionContext";
 
 type SendMessageOptions = {
   skipPromptExpansion?: boolean;
@@ -359,6 +360,7 @@ export function useThreadMessaging({
   updateThreadParent,
 }: UseThreadMessagingOptions) {
   const cliModelPreflightCacheRef = useRef<Map<string, string>>(new Map());
+  const claudeSessionByThreadRef = useRef<Map<string, string>>(new Map());
 
   const sendMessageToThread = useCallback(
     async (
@@ -700,7 +702,7 @@ export function useThreadMessaging({
           );
 
           if (useCli) {
-            // Use Claude CLI
+            // Use Claude CLI with session continuity
             let accumulatedText = "";
             const cacheKey = `${provider.id}:${modelName}`;
             let cliModel = cliModelPreflightCacheRef.current.get(cacheKey) ?? null;
@@ -725,26 +727,42 @@ export function useThreadMessaging({
                 return;
               }
             }
+
+            // Session management: resume existing or create new
+            const existingSessionId = claudeSessionByThreadRef.current.get(threadId) ?? null;
+            const isResume = existingSessionId !== null;
+            const newSessionId = isResume ? null : crypto.randomUUID();
+
+            // Build system prompt only for first call (session creation)
+            const systemPrompt = isResume
+              ? null
+              : buildClaudeSessionContext(workspace, itemsByThread[threadId] ?? []);
+
             const traceItemId = `trace-${assistantMessageId}`;
             const traceStartedAt = Date.now();
+            const sessionLabel = isResume ? "resume" : "new";
             upsertTraceToolItem(
               dispatch,
               workspace.id,
               threadId,
               traceItemId,
               "Trace: Claude",
-              `CLI · ${modelName}${cliModel !== modelName ? ` -> ${cliModel}` : ""}`,
+              `CLI · ${modelName}${cliModel !== modelName ? ` → ${cliModel}` : ""} · ${sessionLabel}`,
               "in_progress",
             );
             dispatch({
               type: "appendToolOutput",
               threadId,
               itemId: traceItemId,
-              delta: `Started ${formatRelativeTime(traceStartedAt)}.\n`,
+              delta: `Started ${formatRelativeTime(traceStartedAt)} · session=${isResume ? existingSessionId!.slice(0, 8) : newSessionId!.slice(0, 8)}…\n`,
             });
+
+            // On resume: send only the new message (Claude CLI keeps session history)
+            // On first call: send only the new message (system prompt has context summary)
             const promptText = isPlanMode
               ? buildPlanPrompt(finalText, 0)
-              : buildOtherAiPrompt(recentHistory, finalText);
+              : finalText;
+
             await sendClaudeCliMessage(
               provider.command!,
               provider.args,
@@ -754,22 +772,26 @@ export function useThreadMessaging({
               provider.env ?? null,
               {
                 onInit: (sessionId, model) => {
+                  // Store session ID for future resume calls
+                  if (sessionId) {
+                    claudeSessionByThreadRef.current.set(threadId, sessionId);
+                  }
                   onDebug?.({
                     id: `${Date.now()}-claude-cli-init`,
                     timestamp: Date.now(),
                     source: "client",
                     label: "claude-cli/init",
-                    payload: { sessionId, model },
+                    payload: { sessionId, model, isResume },
                   });
                   dispatch({
                     type: "appendToolOutput",
                     threadId,
                     itemId: traceItemId,
-                    delta: `Init · model=${model ?? modelName} session=${sessionId ?? "n/a"}\n`,
+                    delta: `Init · model=${model ?? modelName} session=${sessionId ?? "n/a"}${isResume ? " (resumed)" : ""}\n`,
                   });
                 },
                 onContent: (text) => {
-                  accumulatedText += text;
+                  accumulatedText = text;
                   if (!isPlanMode) {
                     dispatch({
                       type: "upsertItem",
@@ -788,11 +810,14 @@ export function useThreadMessaging({
                 },
                 onComplete: (_text, usage) => {
                   if (usage) {
+                    const cacheInfo = usage.cacheReadInputTokens > 0
+                      ? ` cache=${usage.cacheReadInputTokens}`
+                      : "";
                     dispatch({
                       type: "appendToolOutput",
                       threadId,
                       itemId: traceItemId,
-                      delta: `Complete · in=${usage.inputTokens} out=${usage.outputTokens} cost=$${usage.totalCostUsd.toFixed(
+                      delta: `Complete · in=${usage.inputTokens} out=${usage.outputTokens}${cacheInfo} cost=$${usage.totalCostUsd.toFixed(
                         4,
                       )}\n`,
                     });
@@ -863,6 +888,13 @@ export function useThreadMessaging({
                   ) {
                     cliModelPreflightCacheRef.current.delete(cacheKey);
                   }
+                  // On session errors, clear the session so next call creates fresh one
+                  if (
+                    error.toLowerCase().includes("session") ||
+                    error.toLowerCase().includes("resume")
+                  ) {
+                    claudeSessionByThreadRef.current.delete(threadId);
+                  }
                   upsertTraceToolItem(
                     dispatch,
                     workspace.id,
@@ -882,7 +914,12 @@ export function useThreadMessaging({
                   pushThreadErrorMessage(threadId, error);
                   safeMessageActivity();
                 },
-              }
+              },
+              {
+                sessionId: newSessionId,
+                resumeSessionId: existingSessionId,
+                systemPrompt,
+              },
             );
           } else {
             // Use Claude API
