@@ -1334,11 +1334,18 @@ export function EditorView({
     <div className={`editor-shell${compactMode ? " is-compact" : ""}`}>
       <div className="editor-tabs" role="tablist" aria-label="Editor tabs">
         {tabs.map((tab) => (
-          <button
+          <div
             key={tab.path}
-            type="button"
             className={`editor-tab${tab.isActive ? " is-active" : ""}`}
+            role="tab"
+            tabIndex={0}
             onClick={() => onSelectPath(tab.path)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelectPath(tab.path);
+              }
+            }}
             onContextMenu={(event) => {
               event.preventDefault();
               setTabContextMenu({
@@ -1360,25 +1367,18 @@ export function EditorView({
                 ●
               </span>
             ) : null}
-            <span
+            <button
+              type="button"
               className="editor-tab-close"
-              role="button"
-              tabIndex={0}
               aria-label={`${tab.name} dosyasini kapat`}
               onClick={(event) => {
                 event.stopPropagation();
                 onClosePath(tab.path);
               }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onClosePath(tab.path);
-                }
-              }}
             >
               <Close size={12} aria-hidden />
-            </span>
-          </button>
+            </button>
+          </div>
         ))}
         {hasPreview ? (
           <div className="editor-tabs-actions" role="group" aria-label="Preview view">
