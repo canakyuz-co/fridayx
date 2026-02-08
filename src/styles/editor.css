@@ -568,9 +568,9 @@
 
 .app.editor-active .main-topbar {
   padding: 7px 12px 6px;
-  border-bottom: 1px solid rgba(80, 103, 144, 0.28);
-  background: #060d19;
-  backdrop-filter: none;
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-topbar) 88%, transparent);
+  backdrop-filter: blur(14px) saturate(1.1);
 }
 
 .app.editor-active .main-header {
@@ -589,8 +589,8 @@
 
 .app.editor-active .editor-sidebar {
   padding-top: var(--main-topbar-height);
-  background: #050c18;
-  border-right: 1px solid rgba(80, 103, 144, 0.28);
+  background: color-mix(in srgb, var(--surface-right-panel) 84%, var(--surface-sidebar) 16%);
+  border-right: 1px solid var(--border-subtle);
 }
 
 .app.editor-active .editor-sidebar .diff-panel,
@@ -612,8 +612,8 @@
 
 .app.editor-active .editor-sidebar .file-tree-search {
   border-radius: 8px;
-  background: rgba(11, 18, 31, 0.96);
-  border-color: rgba(80, 103, 144, 0.28);
+  background: color-mix(in srgb, var(--surface-card) 80%, var(--surface-sidebar) 20%);
+  border-color: var(--border-subtle);
 }
 
 .app.editor-active .editor-sidebar .file-tree-row {
@@ -626,41 +626,41 @@
 .app.editor-active .monaco-editor,
 .app.editor-active .monaco-editor .margin,
 .app.editor-active .monaco-editor-background {
-  background: #060d1a !important;
+  background: color-mix(in srgb, var(--surface-sidebar) 84%, transparent) !important;
 }
 
 .app.editor-active .editor-tabs {
   min-height: 34px;
   padding: 0;
-  border-bottom: 1px solid rgba(80, 103, 144, 0.28);
-  background: #070f1e;
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-topbar) 84%, transparent);
 }
 
 .app.editor-active .editor-tab {
   min-height: 34px;
   padding: 0 10px;
-  border-right: 1px solid rgba(80, 103, 144, 0.22);
-  background: rgba(18, 26, 42, 0.92);
+  border-right: 1px solid var(--border-muted);
+  background: color-mix(in srgb, var(--surface-card) 68%, transparent);
 }
 
 .app.editor-active .editor-tab.is-active {
-  background: #0b1424;
+  background: color-mix(in srgb, var(--surface-sidebar) 88%, var(--surface-card) 12%);
   color: rgba(231, 240, 255, 0.94);
-  border-right-color: rgba(101, 127, 177, 0.45);
+  border-right-color: var(--border-strong);
 }
 
 .app.editor-active .editor-statusbar {
-  background: #060d19;
-  border-top: 1px solid rgba(80, 103, 144, 0.28);
+  background: color-mix(in srgb, var(--surface-topbar) 88%, transparent);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .app.editor-active .editor-assistant-panel {
-  border-left: 1px solid rgba(80, 103, 144, 0.28);
-  background: #060d19;
+  border-left: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-right-panel) 88%, transparent);
 }
 
 .app.editor-active .editor-right-panel-resizer::after {
-  background: rgba(114, 140, 190, 0.4);
+  background: var(--border-strong);
 }
 
 .app.editor-active .editor-assistant-messages .messages-full {
@@ -681,7 +681,7 @@
   grid-column: auto;
   grid-row: auto;
   padding: 10px 12px 12px;
-  border-top: 1px solid rgba(80, 103, 144, 0.24);
+  border-top: 1px solid var(--border-subtle);
   background: transparent;
 }
 
@@ -691,8 +691,8 @@
 }
 
 .app.editor-active .editor-assistant-composer .composer-input-row {
-  background: rgba(15, 24, 39, 0.94);
-  border: 1px solid rgba(80, 103, 144, 0.26);
+  background: color-mix(in srgb, var(--surface-card) 82%, transparent);
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 6px 8px;
 }
