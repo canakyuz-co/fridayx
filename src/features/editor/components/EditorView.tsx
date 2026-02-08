@@ -6,7 +6,6 @@ import Code from "lucide-react/dist/esm/icons/code";
 import Columns2 from "lucide-react/dist/esm/icons/columns-2";
 import Eye from "lucide-react/dist/esm/icons/eye";
 import Pin from "lucide-react/dist/esm/icons/pin";
-import PinOff from "lucide-react/dist/esm/icons/pin-off";
 import SlidersHorizontal from "lucide-react/dist/esm/icons/sliders-horizontal";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorPlaceholder } from "./EditorPlaceholder";
@@ -1398,34 +1397,6 @@ export function EditorView({
               title="Editor settings"
             >
               <SlidersHorizontal size={14} aria-hidden />
-            </button>
-          </div>
-        ) : null}
-        {activePath ? (
-          <div className="editor-tabs-actions" role="group" aria-label="Tab actions">
-            <button
-              type="button"
-              className="icon-button editor-view-toggle"
-              onClick={() => onTogglePinPath(activePath)}
-              aria-pressed={pinnedPathSet.has(activePath)}
-              aria-label={pinnedPathSet.has(activePath) ? "Unpin tab" : "Pin tab"}
-              title={pinnedPathSet.has(activePath) ? "Unpin tab" : "Pin tab"}
-            >
-              {pinnedPathSet.has(activePath) ? (
-                <PinOff size={14} aria-hidden />
-              ) : (
-                <Pin size={14} aria-hidden />
-              )}
-            </button>
-            <button
-              type="button"
-              className="icon-button editor-view-toggle"
-              onClick={() => onCloseOtherPaths(activePath)}
-              disabled={openPaths.length <= 1}
-              aria-label="Close other tabs"
-              title="Close other tabs"
-            >
-              <Close size={14} aria-hidden />
             </button>
           </div>
         ) : null}
