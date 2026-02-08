@@ -776,6 +776,10 @@
   background: color-mix(in srgb, var(--surface-topbar) 84%, transparent);
 }
 
+.app.editor-active .editor-tabs-empty {
+  display: none;
+}
+
 .app.editor-active .editor-tab {
   min-height: 34px;
   padding: 0 10px;
@@ -787,6 +791,31 @@
   background: color-mix(in srgb, var(--surface-sidebar) 88%, var(--surface-card) 12%);
   color: rgba(231, 240, 255, 0.94);
   border-right-color: var(--border-strong);
+}
+
+.app.editor-active .editor-tabs-actions {
+  gap: 4px;
+}
+
+.app.editor-active .editor-view-toggle {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border-color: var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-card) 72%, transparent);
+  padding: 0;
+}
+
+.app.editor-active .editor-view-toggle svg {
+  width: 12px;
+  height: 12px;
+}
+
+.app.editor-active .editor-view-toggle:hover:not(:disabled),
+.app.editor-active .editor-view-toggle:focus-visible {
+  transform: none;
+  box-shadow: none;
+  background: color-mix(in srgb, var(--surface-control-hover) 70%, transparent);
 }
 
 .app.editor-active .editor-statusbar {

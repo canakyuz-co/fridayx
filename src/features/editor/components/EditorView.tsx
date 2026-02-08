@@ -1335,74 +1335,72 @@ export function EditorView({
   return (
     <div className={`editor-shell${compactMode ? " is-compact" : ""}`}>
       <div className="editor-tabs" role="tablist" aria-label="Editor tabs">
-        {tabs.length === 0 ? (
-          <div className="editor-tabs-empty">Dosya acmak icin soldan sec.</div>
-        ) : (
-          tabs.map((tab) => (
-            <button
-              key={tab.path}
-              type="button"
-              className={`editor-tab${tab.isActive ? " is-active" : ""}`}
-              onClick={() => onSelectPath(tab.path)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                setTabContextMenu({
-                  path: tab.path,
-                  x: event.clientX,
-                  y: event.clientY,
-                });
-              }}
-              aria-current={tab.isActive ? "page" : undefined}
-            >
-              {tab.isPinned ? (
-                <span className="editor-tab-pin" aria-hidden>
-                  <Pin size={11} />
-                </span>
-              ) : null}
-              <span className="editor-tab-title">{tab.name}</span>
-              {tab.buffer?.isDirty ? (
-                <span className="editor-tab-dirty" aria-hidden>
-                  ●
-                </span>
-              ) : null}
-              <span
-                className="editor-tab-close"
-                role="button"
-                tabIndex={0}
-                aria-label={`${tab.name} dosyasini kapat`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onClosePath(tab.path);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onClosePath(tab.path);
-                  }
-                }}
-              >
-                <Close size={12} aria-hidden />
-              </span>
-            </button>
-          ))
-        )}
-        <div className="editor-tabs-actions" role="group" aria-label="Editor preferences">
+        {tabs.map((tab) => (
           <button
+            key={tab.path}
             type="button"
-            className={`icon-button editor-view-toggle editor-settings-toggle${
-              editorSettingsOpen ? " is-active" : ""
-            }`}
-            onClick={() => {
-              setEditorSettingsOpen((prev) => !prev);
-              setTabContextMenu(null);
+            className={`editor-tab${tab.isActive ? " is-active" : ""}`}
+            onClick={() => onSelectPath(tab.path)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setTabContextMenu({
+                path: tab.path,
+                x: event.clientX,
+                y: event.clientY,
+              });
             }}
-            aria-pressed={editorSettingsOpen}
-            aria-label="Editor settings"
-            title="Editor settings"
+            aria-current={tab.isActive ? "page" : undefined}
           >
-            <SlidersHorizontal size={14} aria-hidden />
+            {tab.isPinned ? (
+              <span className="editor-tab-pin" aria-hidden>
+                <Pin size={11} />
+              </span>
+            ) : null}
+            <span className="editor-tab-title">{tab.name}</span>
+            {tab.buffer?.isDirty ? (
+              <span className="editor-tab-dirty" aria-hidden>
+                ●
+              </span>
+            ) : null}
+            <span
+              className="editor-tab-close"
+              role="button"
+              tabIndex={0}
+              aria-label={`${tab.name} dosyasini kapat`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onClosePath(tab.path);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onClosePath(tab.path);
+                }
+              }}
+            >
+              <Close size={12} aria-hidden />
+            </span>
           </button>
-        </div>
+        ))}
+        {tabs.length > 0 ? (
+          <div className="editor-tabs-actions" role="group" aria-label="Editor preferences">
+            <button
+              type="button"
+              className={`icon-button editor-view-toggle editor-settings-toggle${
+                editorSettingsOpen ? " is-active" : ""
+              }`}
+              onClick={() => {
+                setEditorSettingsOpen((prev) => !prev);
+                setTabContextMenu(null);
+              }}
+              aria-pressed={editorSettingsOpen}
+              aria-label="Editor settings"
+              title="Editor settings"
+            >
+              <SlidersHorizontal size={14} aria-hidden />
+            </button>
+          </div>
+        ) : null}
         {activePath ? (
           <div className="editor-tabs-actions" role="group" aria-label="Tab actions">
             <button
