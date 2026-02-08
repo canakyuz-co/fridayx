@@ -578,40 +578,6 @@
   backdrop-filter: blur(14px) saturate(1.1);
 }
 
-.app.editor-active .titlebar-controls {
-  z-index: 7;
-}
-
-.app.editor-active .titlebar-toggle {
-  transform: translateY(-50%);
-  transition: none;
-}
-
-.app.editor-active .titlebar-toggle-left {
-  left: calc(8px + var(--titlebar-inset-left, 0px));
-}
-
-.app.editor-active .titlebar-toggle-right {
-  right: 8px;
-}
-
-.app.editor-active .titlebar-toggle .main-header-action {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--surface-card) 74%, transparent);
-  color: var(--text-muted);
-  padding: 0;
-}
-
-.app.editor-active .titlebar-toggle .main-header-action:hover:not(:disabled),
-.app.editor-active .titlebar-toggle .main-header-action:focus-visible {
-  transform: none;
-  box-shadow: none;
-  background: color-mix(in srgb, var(--surface-control-hover) 70%, transparent);
-  color: var(--text-stronger);
-}
 
 .app.editor-active .main-header {
   gap: 10px;
@@ -702,22 +668,9 @@
   height: 13px;
 }
 
-.app.editor-active.right-panel-collapsed .main-topbar {
-  padding-right: calc(
-    12px
-    + var(--titlebar-toggle-size, 28px)
-    + var(--titlebar-toggle-side-gap, 12px)
-    + 10px
-  );
-}
-
+.app.editor-active.right-panel-collapsed .main-topbar,
 .app.editor-active.sidebar-collapsed .main-topbar {
-  padding-left: calc(
-    12px
-    + var(--titlebar-inset-left, 0px)
-    + var(--titlebar-toggle-size, 28px)
-    + 8px
-  );
+  padding: 6px 10px;
 }
 
 .app.editor-active .editor-sidebar {

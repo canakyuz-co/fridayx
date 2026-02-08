@@ -12,7 +12,6 @@ type MainHeaderActionsProps = {
   activeTab: "projects" | "codex" | "git" | "log" | "editor";
   onSelectTab: (tab: "projects" | "codex" | "git" | "log" | "editor") => void;
   isCompact: boolean;
-  rightPanelCollapsed: boolean;
   sidebarToggleProps: SidebarToggleProps;
 };
 
@@ -23,7 +22,6 @@ export const MainHeaderActions = memo(function MainHeaderActions({
   activeTab,
   onSelectTab,
   isCompact,
-  rightPanelCollapsed,
   sidebarToggleProps,
 }: MainHeaderActionsProps) {
   const editorActive = activeTab === "editor";
@@ -67,7 +65,7 @@ export const MainHeaderActions = memo(function MainHeaderActions({
           </button>
         </div>
       )}
-      {!isCompact && !rightPanelCollapsed ? (
+      {!isCompact ? (
         <RightPanelCollapseButton {...sidebarToggleProps} />
       ) : null}
     </>

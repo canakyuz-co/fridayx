@@ -64,7 +64,6 @@ import { useWindowLabel } from "./features/layout/hooks/useWindowLabel";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   SidebarCollapseButton,
-  TitlebarExpandControls,
 } from "./features/layout/components/SidebarToggleControls";
 import { useAppSettingsController } from "./features/app/hooks/useAppSettingsController";
 import { useUpdaterController } from "./features/app/hooks/useUpdaterController";
@@ -2101,7 +2100,6 @@ function MainApp() {
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         isCompact={isCompact}
-        rightPanelCollapsed={rightPanelCollapsed}
         sidebarToggleProps={sidebarToggleProps}
       />
     ),
@@ -2482,7 +2480,6 @@ function MainApp() {
       }
     >
       <div className="drag-strip" id="titlebar" data-tauri-drag-region />
-      <TitlebarExpandControls {...sidebarToggleProps} />
       {shouldLoadGitHubPanelData ? (
         <Suspense fallback={null}>
           <GitHubPanelData

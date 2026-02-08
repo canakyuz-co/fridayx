@@ -16,21 +16,26 @@ export type SidebarToggleProps = {
 export function SidebarCollapseButton({
   isCompact,
   sidebarCollapsed,
+  onExpandSidebar,
   onCollapseSidebar,
 }: SidebarToggleProps) {
-  if (isCompact || sidebarCollapsed) {
+  if (isCompact) {
     return null;
   }
   return (
     <button
       type="button"
       className="ghost main-header-action"
-      onClick={onCollapseSidebar}
+      onClick={sidebarCollapsed ? onExpandSidebar : onCollapseSidebar}
       data-tauri-drag-region="false"
-      aria-label="Hide threads sidebar"
-      title="Hide threads sidebar"
+      aria-label={sidebarCollapsed ? "Show threads sidebar" : "Hide threads sidebar"}
+      title={sidebarCollapsed ? "Show threads sidebar" : "Hide threads sidebar"}
     >
-      <PanelLeftClose size={14} aria-hidden />
+      {sidebarCollapsed ? (
+        <PanelLeftOpen size={14} aria-hidden />
+      ) : (
+        <PanelLeftClose size={14} aria-hidden />
+      )}
     </button>
   );
 }
@@ -38,21 +43,26 @@ export function SidebarCollapseButton({
 export function RightPanelCollapseButton({
   isCompact,
   rightPanelCollapsed,
+  onExpandRightPanel,
   onCollapseRightPanel,
 }: SidebarToggleProps) {
-  if (isCompact || rightPanelCollapsed) {
+  if (isCompact) {
     return null;
   }
   return (
     <button
       type="button"
       className="ghost main-header-action"
-      onClick={onCollapseRightPanel}
+      onClick={rightPanelCollapsed ? onExpandRightPanel : onCollapseRightPanel}
       data-tauri-drag-region="false"
-      aria-label="Hide git sidebar"
-      title="Hide git sidebar"
+      aria-label={rightPanelCollapsed ? "Show git sidebar" : "Hide git sidebar"}
+      title={rightPanelCollapsed ? "Show git sidebar" : "Hide git sidebar"}
     >
-      <PanelRightClose size={14} aria-hidden />
+      {rightPanelCollapsed ? (
+        <PanelRightOpen size={14} aria-hidden />
+      ) : (
+        <PanelRightClose size={14} aria-hidden />
+      )}
     </button>
   );
 }
