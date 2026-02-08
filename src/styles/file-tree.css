@@ -2,6 +2,14 @@
   gap: 10px;
 }
 
+.file-tree-explorer-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
 .file-tree-count {
   font-size: 11px;
   color: var(--text-faint);
@@ -17,6 +25,12 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+.file-tree-header-action {
+  width: 22px;
+  height: 22px;
+  padding: 0;
 }
 
 .file-tree-actions .icon-button {
@@ -44,6 +58,10 @@
   background: var(--surface-raised);
   border: 1px solid var(--border-subtle);
   color: var(--text-faint);
+}
+
+.file-tree-search.is-hidden {
+  display: none;
 }
 
 .file-tree-search:focus-within {

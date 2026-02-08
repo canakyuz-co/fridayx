@@ -1051,21 +1051,49 @@ export function FileTreePanel({
       <div className="git-panel-header">
         {showTabs ? (
           <PanelTabs active={filePanelMode} onSelect={onFilePanelModeChange} />
-        ) : null}
+        ) : (
+          <div className="file-tree-explorer-title">Explorer</div>
+        )}
         <div className="file-tree-meta">
-          <div className="file-tree-count">
-            {filteredFiles.length
-              ? normalizedQuery
-                ? `${filteredFiles.length} match${filteredFiles.length === 1 ? "" : "es"}`
-                : filterMode === "modified"
-                  ? `${filteredFiles.length} modified`
-                  : `${filteredFiles.length} file${filteredFiles.length === 1 ? "" : "s"}`
-              : showLoading
-                ? "Loading files"
-                : filterMode === "modified"
-                  ? "No modified"
-                  : "No files"}
-          </div>
+          {showTabs ? (
+            <div className="file-tree-count">
+              {filteredFiles.length
+                ? normalizedQuery
+                  ? `${filteredFiles.length} match${filteredFiles.length === 1 ? "" : "es"}`
+                  : filterMode === "modified"
+                    ? `${filteredFiles.length} modified`
+                    : `${filteredFiles.length} file${filteredFiles.length === 1 ? "" : "s"}`
+                : showLoading
+                  ? "Loading files"
+                  : filterMode === "modified"
+                    ? "No modified"
+                    : "No files"}
+            </div>
+          ) : null}
+          {!showTabs && showCreateActions ? (
+            <>
+              <button
+                type="button"
+                className="ghost icon-button file-tree-header-action"
+                onClick={() => handleCreateFile("")}
+                aria-label="New file"
+                title="New file"
+                disabled={actionBusy}
+              >
+                <FilePlus size={14} aria-hidden />
+              </button>
+              <button
+                type="button"
+                className="ghost icon-button file-tree-header-action"
+                onClick={() => handleCreateFolder("")}
+                aria-label="New folder"
+                title="New folder"
+                disabled={actionBusy}
+              >
+                <FolderPlus size={14} aria-hidden />
+              </button>
+            </>
+          ) : null}
           {hasFolders ? (
             <button
               type="button"
@@ -1079,7 +1107,7 @@ export function FileTreePanel({
           ) : null}
         </div>
       </div>
-      <div className="file-tree-search">
+      <div className={`file-tree-search${showTabs ? "" : " is-hidden"}`}>
         <div className="file-tree-search-field">
           <Search className="file-tree-search-icon" aria-hidden />
           <input

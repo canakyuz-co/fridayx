@@ -559,7 +559,7 @@
 }
 
 .app.editor-active {
-  --main-topbar-height: 40px;
+  --main-topbar-height: 46px;
 }
 
 .app.editor-active .main {
@@ -567,7 +567,7 @@
 }
 
 .app.editor-active .main-topbar {
-  padding: 7px 12px 6px;
+  padding: 8px 12px 7px;
   border-bottom: 1px solid var(--border-subtle);
   background: color-mix(in srgb, var(--surface-topbar) 88%, transparent);
   backdrop-filter: blur(14px) saturate(1.1);
@@ -578,13 +578,80 @@
 }
 
 .app.editor-active .workspace-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(223, 235, 255, 0.94);
+  display: none;
 }
 
 .app.editor-active .workspace-separator {
-  color: rgba(156, 175, 210, 0.55);
+  display: none;
+}
+
+.app.editor-active .workspace-title-line::before {
+  content: "fridex-app";
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: 0.01em;
+  margin-right: 8px;
+}
+
+.app.editor-active .workspace-title-line {
+  gap: 0;
+}
+
+.app.editor-active .workspace-branch,
+.app.editor-active .workspace-branch-static-button {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-card) 88%, transparent);
+  color: rgba(142, 231, 182, 0.95);
+}
+
+.app.editor-active .workspace-branch-menu .workspace-branch-button {
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.app.editor-active .workspace-branch-caret {
+  display: none;
+}
+
+.app.editor-active .open-app-menu {
+  display: none;
+}
+
+.app.editor-active .main-header-actions {
+  gap: 8px;
+}
+
+.app.editor-active .main-header-action,
+.app.editor-active .editor-toggle,
+.app.editor-active .launch-script-button,
+.app.editor-active .launch-script-entry-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-card) 84%, transparent);
+  color: var(--text-muted);
+  padding: 0;
+}
+
+.app.editor-active .main-header-action:hover:not(:disabled),
+.app.editor-active .editor-toggle:hover:not(:disabled),
+.app.editor-active .launch-script-button:hover:not(:disabled),
+.app.editor-active .launch-script-entry-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-control-hover) 75%, transparent);
+  color: var(--text-stronger);
+}
+
+.app.editor-active .main-header-action.is-active,
+.app.editor-active .editor-toggle.is-active {
+  border-color: var(--border-strong);
+  color: var(--text-stronger);
 }
 
 .app.editor-active .editor-sidebar {
@@ -595,8 +662,8 @@
 
 .app.editor-active .editor-sidebar .diff-panel,
 .app.editor-active .editor-sidebar .file-tree-panel {
-  padding: 8px 8px 0;
-  gap: 8px;
+  padding: 6px 8px 0;
+  gap: 6px;
 }
 
 .app.editor-active .editor-sidebar .git-panel-header {
@@ -610,6 +677,21 @@
   text-transform: uppercase;
 }
 
+.app.editor-active .editor-sidebar .file-tree-explorer-title {
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  color: var(--text-faint);
+}
+
+.app.editor-active .editor-sidebar .file-tree-header-action,
+.app.editor-active .editor-sidebar .file-tree-toggle {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+}
+
 .app.editor-active .editor-sidebar .file-tree-search {
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface-card) 80%, var(--surface-sidebar) 20%);
@@ -618,7 +700,12 @@
 
 .app.editor-active .editor-sidebar .file-tree-row {
   border-radius: 6px;
-  padding: 3px 6px;
+  padding: 2px 6px;
+  min-height: 24px;
+}
+
+.app.editor-active .editor-sidebar .file-tree-name {
+  font-size: 12px;
 }
 
 .app.editor-active .editor-shell,
