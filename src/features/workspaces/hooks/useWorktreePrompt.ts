@@ -3,10 +3,7 @@ import type { WorkspaceInfo, WorkspaceSettings } from "../../../types";
 
 type WorktreePromptState = {
   workspace: WorkspaceInfo;
-  name: string;
   branch: string;
-  branchWasEdited: boolean;
-  copyAgentsMd: boolean;
   setupScript: string;
   savedSetupScript: string | null;
   isSubmitting: boolean;
@@ -19,7 +16,6 @@ type UseWorktreePromptOptions = {
   addWorktreeAgent: (
     workspace: WorkspaceInfo,
     branch: string,
-    options?: { displayName?: string | null; copyAgentsMd?: boolean },
   ) => Promise<WorkspaceInfo | null>;
   updateWorkspaceSettings: (
     id: string,
@@ -37,30 +33,13 @@ type UseWorktreePromptResult = {
   openPrompt: (workspace: WorkspaceInfo) => void;
   confirmPrompt: () => Promise<void>;
   cancelPrompt: () => void;
-  updateName: (value: string) => void;
   updateBranch: (value: string) => void;
-  updateCopyAgentsMd: (value: boolean) => void;
   updateSetupScript: (value: string) => void;
 };
 
 function normalizeSetupScript(value: string | null | undefined): string | null {
   const next = value ?? "";
   return next.trim().length > 0 ? next : null;
-}
-
-function toBranchFromName(value: string): string | null {
-  const trimmed = value.trim().toLowerCase();
-  if (!trimmed) {
-    return null;
-  }
-  const slug = trimmed
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/(^-|-$)/g, "");
-  if (!slug) {
-    return null;
-  }
-  return `codex/${slug}`;
 }
 
 export function useWorktreePrompt({
@@ -81,10 +60,7 @@ export function useWorktreePrompt({
     const savedSetupScript = normalizeSetupScript(workspace.settings.worktreeSetupScript);
     setWorktreePrompt({
       workspace,
-      name: "",
       branch: defaultBranch,
-      branchWasEdited: false,
-      copyAgentsMd: true,
       setupScript: savedSetupScript ?? "",
       savedSetupScript,
       isSubmitting: false,
@@ -94,35 +70,8 @@ export function useWorktreePrompt({
     });
   }, []);
 
-  const updateName = useCallback((value: string) => {
-    setWorktreePrompt((prev) => {
-      if (!prev) {
-        return prev;
-      }
-      if (prev.branchWasEdited) {
-        return { ...prev, name: value, error: null };
-      }
-      const nextBranch = toBranchFromName(value);
-      if (!nextBranch) {
-        return { ...prev, name: value, error: null };
-      }
-      return {
-        ...prev,
-        name: value,
-        branch: nextBranch,
-        error: null,
-      };
-    });
-  }, []);
-
   const updateBranch = useCallback((value: string) => {
-    setWorktreePrompt((prev) =>
-      prev ? { ...prev, branch: value, branchWasEdited: true, error: null } : prev,
-    );
-  }, []);
-
-  const updateCopyAgentsMd = useCallback((value: boolean) => {
-    setWorktreePrompt((prev) => (prev ? { ...prev, copyAgentsMd: value } : prev));
+    setWorktreePrompt((prev) => (prev ? { ...prev, branch: value, error: null } : prev));
   }, []);
 
   const updateSetupScript = useCallback((value: string) => {
@@ -195,11 +144,7 @@ export function useWorktreePrompt({
     }
 
     try {
-      const displayName = snapshot.name.trim();
-      const worktreeWorkspace = await addWorktreeAgent(parentWorkspace, snapshot.branch, {
-        displayName: displayName.length > 0 ? displayName : null,
-        copyAgentsMd: snapshot.copyAgentsMd,
-      });
+      const worktreeWorkspace = await addWorktreeAgent(parentWorkspace, snapshot.branch);
       if (!worktreeWorkspace) {
         setWorktreePrompt(null);
         return;
@@ -239,9 +184,7 @@ export function useWorktreePrompt({
     openPrompt,
     confirmPrompt,
     cancelPrompt,
-    updateName,
     updateBranch,
-    updateCopyAgentsMd,
     updateSetupScript,
   };
 }

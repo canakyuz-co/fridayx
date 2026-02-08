@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getGitDiffs } from "../../../services/tauri";
 import type { GitFileDiff, GitFileStatus, WorkspaceInfo } from "../../../types";
+import { getGitDiffs } from "../../../services/tauri";
 
 type GitDiffState = {
   diffs: GitFileDiff[];
@@ -18,11 +18,10 @@ export function useGitDiffs(
   activeWorkspace: WorkspaceInfo | null,
   files: GitFileStatus[],
   enabled: boolean,
-  ignoreWhitespaceChanges: boolean,
 ) {
   const [state, setState] = useState<GitDiffState>(emptyState);
   const requestIdRef = useRef(0);
-  const cacheKeyRef = useRef<string | null>(null);
+  const workspaceIdRef = useRef<string | null>(activeWorkspace?.id ?? null);
   const cachedDiffsRef = useRef<Map<string, GitFileDiff[]>>(new Map());
 
   const fileKey = useMemo(
@@ -43,7 +42,6 @@ export function useGitDiffs(
       return;
     }
     const workspaceId = activeWorkspace.id;
-    const cacheKey = `${workspaceId}|ignoreWhitespaceChanges:${ignoreWhitespaceChanges ? "1" : "0"}`;
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
@@ -51,17 +49,17 @@ export function useGitDiffs(
       const diffs = await getGitDiffs(workspaceId);
       if (
         requestIdRef.current !== requestId ||
-        cacheKeyRef.current !== cacheKey
+        workspaceIdRef.current !== workspaceId
       ) {
         return;
       }
       setState({ diffs, isLoading: false, error: null });
-      cachedDiffsRef.current.set(cacheKey, diffs);
+      cachedDiffsRef.current.set(workspaceId, diffs);
     } catch (error) {
       console.error("Failed to load git diffs", error);
       if (
         requestIdRef.current !== requestId ||
-        cacheKeyRef.current !== cacheKey
+        workspaceIdRef.current !== workspaceId
       ) {
         return;
       }
@@ -71,28 +69,25 @@ export function useGitDiffs(
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [activeWorkspace, ignoreWhitespaceChanges]);
+  }, [activeWorkspace]);
 
   useEffect(() => {
     const workspaceId = activeWorkspace?.id ?? null;
-    const nextCacheKey = workspaceId
-      ? `${workspaceId}|ignoreWhitespaceChanges:${ignoreWhitespaceChanges ? "1" : "0"}`
-      : null;
-    if (cacheKeyRef.current !== nextCacheKey) {
-      cacheKeyRef.current = nextCacheKey;
+    if (workspaceIdRef.current !== workspaceId) {
+      workspaceIdRef.current = workspaceId;
       requestIdRef.current += 1;
-      if (!nextCacheKey) {
+      if (!workspaceId) {
         setState(emptyState);
         return;
       }
-      const cached = cachedDiffsRef.current.get(nextCacheKey);
+      const cached = cachedDiffsRef.current.get(workspaceId);
       setState({
         diffs: cached ?? [],
         isLoading: false,
         error: null,
       });
     }
-  }, [activeWorkspace?.id, ignoreWhitespaceChanges]);
+  }, [activeWorkspace?.id]);
 
   useEffect(() => {
     if (!enabled) {
@@ -111,8 +106,6 @@ export function useGitDiffs(
         path: file.path,
         status: file.status,
         diff: entry?.diff ?? "",
-        oldLines: entry?.oldLines,
-        newLines: entry?.newLines,
         isImage: entry?.isImage,
         oldImageData: entry?.oldImageData,
         newImageData: entry?.newImageData,

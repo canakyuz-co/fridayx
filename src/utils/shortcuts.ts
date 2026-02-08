@@ -1,5 +1,3 @@
-import { isMacPlatform as isMacPlatformFromPaths } from "./platformPaths";
-
 export type ShortcutDefinition = {
   key: string;
   meta: boolean;
@@ -8,32 +6,12 @@ export type ShortcutDefinition = {
   shift: boolean;
 };
 
-function normalizeShortcutDefinitionForPlatform(
-  value: ShortcutDefinition,
-  isMac: boolean,
-): ShortcutDefinition {
-  if (isMac) {
-    return value;
-  }
-  if (value.meta && value.ctrl) {
-    return { ...value, meta: false, alt: true };
-  }
-  return value;
-}
-
 const MODIFIER_ORDER = ["cmd", "ctrl", "alt", "shift"] as const;
-const MODIFIER_LABELS_MAC: Record<string, string> = {
+const MODIFIER_LABELS: Record<string, string> = {
   cmd: "⌘",
   ctrl: "⌃",
   alt: "⌥",
   shift: "⇧",
-};
-
-const MODIFIER_LABELS_OTHER: Record<string, string> = {
-  cmd: "Ctrl",
-  ctrl: "Ctrl",
-  alt: "Alt",
-  shift: "Shift",
 };
 
 const KEY_LABELS: Record<string, string> = {
@@ -107,33 +85,25 @@ export function formatShortcut(value: string | null | undefined): string {
   if (!parsed) {
     return value;
   }
-  const useSymbols = isMacPlatform();
-  const normalized = normalizeShortcutDefinitionForPlatform(parsed, useSymbols);
-  const modifierLabels = useSymbols ? MODIFIER_LABELS_MAC : MODIFIER_LABELS_OTHER;
   const modifiers = MODIFIER_ORDER.flatMap((modifier) => {
-    if (modifier === "cmd" && normalized.meta) {
-      return modifierLabels.cmd;
+    if (modifier === "cmd" && parsed.meta) {
+      return MODIFIER_LABELS.cmd;
     }
-    if (modifier === "ctrl" && normalized.ctrl) {
-      return modifierLabels.ctrl;
+    if (modifier === "ctrl" && parsed.ctrl) {
+      return MODIFIER_LABELS.ctrl;
     }
-    if (modifier === "alt" && normalized.alt) {
-      return modifierLabels.alt;
+    if (modifier === "alt" && parsed.alt) {
+      return MODIFIER_LABELS.alt;
     }
-    if (modifier === "shift" && normalized.shift) {
-      return modifierLabels.shift;
+    if (modifier === "shift" && parsed.shift) {
+      return MODIFIER_LABELS.shift;
     }
     return [];
   });
-  const uniqueModifiers = useSymbols
-    ? modifiers
-    : modifiers.filter((modifier, index) => modifiers.indexOf(modifier) === index);
   const keyLabel =
     KEY_LABELS[parsed.key] ??
     (parsed.key.length === 1 ? parsed.key.toUpperCase() : parsed.key);
-  return useSymbols
-    ? [...uniqueModifiers, keyLabel].join("")
-    : [...uniqueModifiers, keyLabel].join("+");
+  return [...modifiers, keyLabel].join("");
 }
 
 export function buildShortcutValue(event: KeyboardEvent): string | null {
@@ -167,35 +137,23 @@ export function matchesShortcut(event: KeyboardEvent, value: string | null | und
   if (!parsed) {
     return false;
   }
-  const isMac = isMacPlatform();
-  const normalized = normalizeShortcutDefinitionForPlatform(parsed, isMac);
   const key = normalizeKey(event.key);
-  if (!key || key !== normalized.key) {
+  if (!key || key !== parsed.key) {
     return false;
   }
-  const metaMatches = normalized.meta
-    ? isMac
-      ? event.metaKey
-      : event.ctrlKey || event.metaKey
-    : !event.metaKey;
-  if (!metaMatches) {
-    return false;
-  }
-
-  const ctrlMatches = normalized.ctrl
-    ? event.ctrlKey
-    : normalized.meta && !isMac
-      ? true
-      : !event.ctrlKey;
   return (
-    ctrlMatches &&
-    normalized.alt === event.altKey &&
-    normalized.shift === event.shiftKey
+    parsed.meta === event.metaKey &&
+    parsed.ctrl === event.ctrlKey &&
+    parsed.alt === event.altKey &&
+    parsed.shift === event.shiftKey
   );
 }
 
 export function isMacPlatform(): boolean {
-  return isMacPlatformFromPaths();
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 }
 
 export function getDefaultInterruptShortcut(): string {
@@ -207,26 +165,24 @@ export function toMenuAccelerator(value: string | null | undefined): string | nu
   if (!parsed) {
     return null;
   }
-  const isMac = isMacPlatform();
-  const normalized = normalizeShortcutDefinitionForPlatform(parsed, isMac);
   const parts: string[] = [];
-  if (normalized.meta && normalized.ctrl) {
+  if (parsed.meta && parsed.ctrl) {
     parts.push("Cmd");
     parts.push("Ctrl");
-  } else if (normalized.meta) {
+  } else if (parsed.meta) {
     parts.push("CmdOrCtrl");
-  } else if (normalized.ctrl) {
+  } else if (parsed.ctrl) {
     parts.push("Ctrl");
   }
-  if (normalized.alt) {
+  if (parsed.alt) {
     parts.push("Alt");
   }
-  if (normalized.shift) {
+  if (parsed.shift) {
     parts.push("Shift");
   }
   const key =
-    ACCELERATOR_KEYS[normalized.key] ??
-    (normalized.key.length === 1 ? normalized.key.toUpperCase() : normalized.key);
+    ACCELERATOR_KEYS[parsed.key] ??
+    (parsed.key.length === 1 ? parsed.key.toUpperCase() : parsed.key);
   if (!key) {
     return null;
   }

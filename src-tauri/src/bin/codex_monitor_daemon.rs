@@ -261,16 +261,12 @@ impl DaemonState {
         &self,
         parent_id: String,
         branch: String,
-        name: Option<String>,
-        copy_agents_md: bool,
         client_version: String,
     ) -> Result<WorkspaceInfo, String> {
         let client_version = client_version.clone();
         workspaces_core::add_worktree_core(
             parent_id,
             branch,
-            name,
-            copy_agents_md,
             &self.data_dir,
             &self.workspaces,
             &self.sessions,
@@ -734,9 +730,8 @@ impl DaemonState {
         workspace_id: String,
         cursor: Option<String>,
         limit: Option<u32>,
-        sort_key: Option<String>,
     ) -> Result<Value, String> {
-        codex_core::list_threads_core(&self.sessions, workspace_id, cursor, limit, sort_key).await
+        codex_core::list_threads_core(&self.sessions, workspace_id, cursor, limit).await
     }
 
     async fn list_mcp_server_status(
@@ -790,10 +785,6 @@ impl DaemonState {
         thread_id: String,
     ) -> Result<Value, String> {
         codex_core::archive_thread_core(&self.sessions, workspace_id, thread_id).await
-    }
-
-    async fn compact_thread(&self, workspace_id: String, thread_id: String) -> Result<Value, String> {
-        codex_core::compact_thread_core(&self.sessions, workspace_id, thread_id).await
     }
 
     async fn set_thread_name(
@@ -1780,10 +1771,8 @@ async fn handle_rpc_request(
         "add_worktree" => {
             let parent_id = parse_string(&params, "parentId")?;
             let branch = parse_string(&params, "branch")?;
-            let name = parse_optional_string(&params, "name");
-            let copy_agents_md = parse_optional_bool(&params, "copyAgentsMd").unwrap_or(true);
             let workspace = state
-                .add_worktree(parent_id, branch, name, copy_agents_md, client_version)
+                .add_worktree(parent_id, branch, client_version)
                 .await?;
             serde_json::to_value(workspace).map_err(|err| err.to_string())
         }
@@ -2003,8 +1992,7 @@ async fn handle_rpc_request(
             let workspace_id = parse_string(&params, "workspaceId")?;
             let cursor = parse_optional_string(&params, "cursor");
             let limit = parse_optional_u32(&params, "limit");
-            let sort_key = parse_optional_string(&params, "sortKey");
-            state.list_threads(workspace_id, cursor, limit, sort_key).await
+            state.list_threads(workspace_id, cursor, limit).await
         }
         "list_mcp_server_status" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
@@ -2042,11 +2030,6 @@ async fn handle_rpc_request(
             let workspace_id = parse_string(&params, "workspaceId")?;
             let thread_id = parse_string(&params, "threadId")?;
             state.archive_thread(workspace_id, thread_id).await
-        }
-        "compact_thread" => {
-            let workspace_id = parse_string(&params, "workspaceId")?;
-            let thread_id = parse_string(&params, "threadId")?;
-            state.compact_thread(workspace_id, thread_id).await
         }
         "set_thread_name" => {
             let workspace_id = parse_string(&params, "workspaceId")?;

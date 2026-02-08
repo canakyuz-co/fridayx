@@ -5,6 +5,7 @@ import type {
   WorkspaceInfo,
 } from "../../../types";
 import { getCollaborationModes } from "../../../services/tauri";
+import { formatCollaborationModeLabel } from "../../../utils/collaborationModes";
 
 type UseCollaborationModesOptions = {
   activeWorkspace: WorkspaceInfo | null;
@@ -27,39 +28,23 @@ export function useCollaborationModes({
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
 
-  const extractModeList = useCallback((response: any): any[] => {
-    const candidates = [
-      response?.result?.data,
-      response?.result?.modes,
-      response?.result,
-      response?.data,
-      response?.modes,
-      response,
-    ];
-    for (const candidate of candidates) {
-      if (Array.isArray(candidate)) {
-        return candidate;
-      }
-      if (candidate && typeof candidate === "object") {
-        const nested = (candidate as any).data ?? (candidate as any).modes;
-        if (Array.isArray(nested)) {
-          return nested;
-        }
-        if (nested && typeof nested === "object") {
-          const deep = (nested as any).data ?? (nested as any).modes;
-          if (Array.isArray(deep)) {
-            return deep;
-          }
-        }
-      }
-    }
-    return [];
-  }, []);
-
   const selectedMode = useMemo(
     () => modes.find((mode) => mode.id === selectedModeId) ?? null,
     [modes, selectedModeId],
   );
+
+  const buildFallbackModes = useCallback((): CollaborationModeOption[] => {
+    const defaultModes = ["code", "plan"];
+    return defaultModes.map((mode) => ({
+      id: mode,
+      label: formatCollaborationModeLabel(mode),
+      mode,
+      model: "",
+      reasoningEffort: null,
+      developerInstructions: null,
+      value: { mode },
+    }));
+  }, []);
 
   const refreshModes = useCallback(async () => {
     if (!workspaceId || !isConnected || !enabled) {
@@ -85,14 +70,18 @@ export function useCollaborationModes({
         label: "collaborationMode/list response",
         payload: response,
       });
-      const rawData = extractModeList(response);
+      const rawData = response.result?.data ?? response.data ?? [];
       const data: CollaborationModeOption[] = rawData
         .map((item: any) => {
           if (!item || typeof item !== "object") {
             return null;
           }
-          const modeId = String(item.mode ?? item.name ?? "").trim();
-          if (!modeId) {
+          const mode = String(item.mode ?? item.name ?? "");
+          if (!mode) {
+            return null;
+          }
+          const normalizedMode = mode.trim().toLowerCase();
+          if (normalizedMode && normalizedMode !== "plan" && normalizedMode !== "code") {
             return null;
           }
 
@@ -113,48 +102,39 @@ export function useCollaborationModes({
           const reasoningEffort = settings.reasoning_effort ?? null;
           const developerInstructions = settings.developer_instructions ?? null;
 
-          const labelSource =
-            typeof item.label === "string" && item.label.trim()
-              ? item.label
-              : typeof item.name === "string" && item.name.trim()
-                ? item.name
-                : modeId;
+          const labelSource = String(item.name ?? item.label ?? mode);
 
-          const option: CollaborationModeOption = {
-            id: modeId,
-            label: labelSource,
-            mode: modeId,
+          const normalizedValue = {
+            ...(item as Record<string, unknown>),
+            mode: normalizedMode,
+          };
+
+          return {
+            id: normalizedMode,
+            label: formatCollaborationModeLabel(labelSource),
+            mode: normalizedMode,
             model,
             reasoningEffort: reasoningEffort ? String(reasoningEffort) : null,
             developerInstructions: developerInstructions
               ? String(developerInstructions)
               : null,
-            value: item as Record<string, unknown>,
+            value: normalizedValue,
           };
-          return option;
         })
-        .filter((mode): mode is CollaborationModeOption => mode !== null);
-      setModes(data);
+        .filter(Boolean);
+      const nextModes = data.length > 0 ? data : buildFallbackModes();
+      setModes(nextModes);
       lastFetchedWorkspaceId.current = workspaceId;
       const preferredModeId =
-        data.find(
-          (mode) =>
-            mode.id.trim().toLowerCase() === "default" ||
-            mode.mode.trim().toLowerCase() === "default",
-        )?.id ??
-        data.find(
-          (mode) =>
-            mode.id.trim().toLowerCase() === "code" ||
-            mode.mode.trim().toLowerCase() === "code",
-        )?.id ??
-        data[0]?.id ??
+        nextModes.find((mode) => mode.mode === "code" || mode.id === "code")?.id ??
+        nextModes[0]?.id ??
         null;
       setSelectedModeId((currentSelection) => {
         const selection = currentSelection ?? selectedModeIdRef.current;
         if (!selection) {
           return preferredModeId;
         }
-        if (!data.some((mode) => mode.id === selection)) {
+        if (!nextModes.some((mode) => mode.id === selection)) {
           return preferredModeId;
         }
         return selection;
@@ -167,10 +147,16 @@ export function useCollaborationModes({
         label: "collaborationMode/list error",
         payload: error instanceof Error ? error.message : String(error),
       });
+      const fallbackModes = buildFallbackModes();
+      setModes(fallbackModes);
+      lastFetchedWorkspaceId.current = workspaceId;
+      const preferredModeId =
+        fallbackModes.find((mode) => mode.mode === "code")?.id ?? "code";
+      setSelectedModeId((currentSelection) => currentSelection ?? preferredModeId);
     } finally {
       inFlight.current = false;
     }
-  }, [enabled, extractModeList, isConnected, onDebug, workspaceId]);
+  }, [buildFallbackModes, enabled, isConnected, onDebug, workspaceId]);
 
   useEffect(() => {
     selectedModeIdRef.current = selectedModeId;

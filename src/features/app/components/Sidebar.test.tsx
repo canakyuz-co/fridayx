@@ -1,17 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { act } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createRef } from "react";
 import { Sidebar } from "./Sidebar";
-
-afterEach(() => {
-  if (vi.isFakeTimers()) {
-    vi.runOnlyPendingTimers();
-    vi.useRealTimers();
-  }
-  cleanup();
-});
 
 const baseProps = {
   workspaces: [],
@@ -24,8 +16,6 @@ const baseProps = {
   threadListLoadingByWorkspace: {},
   threadListPagingByWorkspace: {},
   threadListCursorByWorkspace: {},
-  threadListSortKey: "updated_at" as const,
-  onSetThreadListSortKey: vi.fn(),
   activeWorkspaceId: null,
   activeThreadId: null,
   accountRateLimits: null,
@@ -98,27 +88,7 @@ describe("Sidebar", () => {
     });
     const reopened = screen.getByLabelText("Search projects") as HTMLInputElement;
     expect(reopened.value).toBe("");
-  });
-
-  it("opens thread sort menu from the header filter button", () => {
-    const onSetThreadListSortKey = vi.fn();
-    render(
-      <Sidebar
-        {...baseProps}
-        threadListSortKey="updated_at"
-        onSetThreadListSortKey={onSetThreadListSortKey}
-      />,
-    );
-
-    const button = screen.getByRole("button", { name: "Sort threads" });
-    expect(screen.queryByRole("menu")).toBeNull();
-
-    fireEvent.click(button);
-    const option = screen.getByRole("menuitemradio", { name: "Most recent" });
-    fireEvent.click(option);
-
-    expect(onSetThreadListSortKey).toHaveBeenCalledWith("created_at");
-    expect(screen.queryByRole("menu")).toBeNull();
+    vi.useRealTimers();
   });
 
   it("shows a top New Agent draft row and selects workspace when clicked", () => {

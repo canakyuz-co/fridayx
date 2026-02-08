@@ -1,13 +1,4 @@
 import type { UpdateState } from "../hooks/useUpdater";
-import {
-  ToastActions,
-  ToastBody,
-  ToastCard,
-  ToastError,
-  ToastHeader,
-  ToastTitle,
-  ToastViewport,
-} from "../../design-system/components/toast/ToastPrimitives";
 
 type UpdateToastProps = {
   state: UpdateState;
@@ -42,37 +33,37 @@ export function UpdateToast({ state, onUpdate, onDismiss }: UpdateToastProps) {
       : null;
 
   return (
-    <ToastViewport className="update-toasts" role="region" ariaLive="polite">
-      <ToastCard className="update-toast" role="status">
-        <ToastHeader className="update-toast-header">
-          <ToastTitle className="update-toast-title">Update</ToastTitle>
+    <div className="update-toasts" role="region" aria-live="polite">
+      <div className="update-toast" role="status">
+        <div className="update-toast-header">
+          <div className="update-toast-title">Update</div>
           {state.version ? (
             <div className="update-toast-version">v{state.version}</div>
           ) : null}
-        </ToastHeader>
+        </div>
         {state.stage === "checking" && (
-          <ToastBody className="update-toast-body">Checking for updates...</ToastBody>
+          <div className="update-toast-body">Checking for updates...</div>
         )}
         {state.stage === "available" && (
           <>
-            <ToastBody className="update-toast-body">
+            <div className="update-toast-body">
               A new version is available.
-            </ToastBody>
-            <ToastActions className="update-toast-actions">
+            </div>
+            <div className="update-toast-actions">
               <button className="secondary" onClick={onDismiss}>
                 Later
               </button>
               <button className="primary" onClick={onUpdate}>
                 Update
               </button>
-            </ToastActions>
+            </div>
           </>
         )}
         {state.stage === "latest" && (
           <div className="update-toast-inline">
-            <ToastBody className="update-toast-body update-toast-body-inline">
+            <div className="update-toast-body update-toast-body-inline">
               You’re up to date.
-            </ToastBody>
+            </div>
             <button className="secondary" onClick={onDismiss}>
               Dismiss
             </button>
@@ -80,9 +71,9 @@ export function UpdateToast({ state, onUpdate, onDismiss }: UpdateToastProps) {
         )}
         {state.stage === "downloading" && (
           <>
-            <ToastBody className="update-toast-body">
+            <div className="update-toast-body">
               Downloading update…
-            </ToastBody>
+            </div>
             <div className="update-toast-progress">
               <div className="update-toast-progress-bar">
                 <span
@@ -99,28 +90,28 @@ export function UpdateToast({ state, onUpdate, onDismiss }: UpdateToastProps) {
           </>
         )}
         {state.stage === "installing" && (
-          <ToastBody className="update-toast-body">Installing update…</ToastBody>
+          <div className="update-toast-body">Installing update…</div>
         )}
         {state.stage === "restarting" && (
-          <ToastBody className="update-toast-body">Restarting…</ToastBody>
+          <div className="update-toast-body">Restarting…</div>
         )}
         {state.stage === "error" && (
           <>
-            <ToastBody className="update-toast-body">Update failed.</ToastBody>
+            <div className="update-toast-body">Update failed.</div>
             {state.error ? (
-              <ToastError className="update-toast-error">{state.error}</ToastError>
+              <div className="update-toast-error">{state.error}</div>
             ) : null}
-            <ToastActions className="update-toast-actions">
+            <div className="update-toast-actions">
               <button className="secondary" onClick={onDismiss}>
                 Dismiss
               </button>
               <button className="primary" onClick={onUpdate}>
                 Retry
               </button>
-            </ToastActions>
+            </div>
           </>
         )}
-      </ToastCard>
-    </ToastViewport>
+      </div>
+    </div>
   );
 }

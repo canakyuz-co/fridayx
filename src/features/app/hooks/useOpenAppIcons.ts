@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getOpenAppIcon } from "../../../services/tauri";
 import type { OpenAppTarget } from "../../../types";
 import { getKnownOpenAppIcon } from "../utils/openAppIcons";
-import { isMacPlatform } from "../../../utils/platformPaths";
 
 type OpenAppIconMap = Record<string, string>;
 
@@ -11,8 +10,18 @@ type ResolvedAppTarget = {
   appName: string;
 };
 
+function detectMacOS(): boolean {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  const platform =
+    (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData
+      ?.platform ?? navigator.platform ?? "";
+  return platform.toLowerCase().includes("mac");
+}
+
 export function useOpenAppIcons(openTargets: OpenAppTarget[]): OpenAppIconMap {
-  const isMacOS = isMacPlatform();
+  const isMacOS = detectMacOS();
   const iconCacheRef = useRef<Map<string, string>>(new Map());
   const inFlightRef = useRef<Map<string, Promise<string | null>>>(new Map());
   const [iconById, setIconById] = useState<OpenAppIconMap>({});

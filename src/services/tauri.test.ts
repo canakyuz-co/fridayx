@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import * as notification from "@tauri-apps/plugin-notification";
 import {
   addWorkspace,
-  compactThread,
   fetchGit,
   forkThread,
   getGitHubIssues,
@@ -134,18 +133,6 @@ describe("tauri invoke wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("fork_thread", {
       workspaceId: "ws-9",
       threadId: "thread-9",
-    });
-  });
-
-  it("maps workspaceId and threadId for compact_thread", async () => {
-    const invokeMock = vi.mocked(invoke);
-    invokeMock.mockResolvedValueOnce({});
-
-    await compactThread("ws-10", "thread-10");
-
-    expect(invokeMock).toHaveBeenCalledWith("compact_thread", {
-      workspaceId: "ws-10",
-      threadId: "thread-10",
     });
   });
 
@@ -451,22 +438,6 @@ describe("tauri invoke wrappers", () => {
     expect(sendNotificationMock).toHaveBeenCalledWith({
       title: "Hello",
       body: "World",
-    });
-  });
-
-  it("passes extra metadata when provided", async () => {
-    const isPermissionGrantedMock = vi.mocked(notification.isPermissionGranted);
-    const sendNotificationMock = vi.mocked(notification.sendNotification);
-    isPermissionGrantedMock.mockResolvedValueOnce(true);
-
-    await sendNotification("Hello", "World", {
-      extra: { kind: "thread", workspaceId: "ws-1", threadId: "t-1" },
-    });
-
-    expect(sendNotificationMock).toHaveBeenCalledWith({
-      title: "Hello",
-      body: "World",
-      extra: { kind: "thread", workspaceId: "ws-1", threadId: "t-1" },
     });
   });
 

@@ -1,89 +1,132 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AppSettings } from "../../../types";
-import { getAppSettings, runCodexDoctor, updateAppSettings } from "../../../services/tauri";
+import {
+  getAppSettings,
+  listOtherAiModels,
+  listOtherAiModelsCli,
+  runCodexDoctor,
+  updateAppSettings,
+} from "../../../services/tauri";
 import { clampUiScale, UI_SCALE_DEFAULT } from "../../../utils/uiScale";
 import {
   DEFAULT_CODE_FONT_FAMILY,
+  DEFAULT_INTER_FONT_FEATURES,
   DEFAULT_UI_FONT_FAMILY,
   CODE_FONT_SIZE_DEFAULT,
   clampCodeFontSize,
-  normalizeFontFamily,
+  normalizeInterFontFeatures,
 } from "../../../utils/fonts";
+import { getFallbackOtherAiModels, normalizeModelList } from "../../../utils/otherAiModels";
+import {
+  discoverOtherAiModels,
+  type OtherAiModelRegistryEntry,
+} from "../../../utils/otherAiProviderEngine";
 import {
   DEFAULT_OPEN_APP_ID,
   DEFAULT_OPEN_APP_TARGETS,
   OPEN_APP_STORAGE_KEY,
 } from "../../app/constants";
 import { normalizeOpenAppTargets } from "../../app/utils/openApp";
-import { getDefaultInterruptShortcut, isMacPlatform } from "../../../utils/shortcuts";
+import { getDefaultInterruptShortcut } from "../../../utils/shortcuts";
 
 const allowedThemes = new Set(["system", "light", "dark", "dim"]);
+const allowedEditorKeymaps = new Set(["jetbrains", "vscode", "default"]);
+const LEGACY_UI_FONT_FAMILY =
+  "\"SF Pro Text\", \"SF Pro Display\", -apple-system, \"Helvetica Neue\", sans-serif";
+const LEGACY_CODE_FONT_FAMILY =
+  "\"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace";
 const allowedPersonality = new Set(["friendly", "pragmatic"]);
 
-function buildDefaultSettings(): AppSettings {
-  const isMac = isMacPlatform();
-  return {
-    codexBin: null,
-    codexArgs: null,
-    backendMode: "local",
-    remoteBackendHost: "127.0.0.1:4732",
-    remoteBackendToken: null,
-    defaultAccessMode: "current",
-    reviewDeliveryMode: "inline",
-    composerModelShortcut: isMac ? "cmd+shift+m" : "ctrl+shift+m",
-    composerAccessShortcut: isMac ? "cmd+shift+a" : "ctrl+shift+a",
-    composerReasoningShortcut: isMac ? "cmd+shift+r" : "ctrl+shift+r",
-    composerCollaborationShortcut: "shift+tab",
-    interruptShortcut: getDefaultInterruptShortcut(),
-    newAgentShortcut: isMac ? "cmd+n" : "ctrl+n",
-    newWorktreeAgentShortcut: isMac ? "cmd+shift+n" : "ctrl+shift+n",
-    newCloneAgentShortcut: isMac ? "cmd+alt+n" : "ctrl+alt+n",
-    archiveThreadShortcut: isMac ? "cmd+ctrl+a" : "ctrl+alt+a",
-    toggleProjectsSidebarShortcut: isMac ? "cmd+shift+p" : "ctrl+shift+p",
-    toggleGitSidebarShortcut: isMac ? "cmd+shift+g" : "ctrl+shift+g",
-    branchSwitcherShortcut: isMac ? "cmd+b" : "ctrl+b",
-    toggleDebugPanelShortcut: isMac ? "cmd+shift+d" : "ctrl+shift+d",
-    toggleTerminalShortcut: isMac ? "cmd+shift+t" : "ctrl+shift+t",
-    cycleAgentNextShortcut: isMac ? "cmd+ctrl+down" : "ctrl+alt+down",
-    cycleAgentPrevShortcut: isMac ? "cmd+ctrl+up" : "ctrl+alt+up",
-    cycleWorkspaceNextShortcut: isMac ? "cmd+shift+down" : "ctrl+alt+shift+down",
-    cycleWorkspacePrevShortcut: isMac ? "cmd+shift+up" : "ctrl+alt+shift+up",
-    lastComposerModelId: null,
-    lastComposerReasoningEffort: null,
-    uiScale: UI_SCALE_DEFAULT,
-    theme: "system",
-    usageShowRemaining: false,
-    uiFontFamily: DEFAULT_UI_FONT_FAMILY,
-    codeFontFamily: DEFAULT_CODE_FONT_FAMILY,
-    codeFontSize: CODE_FONT_SIZE_DEFAULT,
-    notificationSoundsEnabled: true,
-    systemNotificationsEnabled: true,
-    preloadGitDiffs: true,
-    gitDiffIgnoreWhitespaceChanges: false,
-    experimentalCollabEnabled: false,
-    collaborationModesEnabled: true,
-    steerEnabled: true,
-    unifiedExecEnabled: true,
-    experimentalAppsEnabled: false,
-    personality: "friendly",
-    dictationEnabled: false,
-    dictationModelId: "base",
-    dictationPreferredLanguage: null,
-    dictationHoldKey: "alt",
-    composerEditorPreset: "default",
-    composerFenceExpandOnSpace: false,
-    composerFenceExpandOnEnter: false,
-    composerFenceLanguageTags: false,
-    composerFenceWrapSelection: false,
-    composerFenceAutoWrapPasteMultiline: false,
-    composerFenceAutoWrapPasteCodeLike: false,
-    composerListContinuation: false,
-    composerCodeBlockCopyUseModifier: false,
-    workspaceGroups: [],
-    openAppTargets: DEFAULT_OPEN_APP_TARGETS,
-    selectedOpenAppId: DEFAULT_OPEN_APP_ID,
-  };
-}
+const defaultSettings: AppSettings = {
+  codexBin: null,
+  codexArgs: null,
+  backendMode: "local",
+  remoteBackendHost: "127.0.0.1:4732",
+  remoteBackendToken: null,
+  otherAiProviders: [
+    {
+      id: "claude",
+      label: "Claude",
+      provider: "claude",
+      enabled: false,
+      apiKey: null,
+      command: "claude",
+      args: null,
+      models: getFallbackOtherAiModels("claude"),
+      defaultModel: null,
+      protocol: "cli",
+      env: null,
+    },
+    {
+      id: "gemini",
+      label: "Gemini",
+      provider: "gemini",
+      enabled: false,
+      apiKey: null,
+      command: "gemini",
+      args: null,
+      models: getFallbackOtherAiModels("gemini"),
+      defaultModel: null,
+      protocol: "cli",
+      env: null,
+    },
+  ],
+  otherAiAutoRefreshEnabled: false,
+  defaultAccessMode: "current",
+  reviewDeliveryMode: "inline",
+  composerModelShortcut: "cmd+shift+m",
+  composerAccessShortcut: "cmd+shift+a",
+  composerReasoningShortcut: "cmd+shift+r",
+  composerCollaborationShortcut: "shift+tab",
+  interruptShortcut: getDefaultInterruptShortcut(),
+  newAgentShortcut: "cmd+n",
+  newWorktreeAgentShortcut: "cmd+shift+n",
+  newCloneAgentShortcut: "cmd+alt+n",
+  archiveThreadShortcut: "cmd+ctrl+a",
+  toggleProjectsSidebarShortcut: "cmd+shift+p",
+  toggleGitSidebarShortcut: "cmd+shift+g",
+  toggleDebugPanelShortcut: "cmd+shift+d",
+  toggleTerminalShortcut: "cmd+shift+t",
+  cycleAgentNextShortcut: "cmd+ctrl+down",
+  cycleAgentPrevShortcut: "cmd+ctrl+up",
+  cycleWorkspaceNextShortcut: "cmd+shift+down",
+  cycleWorkspacePrevShortcut: "cmd+shift+up",
+  editorKeymap: "jetbrains",
+  lastComposerModelId: null,
+  lastComposerReasoningEffort: null,
+  uiScale: UI_SCALE_DEFAULT,
+  theme: "system",
+  usageShowRemaining: false,
+  uiFontFamily: DEFAULT_UI_FONT_FAMILY,
+  interFontFeatures: DEFAULT_INTER_FONT_FEATURES,
+  codeFontFamily: DEFAULT_CODE_FONT_FAMILY,
+  codeFontSize: CODE_FONT_SIZE_DEFAULT,
+  notificationSoundsEnabled: true,
+  systemNotificationsEnabled: true,
+  preloadGitDiffs: true,
+  experimentalCollabEnabled: false,
+  collaborationModesEnabled: true,
+  experimentalSteerEnabled: false,
+  experimentalUnifiedExecEnabled: false,
+  experimentalAppsEnabled: false,
+  personality: "friendly",
+  dictationEnabled: false,
+  dictationModelId: "base",
+  dictationPreferredLanguage: null,
+  dictationHoldKey: "alt",
+  composerEditorPreset: "default",
+  composerFenceExpandOnSpace: false,
+  composerFenceExpandOnEnter: false,
+  composerFenceLanguageTags: false,
+  composerFenceWrapSelection: false,
+  composerFenceAutoWrapPasteMultiline: false,
+  composerFenceAutoWrapPasteCodeLike: false,
+  composerListContinuation: false,
+  composerCodeBlockCopyUseModifier: false,
+  workspaceGroups: [],
+  openAppTargets: DEFAULT_OPEN_APP_TARGETS,
+  selectedOpenAppId: DEFAULT_OPEN_APP_ID,
+};
 
 function normalizeAppSettings(settings: AppSettings): AppSettings {
   const normalizedTargets =
@@ -106,21 +149,65 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
     : hasStoredSelection
       ? storedOpenAppId
       : normalizedTargets[0]?.id ?? DEFAULT_OPEN_APP_ID;
+  const normalizeProtocol = (
+    value: string | null | undefined,
+  ): "acp" | "api" | "cli" => {
+    const normalized = value?.trim().toLowerCase();
+    if (normalized === "acp" || normalized === "api" || normalized === "cli") {
+      return normalized;
+    }
+    return "acp";
+  };
+  const normalizedOtherAiProviders = (settings.otherAiProviders ?? []).map(
+    (provider) => ({
+      ...provider,
+      label: provider.label?.trim() ? provider.label.trim() : provider.id,
+      command: provider.command?.trim() ? provider.command.trim() : null,
+      args: provider.args?.trim() ? provider.args.trim() : null,
+      models: Array.isArray(provider.models)
+        ? provider.models
+            .map((model) => model.trim())
+            .filter((model) => model.length > 0)
+        : [],
+      defaultModel: provider.defaultModel?.trim() ? provider.defaultModel.trim() : null,
+      protocol: normalizeProtocol(provider.protocol),
+      env: provider.env && typeof provider.env === "object" ? provider.env : null,
+    }),
+  );
+  const normalizeFontWithLegacy = (
+    value: string | null | undefined,
+    fallback: string,
+    legacy: string[],
+  ) => {
+    const trimmed = value?.trim();
+    if (!trimmed) {
+      return fallback;
+    }
+    return legacy.includes(trimmed) ? fallback : trimmed;
+  };
   return {
     ...settings,
     codexBin: settings.codexBin?.trim() ? settings.codexBin.trim() : null,
     codexArgs: settings.codexArgs?.trim() ? settings.codexArgs.trim() : null,
+    otherAiAutoRefreshEnabled: Boolean(settings.otherAiAutoRefreshEnabled),
     uiScale: clampUiScale(settings.uiScale),
     theme: allowedThemes.has(settings.theme) ? settings.theme : "system",
-    uiFontFamily: normalizeFontFamily(
+    uiFontFamily: normalizeFontWithLegacy(
       settings.uiFontFamily,
       DEFAULT_UI_FONT_FAMILY,
+      [LEGACY_UI_FONT_FAMILY],
     ),
-    codeFontFamily: normalizeFontFamily(
+    interFontFeatures: normalizeInterFontFeatures(settings.interFontFeatures),
+    codeFontFamily: normalizeFontWithLegacy(
       settings.codeFontFamily,
       DEFAULT_CODE_FONT_FAMILY,
+      [LEGACY_CODE_FONT_FAMILY],
     ),
     codeFontSize: clampCodeFontSize(settings.codeFontSize),
+    editorKeymap: allowedEditorKeymaps.has(settings.editorKeymap)
+      ? settings.editorKeymap
+      : "jetbrains",
+    otherAiProviders: normalizedOtherAiProviders,
     personality: allowedPersonality.has(settings.personality)
       ? settings.personality
       : "friendly",
@@ -132,9 +219,18 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
 }
 
 export function useAppSettings() {
-  const defaultSettings = useMemo(() => buildDefaultSettings(), []);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [isLoading, setIsLoading] = useState(true);
+  const [otherAiModelsSyncPercent, setOtherAiModelsSyncPercent] = useState<number | null>(
+    null,
+  );
+  const [otherAiModelRegistryByProvider, setOtherAiModelRegistryByProvider] = useState<
+    Record<string, OtherAiModelRegistryEntry[]>
+  >({});
+  const syncInFlightRef = useRef(false);
+  const didInitialOtherAiModelsSyncRef = useRef(false);
+  const lastAutoRefreshEnabledRef = useRef<boolean | null>(null);
+  const clearSyncTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -160,7 +256,7 @@ export function useAppSettings() {
     return () => {
       active = false;
     };
-  }, [defaultSettings]);
+  }, []);
 
   const saveSettings = useCallback(async (next: AppSettings) => {
     const normalized = normalizeAppSettings(next);
@@ -172,7 +268,140 @@ export function useAppSettings() {
       }),
     );
     return saved;
-  }, [defaultSettings]);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const sync = async () => {
+      if (syncInFlightRef.current) {
+        return;
+      }
+      const candidates = (settings.otherAiProviders ?? []).filter((provider) => {
+        if (!provider.enabled) {
+          return false;
+        }
+        const normalizedProvider = provider.provider?.trim().toLowerCase();
+        if (normalizedProvider !== "claude" && normalizedProvider !== "gemini") {
+          return false;
+        }
+        const apiKey = (provider.apiKey ?? "").trim();
+        const cliCommand = (provider.command ?? "").trim();
+        const models = Array.isArray(provider.models) ? provider.models : [];
+        // Only do work when we can fetch (API/CLI) or when we need to auto-fill (empty list).
+        return apiKey.length > 0 || cliCommand.length > 0 || models.length === 0;
+      });
+
+      if (candidates.length === 0) {
+        if (active) {
+          setOtherAiModelsSyncPercent(null);
+        }
+        return;
+      }
+
+      syncInFlightRef.current = true;
+      if (active) {
+        setOtherAiModelsSyncPercent(0);
+      }
+
+      const nextProviders = [...(settings.otherAiProviders ?? [])];
+      const nextRegistry: Record<string, OtherAiModelRegistryEntry[]> = {};
+      const total = candidates.length;
+      let completed = 0;
+      let changed = false;
+
+      for (const provider of candidates) {
+        const idx = nextProviders.findIndex((p) => p.id === provider.id);
+        if (idx < 0) {
+          completed += 1;
+          continue;
+        }
+        const providerType = provider.provider.trim().toLowerCase();
+        const apiKey = (provider.apiKey ?? "").trim();
+        const cliCommand = (provider.command ?? "").trim();
+        const discovery = await discoverOtherAiModels({
+          providerType,
+          apiKey,
+          cliCommand,
+          prefersCli: (provider.protocol ?? "").trim().toLowerCase() === "cli",
+          env: provider.env ?? null,
+          existingModels: Array.isArray(provider.models) ? provider.models : [],
+          fallbackModels: getFallbackOtherAiModels(providerType),
+          listViaApi: listOtherAiModels,
+          listViaCli: listOtherAiModelsCli,
+        });
+        const normalizedModels = normalizeModelList(discovery.models);
+        nextRegistry[provider.id] = discovery.registry;
+        const prevModels = Array.isArray(nextProviders[idx].models)
+          ? nextProviders[idx].models
+          : [];
+        const prevNormalized = normalizeModelList(prevModels);
+        if (JSON.stringify(prevNormalized) !== JSON.stringify(normalizedModels)) {
+          changed = true;
+        }
+        nextProviders[idx] = {
+          ...nextProviders[idx],
+          models: normalizedModels,
+        };
+
+        completed += 1;
+        if (active) {
+          setOtherAiModelsSyncPercent(Math.round((completed / total) * 100));
+        }
+      }
+
+      try {
+        if (changed) {
+          await saveSettings({ ...settings, otherAiProviders: nextProviders });
+        }
+        if (active && Object.keys(nextRegistry).length > 0) {
+          setOtherAiModelRegistryByProvider((prev) => ({
+            ...prev,
+            ...nextRegistry,
+          }));
+        }
+      } finally {
+        syncInFlightRef.current = false;
+        if (active) {
+          // Leave 100% visible briefly so it feels deterministic.
+          if (clearSyncTimerRef.current) {
+            window.clearTimeout(clearSyncTimerRef.current);
+          }
+          clearSyncTimerRef.current = window.setTimeout(() => {
+            if (active) {
+              setOtherAiModelsSyncPercent(null);
+            }
+          }, 800);
+        }
+      }
+    };
+
+    if (!isLoading) {
+      if (!settings.otherAiAutoRefreshEnabled) {
+        lastAutoRefreshEnabledRef.current = false;
+        if (active) {
+          setOtherAiModelsSyncPercent(null);
+        }
+      } else {
+        const shouldSync =
+          !didInitialOtherAiModelsSyncRef.current ||
+          lastAutoRefreshEnabledRef.current === false;
+        lastAutoRefreshEnabledRef.current = true;
+        if (shouldSync) {
+          didInitialOtherAiModelsSyncRef.current = true;
+          void sync();
+        }
+      }
+    }
+
+    return () => {
+      active = false;
+      if (clearSyncTimerRef.current) {
+        window.clearTimeout(clearSyncTimerRef.current);
+        clearSyncTimerRef.current = null;
+      }
+    };
+  }, [isLoading, saveSettings, settings]);
 
   const doctor = useCallback(
     async (codexBin: string | null, codexArgs: string | null) => {
@@ -187,5 +416,7 @@ export function useAppSettings() {
     saveSettings,
     doctor,
     isLoading,
+    otherAiModelsSyncPercent,
+    otherAiModelRegistryByProvider,
   };
 }

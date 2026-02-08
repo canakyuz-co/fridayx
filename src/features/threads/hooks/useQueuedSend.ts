@@ -23,7 +23,6 @@ type UseQueuedSendOptions = {
   startFork: (text: string) => Promise<void>;
   startReview: (text: string) => Promise<void>;
   startResume: (text: string) => Promise<void>;
-  startCompact: (text: string) => Promise<void>;
   startApps: (text: string) => Promise<void>;
   startMcp: (text: string) => Promise<void>;
   startStatus: (text: string) => Promise<void>;
@@ -38,15 +37,7 @@ type UseQueuedSendResult = {
   removeQueuedMessage: (threadId: string, messageId: string) => void;
 };
 
-type SlashCommandKind =
-  | "apps"
-  | "compact"
-  | "fork"
-  | "mcp"
-  | "new"
-  | "resume"
-  | "review"
-  | "status";
+type SlashCommandKind = "apps" | "fork" | "mcp" | "new" | "resume" | "review" | "status";
 
 function parseSlashCommand(text: string, appsEnabled: boolean): SlashCommandKind | null {
   if (appsEnabled && /^\/apps\b/i.test(text)) {
@@ -60,9 +51,6 @@ function parseSlashCommand(text: string, appsEnabled: boolean): SlashCommandKind
   }
   if (/^\/review\b/i.test(text)) {
     return "review";
-  }
-  if (/^\/compact\b/i.test(text)) {
-    return "compact";
   }
   if (/^\/new\b/i.test(text)) {
     return "new";
@@ -90,7 +78,6 @@ export function useQueuedSend({
   startFork,
   startReview,
   startResume,
-  startCompact,
   startApps,
   startMcp,
   startStatus,
@@ -151,10 +138,6 @@ export function useQueuedSend({
         await startResume(trimmed);
         return;
       }
-      if (command === "compact") {
-        await startCompact(trimmed);
-        return;
-      }
       if (command === "apps") {
         await startApps(trimmed);
         return;
@@ -181,7 +164,6 @@ export function useQueuedSend({
       startFork,
       startReview,
       startResume,
-      startCompact,
       startApps,
       startMcp,
       startStatus,

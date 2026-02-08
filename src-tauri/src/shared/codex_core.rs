@@ -102,10 +102,9 @@ pub(crate) async fn list_threads_core(
     workspace_id: String,
     cursor: Option<String>,
     limit: Option<u32>,
-    sort_key: Option<String>,
 ) -> Result<Value, String> {
     let session = get_session_clone(sessions, &workspace_id).await?;
-    let params = json!({ "cursor": cursor, "limit": limit, "sortKey": sort_key });
+    let params = json!({ "cursor": cursor, "limit": limit });
     session.send_request("thread/list", params).await
 }
 
@@ -327,16 +326,6 @@ pub(crate) async fn archive_thread_core(
     let session = get_session_clone(sessions, &workspace_id).await?;
     let params = json!({ "threadId": thread_id });
     session.send_request("thread/archive", params).await
-}
-
-pub(crate) async fn compact_thread_core(
-    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
-    workspace_id: String,
-    thread_id: String,
-) -> Result<Value, String> {
-    let session = get_session_clone(sessions, &workspace_id).await?;
-    let params = json!({ "threadId": thread_id });
-    session.send_request("thread/compact/start", params).await
 }
 
 pub(crate) async fn set_thread_name_core(

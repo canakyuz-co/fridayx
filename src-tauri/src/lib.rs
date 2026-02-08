@@ -157,7 +157,6 @@ pub fn run() {
             codex::list_configured_mcp_servers,
             codex::set_mcp_server_enabled,
             codex::archive_thread,
-            codex::compact_thread,
             codex::set_thread_name,
             codex::collaboration_mode_list,
             workspaces::connect_workspace,

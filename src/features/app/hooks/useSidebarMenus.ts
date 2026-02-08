@@ -3,10 +3,6 @@ import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-import type { WorkspaceInfo } from "../../../types";
-import { pushErrorToast } from "../../../services/toasts";
-import { fileManagerName } from "../../../utils/platformPaths";
-
 type SidebarMenuHandlers = {
   onDeleteThread: (workspaceId: string, threadId: string) => void;
   onSyncThread: (workspaceId: string, threadId: string) => void;
@@ -114,44 +110,18 @@ export function useSidebarMenus({
   );
 
   const showWorktreeMenu = useCallback(
-    async (event: MouseEvent, worktree: WorkspaceInfo) => {
+    async (event: MouseEvent, workspaceId: string) => {
       event.preventDefault();
       event.stopPropagation();
-      const fileManagerLabel = fileManagerName();
       const reloadItem = await MenuItem.new({
         text: "Reload threads",
-        action: () => onReloadWorkspaceThreads(worktree.id),
-      });
-      const revealItem = await MenuItem.new({
-        text: `Show in ${fileManagerLabel}`,
-        action: async () => {
-          if (!worktree.path) {
-            return;
-          }
-          try {
-            const { revealItemInDir } = await import(
-              "@tauri-apps/plugin-opener"
-            );
-            await revealItemInDir(worktree.path);
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            pushErrorToast({
-              title: `Couldn't show worktree in ${fileManagerLabel}`,
-              message,
-            });
-            console.warn("Failed to reveal worktree", {
-              message,
-              workspaceId: worktree.id,
-              path: worktree.path,
-            });
-          }
-        },
+        action: () => onReloadWorkspaceThreads(workspaceId),
       });
       const deleteItem = await MenuItem.new({
         text: "Delete worktree",
-        action: () => onDeleteWorktree(worktree.id),
+        action: () => onDeleteWorktree(workspaceId),
       });
-      const menu = await Menu.new({ items: [reloadItem, revealItem, deleteItem] });
+      const menu = await Menu.new({ items: [reloadItem, deleteItem] });
       const window = getCurrentWindow();
       const position = new LogicalPosition(event.clientX, event.clientY);
       await menu.popup(position, window);

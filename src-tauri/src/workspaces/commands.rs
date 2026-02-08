@@ -1,9 +1,4 @@
 use std::path::PathBuf;
-
-#[cfg(target_os = "windows")]
-use std::path::Path;
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 use std::process::Stdio;
 use std::sync::Arc;
 
@@ -38,9 +33,7 @@ use crate::codex::args::resolve_workspace_codex_args;
 use crate::codex::home::resolve_workspace_codex_home;
 use crate::git_utils::resolve_git_root;
 use crate::remote_backend;
-use crate::shared::process_core::{kill_child_process_tree, tokio_command};
-#[cfg(target_os = "windows")]
-use crate::shared::process_core::{build_cmd_c_command, resolve_windows_executable};
+use crate::shared::process_core::tokio_command;
 use crate::shared::workspaces_core;
 use crate::shared::editor_core::{EditorSearchOptions, EditorSearchMatch};
 use crate::state::AppState;
@@ -668,7 +661,7 @@ pub(crate) async fn add_clone(
             workspaces.remove(&entry.id);
         }
         let mut child = session.child.lock().await;
-        kill_child_process_tree(&mut child).await;
+        let _ = child.kill().await;
         let _ = tokio::fs::remove_dir_all(&destination_path).await;
         return Err(error);
     }
@@ -697,23 +690,15 @@ pub(crate) async fn add_clone(
 pub(crate) async fn add_worktree(
     parent_id: String,
     branch: String,
-    name: Option<String>,
-    copy_agents_md: Option<bool>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<WorkspaceInfo, String> {
-    let copy_agents_md = copy_agents_md.unwrap_or(true);
     if remote_backend::is_remote_mode(&*state).await {
         let response = remote_backend::call_remote(
             &*state,
             app,
             "add_worktree",
-            json!({
-                "parentId": parent_id,
-                "branch": branch,
-                "name": name,
-                "copyAgentsMd": copy_agents_md
-            }),
+            json!({ "parentId": parent_id, "branch": branch }),
         )
         .await?;
         return serde_json::from_value(response).map_err(|err| err.to_string());
@@ -727,8 +712,6 @@ pub(crate) async fn add_worktree(
     workspaces_core::add_worktree_core(
         parent_id,
         branch,
-        name,
-        copy_agents_md,
         &data_dir,
         &state.workspaces,
         &state.sessions,
@@ -1239,74 +1222,17 @@ pub(crate) async fn open_workspace_in(
         .unwrap_or_else(|| "target".to_string());
 
     let status = if let Some(command) = command {
-        let trimmed = command.trim();
-        if trimmed.is_empty() {
-            return Err("Missing app or command".to_string());
-        }
-
-        #[cfg(target_os = "windows")]
-        let mut cmd = {
-            let resolved = resolve_windows_executable(trimmed, None);
-            let resolved_path = resolved
-                .as_deref()
-                .unwrap_or_else(|| Path::new(trimmed));
-            let ext = resolved_path
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .map(|ext| ext.to_ascii_lowercase());
-
-            if matches!(ext.as_deref(), Some("cmd") | Some("bat")) {
-                let mut cmd = tokio_command("cmd");
-                let mut command_args = args.clone();
-                command_args.push(path.clone());
-                let command_line = build_cmd_c_command(resolved_path, &command_args)?;
-                cmd.arg("/D");
-                cmd.arg("/S");
-                cmd.arg("/C");
-                cmd.raw_arg(command_line);
-                cmd
-            } else {
-                let mut cmd = tokio_command(resolved_path);
-                cmd.args(&args).arg(&path);
-                cmd
-            }
-        };
-
-        #[cfg(not(target_os = "windows"))]
-        let mut cmd = {
-            let mut cmd = tokio_command(trimmed);
-            cmd.args(&args).arg(&path);
-            cmd
-        };
-
+        let mut cmd = std::process::Command::new(command);
+        cmd.args(args).arg(path);
         cmd.status()
-            .await
             .map_err(|error| format!("Failed to open app ({target_label}): {error}"))?
     } else if let Some(app) = app {
-        let trimmed = app.trim();
-        if trimmed.is_empty() {
-            return Err("Missing app or command".to_string());
+        let mut cmd = std::process::Command::new("open");
+        cmd.arg("-a").arg(app).arg(path);
+        if !args.is_empty() {
+            cmd.arg("--args").args(args);
         }
-
-        #[cfg(target_os = "macos")]
-        let mut cmd = {
-            let mut cmd = tokio_command("open");
-            cmd.arg("-a").arg(trimmed).arg(&path);
-            if !args.is_empty() {
-                cmd.arg("--args").args(&args);
-            }
-            cmd
-        };
-
-        #[cfg(not(target_os = "macos"))]
-        let mut cmd = {
-            let mut cmd = tokio_command(trimmed);
-            cmd.args(&args).arg(&path);
-            cmd
-        };
-
         cmd.status()
-            .await
             .map_err(|error| format!("Failed to open app ({target_label}): {error}"))?
     } else {
         return Err("Missing app or command".to_string());
