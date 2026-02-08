@@ -562,6 +562,11 @@
   --main-topbar-height: 42px;
 }
 
+.app.editor-active,
+.app.editor-active .main {
+  transition: none !important;
+}
+
 .app.editor-active .main {
   grid-template-columns: minmax(0, 1fr) var(--right-panel-width, 300px);
 }
@@ -571,6 +576,41 @@
   border-bottom: 1px solid var(--border-subtle);
   background: color-mix(in srgb, var(--surface-topbar) 92%, transparent);
   backdrop-filter: blur(14px) saturate(1.1);
+}
+
+.app.editor-active .titlebar-controls {
+  z-index: 7;
+}
+
+.app.editor-active .titlebar-toggle {
+  transform: translateY(-50%);
+  transition: none;
+}
+
+.app.editor-active .titlebar-toggle-left {
+  left: calc(8px + var(--titlebar-inset-left, 0px));
+}
+
+.app.editor-active .titlebar-toggle-right {
+  right: 8px;
+}
+
+.app.editor-active .titlebar-toggle .main-header-action {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-card) 74%, transparent);
+  color: var(--text-muted);
+  padding: 0;
+}
+
+.app.editor-active .titlebar-toggle .main-header-action:hover:not(:disabled),
+.app.editor-active .titlebar-toggle .main-header-action:focus-visible {
+  transform: none;
+  box-shadow: none;
+  background: color-mix(in srgb, var(--surface-control-hover) 70%, transparent);
+  color: var(--text-stronger);
 }
 
 .app.editor-active .main-header {
@@ -826,6 +866,13 @@
 .app.editor-active .editor-assistant-panel {
   border-left: 1px solid var(--border-subtle);
   background: color-mix(in srgb, var(--surface-right-panel) 88%, transparent);
+}
+
+.app.editor-active .right-panel,
+.app.editor-active .sidebar,
+.app.editor-active .sidebar-resizer,
+.app.editor-active .right-panel-resizer {
+  transition: none !important;
 }
 
 .app.editor-active .editor-right-panel-resizer::after {
