@@ -1,18 +1,21 @@
-# App-Server Events Reference (Codex `59707da8572bbbffa8060396eb09e6961776981e`)
+# App-Server Events Reference (Codex `41b4962b0a7f5d73bb23d329ad9bb742545f6a2c`)
 
 This document helps agents quickly answer:
-- Which app-server events Fridex supports right now.
-- Which app-server requests Fridex sends right now.
-- Where to look in Fridex to add support.
+- Which app-server events CodexMonitor supports right now.
+- Which app-server requests CodexMonitor sends right now.
+- Where to look in CodexMonitor to add support.
 - Where to look in `../Codex` to compare event lists and find emitters.
 
 When updating this document:
 1. Update the Codex hash in the title using `git -C ../Codex rev-parse HEAD`.
-2. Compare Codex events vs Fridex routing.
-3. Compare Codex request methods vs Fridex outgoing request methods.
+2. Compare Codex events vs CodexMonitor routing.
+3. Compare Codex request methods vs CodexMonitor outgoing request methods.
 4. Update supported and missing lists below.
 
-## Where To Look In Fridex
+## Where To Look In CodexMonitor
+
+Primary app-server event source of truth (methods + typed parsing helpers):
+- `src/utils/appServerEvents.ts`
 
 Primary event router:
 - `src/features/app/hooks/useAppServerEvents.ts`
@@ -43,11 +46,13 @@ Primary outgoing request layer:
 
 ## Supported Events (Current)
 
-These are the events explicitly routed in `useAppServerEvents.ts` (plus
-`requestApproval` methods matched by substring):
+These are the app-server methods currently supported in
+`src/utils/appServerEvents.ts` (`SUPPORTED_APP_SERVER_METHODS`) and routed in
+`useAppServerEvents.ts`.
 
 - `codex/connected`
-- `*requestApproval*` (matched via `method.includes("requestApproval")`)
+- `*requestApproval` methods (matched via
+  `isApprovalRequestMethod(method)`; suffix check)
 - `item/tool/requestUserInput`
 - `item/agentMessage/delta`
 - `turn/started`
@@ -71,6 +76,8 @@ These are the events explicitly routed in `useAppServerEvents.ts` (plus
 - `item/commandExecution/outputDelta`
 - `item/commandExecution/terminalInteraction`
 - `item/fileChange/outputDelta`
+- `codex/event/skills_update_available` (handled via
+  `isSkillsUpdateAvailableEvent(...)` in `useSkills.ts`)
 
 ## Conversation Compaction Signals (Codex v2)
 
@@ -79,7 +86,7 @@ Codex currently exposes two compaction signals:
 - Preferred: `item/started` + `item/completed` with `item.type = "contextCompaction"` (`ThreadItem::ContextCompaction`).
 - Deprecated: `thread/compacted` (`ContextCompactedNotification`).
 
-Fridex status:
+CodexMonitor status:
 
 - It routes `item/started` and `item/completed`, so the preferred signal reaches the frontend event layer.
 - It renders/stores `contextCompaction` items via the normal item lifecycle.
@@ -97,15 +104,16 @@ events are currently not routed:
 - `configWarning`
 - `windows/worldWritableWarning`
 
-## Supported Requests (Fridex -> App-Server, v2)
+## Supported Requests (CodexMonitor -> App-Server, v2)
 
-These are v2 request methods Fridex currently sends to Codex app-server:
+These are v2 request methods CodexMonitor currently sends to Codex app-server:
 
 - `thread/start`
 - `thread/resume`
 - `thread/fork`
 - `thread/list`
 - `thread/archive`
+- `thread/compact/start`
 - `thread/name/set`
 - `turn/start`
 - `turn/interrupt`
@@ -114,25 +122,26 @@ These are v2 request methods Fridex currently sends to Codex app-server:
 - `collaborationMode/list`
 - `mcpServerStatus/list`
 - `account/login/start`
+- `account/login/cancel`
+- `account/rateLimits/read`
 - `account/read`
 - `skills/list`
 - `app/list`
 
-Also used (legacy/non-v2 request method):
-- `account/rateLimits/read`
-
 ## Missing Requests (Codex v2 Request Methods)
 
-Compared against Codex v2 request methods, Fridex currently does not send:
+Compared against Codex v2 request methods, CodexMonitor currently does not send:
 
 - `thread/unarchive`
 - `thread/rollback`
 - `thread/loaded/list`
 - `thread/read`
+- `skills/remote/read`
+- `skills/remote/write`
 - `skills/config/write`
+- `mock/experimentalMethod`
 - `mcpServer/oauth/login`
 - `config/mcpServer/reload`
-- `account/login/cancel` (Fridex currently sends a notification path for cancel)
 - `account/logout`
 - `feedback/upload`
 - `command/exec`
@@ -140,6 +149,10 @@ Compared against Codex v2 request methods, Fridex currently does not send:
 - `config/value/write`
 - `config/batchWrite`
 - `configRequirements/read`
+- `item/commandExecution/requestApproval`
+- `item/fileChange/requestApproval`
+- `item/tool/requestUserInput`
+- `item/tool/call`
 - `account/chatgptAuthTokens/refresh`
 
 ## Where To Look In ../Codex
@@ -163,8 +176,8 @@ Use this workflow to update the lists above:
    - `git -C ../Codex rev-parse HEAD`
 2. List Codex v2 notification methods:
    - `rg -n \"=> \\\".*\\\" \\(v2::.*Notification\\)\" ../Codex/codex-rs/app-server-protocol/src/protocol/common.rs`
-3. List Fridex routed methods:
-   - `rg -n \"method === \\\"|method\\.includes\\(\" src/features/app/hooks/useAppServerEvents.ts`
+3. List CodexMonitor routed methods:
+   - `rg -n \"SUPPORTED_APP_SERVER_METHODS\" src/utils/appServerEvents.ts`
 4. Update the Supported and Missing sections.
 
 ## Quick Request Comparison Workflow
@@ -175,7 +188,7 @@ Use this workflow to update request support lists:
    - `git -C ../Codex rev-parse HEAD`
 2. List Codex request methods:
    - `rg -n \"=> \\\".*\\\" \\{\" ../Codex/codex-rs/app-server-protocol/src/protocol/common.rs`
-3. List Fridex outgoing requests:
+3. List CodexMonitor outgoing requests:
    - `rg -n \"send_request\\(\\\"\" src-tauri/src -g\"*.rs\"`
 4. Update the Supported Requests and Missing Requests sections.
 
@@ -190,6 +203,7 @@ Use this when the method list is unchanged but behavior looks off.
 3. For a specific method, jump to its struct definition:
    - Example: `rg -n \"struct TurnPlanUpdatedNotification|struct ThreadTokenUsageUpdatedNotification|struct AccountRateLimitsUpdatedNotification|struct ItemStartedNotification|struct ItemCompletedNotification\" ../Codex/codex-rs/app-server-protocol/src/protocol/v2.rs`
 4. Compare payload shapes to the router expectations:
+   - Parser/source of truth: `src/utils/appServerEvents.ts`
    - Router: `src/features/app/hooks/useAppServerEvents.ts`
    - Turn/plan/token/rate-limit normalization: `src/features/threads/utils/threadNormalize.ts`
    - Item shaping for display: `src/utils/threadItems.ts`
@@ -197,15 +211,16 @@ Use this when the method list is unchanged but behavior looks off.
    - `rg -n \"enum ThreadItem|CommandExecution|FileChange|McpToolCall|EnteredReviewMode|ExitedReviewMode|ContextCompaction\" ../Codex/codex-rs/app-server-protocol/src/protocol/v2.rs`
 6. Check for camelCase vs snake_case mismatches:
    - The protocol uses `#[serde(rename_all = \"camelCase\")]`, but fields are often declared in snake_case.
-   - Fridex generally defends against this by checking both forms (for example in `threadNormalize.ts` and `useAppServerEvents.ts`).
+   - CodexMonitor generally defends against this by checking both forms (for example in `threadNormalize.ts` and `useAppServerEvents.ts`), while centralizing method/type parsing in `appServerEvents.ts`.
 7. If a schema change is found, fix it at the edges first:
-   - Prefer updating `useAppServerEvents.ts` and `threadNormalize.ts` rather than spreading conditionals into components.
+   - Prefer updating `src/utils/appServerEvents.ts`, `useAppServerEvents.ts`, and `threadNormalize.ts` rather than spreading conditionals into components.
 
 ## Notes
 
 - Not all missing events must be surfaced in the conversation view; some may
   be better as toasts, settings warnings, or debug-only entries.
 - For conversation view changes, prefer:
+  - Add method/type support in `src/utils/appServerEvents.ts`
   - Route in `useAppServerEvents.ts`
   - Handle in `useThreadTurnEvents.ts` or `useThreadItemEvents.ts`
   - Update state in `useThreadsReducer.ts`

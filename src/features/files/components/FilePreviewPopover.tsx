@@ -3,7 +3,7 @@ import type { CSSProperties, MouseEvent } from "react";
 import X from "lucide-react/dist/esm/icons/x";
 import { highlightLine, languageFromPath } from "../../../utils/syntax";
 import { OpenAppMenu } from "../../app/components/OpenAppMenu";
-import { Markdown } from "../../messages/components/Markdown";
+import { PopoverSurface } from "../../design-system/components/popover/PopoverPrimitives";
 import type { OpenAppTarget } from "../../../types";
 
 type FilePreviewPopoverProps = {
@@ -11,7 +11,7 @@ type FilePreviewPopoverProps = {
   absolutePath: string;
   content: string;
   truncated: boolean;
-  previewKind?: "text" | "image" | "markdown";
+  previewKind?: "text" | "image";
   imageSrc?: string | null;
   openTargets: OpenAppTarget[];
   openAppIconById: Record<string, string>;
@@ -58,32 +58,29 @@ export function FilePreviewPopover({
   error = null,
 }: FilePreviewPopoverProps) {
   const isImagePreview = previewKind === "image";
-  const isMarkdownPreview = previewKind === "markdown";
   const lines = useMemo(
-    () => (isImagePreview || isMarkdownPreview ? [] : content.split("\n")),
-    [content, isImagePreview, isMarkdownPreview],
+    () => (isImagePreview ? [] : content.split("\n")),
+    [content, isImagePreview],
   );
   const language = useMemo(() => languageFromPath(path), [path]);
   const selectionLabel = selection
     ? `Lines ${selection.start + 1}-${selection.end + 1}`
     : isImagePreview
       ? "Image preview"
-      : isMarkdownPreview
-        ? "Markdown preview"
-        : "No selection";
+      : "No selection";
   const highlightedLines = useMemo(
     () =>
-      isImagePreview || isMarkdownPreview
+      isImagePreview
         ? []
         : lines.map((line) => {
             const html = highlightLine(line, language);
             return html || "&nbsp;";
           }),
-    [lines, language, isImagePreview, isMarkdownPreview],
+    [lines, language, isImagePreview],
   );
 
   return (
-    <div className="file-preview-popover popover-surface" style={style}>
+    <PopoverSurface className="file-preview-popover" style={style}>
       <div className="file-preview-header">
         <div className="file-preview-title">
           <span className="file-preview-path">{path}</span>
@@ -128,24 +125,6 @@ export function FilePreviewPopover({
               Image preview unavailable.
             </div>
           )}
-        </div>
-      ) : isMarkdownPreview ? (
-        <div className="file-preview-body file-preview-body--markdown">
-          <div className="file-preview-toolbar">
-            <span className="file-preview-selection">{selectionLabel}</span>
-            <div className="file-preview-actions">
-              <OpenAppMenu
-                path={absolutePath}
-                openTargets={openTargets}
-                selectedOpenAppId={selectedOpenAppId}
-                onSelectOpenAppId={onSelectOpenAppId}
-                iconById={openAppIconById}
-              />
-            </div>
-          </div>
-          <div className="file-preview-markdown">
-            <Markdown className="markdown" value={content} />
-          </div>
         </div>
       ) : (
         <div className="file-preview-body">
@@ -220,6 +199,6 @@ export function FilePreviewPopover({
           </div>
         </div>
       )}
-    </div>
+    </PopoverSurface>
   );
 }

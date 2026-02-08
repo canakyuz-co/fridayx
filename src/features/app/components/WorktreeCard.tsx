@@ -7,7 +7,7 @@ type WorktreeCardProps = {
   isActive: boolean;
   isDeleting?: boolean;
   onSelectWorkspace: (id: string) => void;
-  onShowWorktreeMenu: (event: MouseEvent, workspaceId: string) => void;
+  onShowWorktreeMenu: (event: MouseEvent, worktree: WorkspaceInfo) => void;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
   onConnectWorkspace: (workspace: WorkspaceInfo) => void;
   children?: React.ReactNode;
@@ -25,6 +25,7 @@ export function WorktreeCard({
 }: WorktreeCardProps) {
   const worktreeCollapsed = worktree.settings.sidebarCollapsed;
   const worktreeBranch = worktree.worktree?.branch ?? "";
+  const worktreeLabel = worktree.name?.trim() || worktreeBranch;
   const contentCollapsedClass = worktreeCollapsed ? " collapsed" : "";
 
   return (
@@ -41,7 +42,7 @@ export function WorktreeCard({
         }}
         onContextMenu={(event) => {
           if (!isDeleting) {
-            onShowWorktreeMenu(event, worktree.id);
+            onShowWorktreeMenu(event, worktree);
           }
         }}
         onKeyDown={(event) => {
@@ -54,7 +55,7 @@ export function WorktreeCard({
           }
         }}
       >
-        <div className="worktree-label">{worktreeBranch || worktree.name}</div>
+        <div className="worktree-label">{worktreeLabel}</div>
         <div className="worktree-actions">
           {isDeleting ? (
             <div className="worktree-deleting" role="status" aria-live="polite">

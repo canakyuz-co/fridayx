@@ -11,11 +11,11 @@ import Stethoscope from "lucide-react/dist/esm/icons/stethoscope";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import TerminalSquare from "lucide-react/dist/esm/icons/terminal-square";
 import FileText from "lucide-react/dist/esm/icons/file-text";
-import Plug from "lucide-react/dist/esm/icons/plug";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 import X from "lucide-react/dist/esm/icons/x";
 import FlaskConical from "lucide-react/dist/esm/icons/flask-conical";
 import ExternalLink from "lucide-react/dist/esm/icons/external-link";
+import Layers from "lucide-react/dist/esm/icons/layers";
 import type {
   AppSettings,
   CodexDoctorResult,
@@ -27,46 +27,33 @@ import type {
 } from "../../../types";
 import { formatDownloadSize } from "../../../utils/formatting";
 import {
+  fileManagerName,
+  isMacPlatform,
+  isWindowsPlatform,
+  openInFileManagerLabel,
+} from "../../../utils/platformPaths";
+import {
   buildShortcutValue,
   formatShortcut,
   getDefaultInterruptShortcut,
 } from "../../../utils/shortcuts";
 import { clampUiScale } from "../../../utils/uiScale";
-import {
-  getCodexConfigPath,
-  listConfiguredMcpServers,
-  listMcpServerStatus,
-  listOtherAiModels,
-  listOtherAiModelsCli,
-  mcpServerOauthLogin,
-  mcpServerReload,
-  setMcpServerEnabled,
-} from "../../../services/tauri";
-import type { McpServerConfigEntry } from "../../../services/tauri";
+import { getCodexConfigPath } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 import {
-  CODE_FONT_FAMILY_OPTIONS,
   DEFAULT_CODE_FONT_FAMILY,
   DEFAULT_UI_FONT_FAMILY,
-  INTER_FONT_FEATURES,
-  UI_FONT_FAMILY_OPTIONS,
   CODE_FONT_SIZE_DEFAULT,
   CODE_FONT_SIZE_MAX,
   CODE_FONT_SIZE_MIN,
   clampCodeFontSize,
-  isInterFontFamily,
   normalizeFontFamily,
 } from "../../../utils/fonts";
-import {
-  getFallbackOtherAiModels,
-  normalizeModelList,
-} from "../../../utils/otherAiModels";
-import { discoverOtherAiModels } from "../../../utils/otherAiProviderEngine";
-import type { OtherAiModelRegistryEntry } from "../../../utils/otherAiProviderEngine";
 import { DEFAULT_OPEN_APP_ID, OPEN_APP_STORAGE_KEY } from "../../app/constants";
 import { GENERIC_APP_ICON, getKnownOpenAppIcon } from "../../app/utils/openAppIcons";
 import { useGlobalAgentsMd } from "../hooks/useGlobalAgentsMd";
 import { useGlobalCodexConfigToml } from "../hooks/useGlobalCodexConfigToml";
+import { ModalShell } from "../../design-system/components/modal/ModalShell";
 import { FileEditorCard } from "../../shared/components/FileEditorCard";
 
 const DICTATION_MODELS = [
@@ -130,18 +117,16 @@ const COMPOSER_PRESET_CONFIGS: Record<ComposerPreset, ComposerPresetSettings> = 
   },
 };
 
-const EDITOR_KEYMAP_OPTIONS: Array<{
-  id: AppSettings["editorKeymap"];
-  label: string;
-}> = [
-  { id: "jetbrains", label: "JetBrains (default)" },
-  { id: "vscode", label: "VS Code" },
-  { id: "default", label: "Monaco Default" },
-];
-
 const normalizeOverrideValue = (value: string): string | null => {
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+};
+
+const normalizeWorktreeSetupScript = (
+  value: string | null | undefined,
+): string | null => {
+  const next = value ?? "";
+  return next.trim().length > 0 ? next : null;
 };
 
 const buildWorkspaceOverrideDrafts = (
@@ -156,98 +141,6 @@ const buildWorkspaceOverrideDrafts = (
   });
   return next;
 };
-
-type OtherAiDraft = {
-  id: string;
-  label: string;
-  provider: string;
-  enabled: boolean;
-  apiKey: string;
-  command: string;
-  args: string;
-  modelsText: string;
-  protocol: string;
-  envText: string;
-};
-
-const normalizeTextValue = (value: string) => {
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-};
-
-const parseModelList = (value: string) =>
-  normalizeModelList(
-    value
-      .split(/[\n,]+/g)
-      .map((entry) => entry.trim())
-      .filter((entry) => entry.length > 0),
-  );
-
-const formatEnvText = (value: Record<string, string> | null | undefined) => {
-  if (!value) {
-    return "";
-  }
-  return Object.entries(value)
-    .map(([key, val]) => `${key}=${val}`)
-    .join("\n");
-};
-
-const parseEnvText = (value: string) => {
-  const env: Record<string, string> = {};
-  value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .forEach((line) => {
-      const index = line.indexOf("=");
-      if (index <= 0) {
-        return;
-      }
-      const key = line.slice(0, index).trim();
-      const val = line.slice(index + 1).trim();
-      if (!key) {
-        return;
-      }
-      env[key] = val;
-    });
-  return env;
-};
-
-const normalizeProviderType = (
-  value: string,
-  fallback: AppSettings["otherAiProviders"][number]["provider"],
-) => {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "claude" || normalized === "gemini" || normalized === "custom") {
-    return normalized;
-  }
-  return fallback;
-};
-
-const normalizeProtocol = (value: string): "acp" | "api" | "cli" => {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "acp" || normalized === "api" || normalized === "cli") {
-    return normalized;
-  }
-  return "acp";
-};
-
-const buildOtherAiDrafts = (providers: AppSettings["otherAiProviders"]) =>
-  providers.reduce<Record<string, OtherAiDraft>>((acc, provider) => {
-    acc[provider.id] = {
-      id: provider.id,
-      label: provider.label ?? provider.id,
-      provider: provider.provider,
-      enabled: provider.enabled,
-      apiKey: provider.apiKey ?? "",
-      command: provider.command ?? "",
-      args: provider.args ?? "",
-      modelsText: (provider.models ?? []).join("\n"),
-      protocol: provider.protocol ?? "acp",
-      envText: formatEnvText(provider.env),
-    };
-    return acc;
-  }, {});
 
 export type SettingsViewProps = {
   workspaceGroups: WorkspaceGroup[];
@@ -284,7 +177,6 @@ export type SettingsViewProps = {
   ) => Promise<void>;
   scaleShortcutTitle: string;
   scaleShortcutText: string;
-  otherAiModelRegistryByProvider?: Record<string, OtherAiModelRegistryEntry[]>;
   onTestNotificationSound: () => void;
   onTestSystemNotification: () => void;
   dictationModelStatus?: DictationModelStatus | null;
@@ -296,14 +188,13 @@ export type SettingsViewProps = {
 
 type SettingsSection =
   | "projects"
+  | "environments"
   | "display"
   | "composer"
   | "dictation"
   | "shortcuts"
   | "open-apps"
-  | "git"
-  | "mcp"
-  | "other-ai";
+  | "git";
 type CodexSection = SettingsSection | "codex" | "features";
 type ShortcutSettingKey =
   | "composerModelShortcut"
@@ -317,6 +208,7 @@ type ShortcutSettingKey =
   | "archiveThreadShortcut"
   | "toggleProjectsSidebarShortcut"
   | "toggleGitSidebarShortcut"
+  | "branchSwitcherShortcut"
   | "toggleDebugPanelShortcut"
   | "toggleTerminalShortcut"
   | "cycleAgentNextShortcut"
@@ -335,6 +227,7 @@ type ShortcutDraftKey =
   | "archiveThread"
   | "projectsSidebar"
   | "gitSidebar"
+  | "branchSwitcher"
   | "debugPanel"
   | "terminal"
   | "cycleAgentNext"
@@ -356,6 +249,7 @@ const shortcutDraftKeyBySetting: Record<ShortcutSettingKey, ShortcutDraftKey> = 
   archiveThreadShortcut: "archiveThread",
   toggleProjectsSidebarShortcut: "projectsSidebar",
   toggleGitSidebarShortcut: "gitSidebar",
+  branchSwitcherShortcut: "branchSwitcher",
   toggleDebugPanelShortcut: "debugPanel",
   toggleTerminalShortcut: "terminal",
   cycleAgentNextShortcut: "cycleAgentNext",
@@ -427,7 +321,6 @@ export function SettingsView({
   onUpdateWorkspaceSettings,
   scaleShortcutTitle,
   scaleShortcutText,
-  otherAiModelRegistryByProvider = {},
   onTestNotificationSound,
   onTestSystemNotification,
   dictationModelStatus,
@@ -437,7 +330,18 @@ export function SettingsView({
   initialSection,
 }: SettingsViewProps) {
   const [activeSection, setActiveSection] = useState<CodexSection>("projects");
-  const [activeShortcutsTab, setActiveShortcutsTab] = useState<"chat" | "editor">("chat");
+  const [environmentWorkspaceId, setEnvironmentWorkspaceId] = useState<string | null>(
+    null,
+  );
+  const [environmentDraftScript, setEnvironmentDraftScript] = useState("");
+  const [environmentSavedScript, setEnvironmentSavedScript] = useState<string | null>(
+    null,
+  );
+  const [environmentLoadedWorkspaceId, setEnvironmentLoadedWorkspaceId] = useState<
+    string | null
+  >(null);
+  const [environmentError, setEnvironmentError] = useState<string | null>(null);
+  const [environmentSaving, setEnvironmentSaving] = useState(false);
   const [codexPathDraft, setCodexPathDraft] = useState(appSettings.codexBin ?? "");
   const [codexArgsDraft, setCodexArgsDraft] = useState(appSettings.codexArgs ?? "");
   const [remoteHostDraft, setRemoteHostDraft] = useState(appSettings.remoteBackendHost);
@@ -466,12 +370,6 @@ export function SettingsView({
   const [openAppSelectedId, setOpenAppSelectedId] = useState(
     appSettings.selectedOpenAppId,
   );
-  const [otherAiDrafts, setOtherAiDrafts] = useState<
-    Record<string, OtherAiDraft>
-  >(() => buildOtherAiDrafts(appSettings.otherAiProviders));
-  const [otherAiFetchState, setOtherAiFetchState] = useState<
-    Record<string, { loading: boolean }>
-  >({});
   const [doctorState, setDoctorState] = useState<{
     status: "idle" | "running" | "done";
     result: CodexDoctorResult | null;
@@ -514,6 +412,7 @@ export function SettingsView({
     archiveThread: appSettings.archiveThreadShortcut ?? "",
     projectsSidebar: appSettings.toggleProjectsSidebarShortcut ?? "",
     gitSidebar: appSettings.toggleGitSidebarShortcut ?? "",
+    branchSwitcher: appSettings.branchSwitcherShortcut ?? "",
     debugPanel: appSettings.toggleDebugPanelShortcut ?? "",
     terminal: appSettings.toggleTerminalShortcut ?? "",
     cycleAgentNext: appSettings.cycleAgentNextShortcut ?? "",
@@ -559,6 +458,12 @@ export function SettingsView({
   const globalConfigSaveLabel = globalConfigExists ? "Save" : "Create";
   const globalConfigSaveDisabled = globalConfigLoading || globalConfigSaving || !globalConfigDirty;
   const globalConfigRefreshDisabled = globalConfigLoading || globalConfigSaving;
+  const optionKeyLabel = isMacPlatform() ? "Option" : "Alt";
+  const metaKeyLabel = isMacPlatform()
+    ? "Command"
+    : isWindowsPlatform()
+      ? "Windows"
+      : "Meta";
   const selectedDictationModel = useMemo(() => {
     return (
       DICTATION_MODELS.find(
@@ -571,169 +476,33 @@ export function SettingsView({
     () => groupedWorkspaces.flatMap((group) => group.workspaces),
     [groupedWorkspaces],
   );
+  const mainWorkspaces = useMemo(
+    () => projects.filter((workspace) => (workspace.kind ?? "main") !== "worktree"),
+    [projects],
+  );
+  const environmentWorkspace = useMemo(() => {
+    if (mainWorkspaces.length === 0) {
+      return null;
+    }
+    if (environmentWorkspaceId) {
+      const found = mainWorkspaces.find((workspace) => workspace.id === environmentWorkspaceId);
+      if (found) {
+        return found;
+      }
+    }
+    return mainWorkspaces[0] ?? null;
+  }, [environmentWorkspaceId, mainWorkspaces]);
+  const environmentSavedScriptFromWorkspace = useMemo(() => {
+    return normalizeWorktreeSetupScript(environmentWorkspace?.settings.worktreeSetupScript);
+  }, [environmentWorkspace?.settings.worktreeSetupScript]);
+  const environmentDraftNormalized = useMemo(() => {
+    return normalizeWorktreeSetupScript(environmentDraftScript);
+  }, [environmentDraftScript]);
+  const environmentDirty = environmentDraftNormalized !== environmentSavedScript;
   const hasCodexHomeOverrides = useMemo(
     () => projects.some((workspace) => workspace.settings.codexHome != null),
     [projects],
   );
-
-  const [mcpWorkspaceId, setMcpWorkspaceId] = useState<string>("");
-  const [mcpConfigured, setMcpConfigured] = useState<McpServerConfigEntry[]>([]);
-  const [mcpStatus, setMcpStatus] = useState<Array<Record<string, unknown>>>([]);
-  const [mcpLoading, setMcpLoading] = useState(false);
-  const [mcpError, setMcpError] = useState<string | null>(null);
-
-  const parseMcpStatusResponse = useCallback((response: unknown) => {
-    const raw = response as Record<string, unknown> | null;
-    const result = (raw?.result ?? raw) as Record<string, unknown> | null;
-    if (Array.isArray(result?.data)) {
-      return result?.data as Array<Record<string, unknown>>;
-    }
-    return [];
-  }, []);
-
-  const refreshMcp = useCallback(async () => {
-    if (!mcpWorkspaceId) {
-      return;
-    }
-    setMcpLoading(true);
-    setMcpError(null);
-    try {
-      const [configured, statusResponse] = await Promise.all([
-        listConfiguredMcpServers(mcpWorkspaceId),
-        listMcpServerStatus(mcpWorkspaceId, null, null),
-      ]);
-      setMcpConfigured(configured);
-      setMcpStatus(parseMcpStatusResponse(statusResponse));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load MCP servers.";
-      setMcpError(message);
-    } finally {
-      setMcpLoading(false);
-    }
-  }, [mcpWorkspaceId, parseMcpStatusResponse]);
-
-  const handleMcpReload = useCallback(async () => {
-    if (!mcpWorkspaceId) {
-      return;
-    }
-    try {
-      await mcpServerReload(mcpWorkspaceId);
-      await refreshMcp();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to reload MCP servers.";
-      pushErrorToast({ title: "MCP reload failed", message });
-    }
-  }, [mcpWorkspaceId, refreshMcp]);
-
-  const handleMcpOauthLogin = useCallback(
-    async (serverName: string) => {
-      if (!mcpWorkspaceId) {
-        return;
-      }
-      try {
-        await mcpServerOauthLogin(mcpWorkspaceId, serverName);
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to start MCP OAuth login.";
-        pushErrorToast({ title: "MCP login failed", message });
-      }
-    },
-    [mcpWorkspaceId],
-  );
-
-  const handleMcpSetEnabled = useCallback(
-    async (serverName: string, enabled: boolean) => {
-      if (!mcpWorkspaceId) {
-        return;
-      }
-      try {
-        await setMcpServerEnabled(mcpWorkspaceId, serverName, enabled);
-        await refreshMcp();
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to update MCP server settings.";
-        pushErrorToast({ title: "MCP update failed", message });
-      }
-    },
-    [mcpWorkspaceId, refreshMcp],
-  );
-
-  const mcpRows = useMemo(() => {
-    const configuredByName = new Map<string, McpServerConfigEntry>();
-    for (const entry of mcpConfigured) {
-      const name = String(entry.name ?? "").trim();
-      if (name) {
-        configuredByName.set(name, entry);
-      }
-    }
-
-    const statusByName = new Map<string, Record<string, unknown>>();
-    for (const entry of mcpStatus) {
-      const name = String(entry?.name ?? "").trim();
-      if (name) {
-        statusByName.set(name, entry);
-      }
-    }
-
-    const allNames = new Set<string>([
-      ...configuredByName.keys(),
-      ...statusByName.keys(),
-    ]);
-
-    const rows = [...allNames]
-      .map((name) => {
-        const configured = configuredByName.get(name) ?? null;
-        const status = statusByName.get(name) ?? null;
-
-        const enabled = configured?.enabled ?? true;
-
-        const authRaw = status ? (status["authStatus"] ?? status["auth_status"]) : null;
-        const authLabel =
-          typeof authRaw === "string"
-            ? authRaw
-            : authRaw && typeof authRaw === "object" && "status" in authRaw
-              ? String((authRaw as { status?: unknown }).status ?? "")
-              : "";
-
-        const toolsRaw = status ? status["tools"] : null;
-        const toolsRecord =
-          toolsRaw && typeof toolsRaw === "object" && !Array.isArray(toolsRaw)
-            ? (toolsRaw as Record<string, unknown>)
-            : null;
-        const toolsCount = toolsRecord ? Object.keys(toolsRecord).length : 0;
-
-        const resourcesRaw = status ? status["resources"] : null;
-        const resourcesCount = Array.isArray(resourcesRaw) ? resourcesRaw.length : 0;
-        const templatesRaw = status ? (status["resourceTemplates"] ?? status["resource_templates"]) : null;
-        const templatesCount = Array.isArray(templatesRaw) ? templatesRaw.length : 0;
-
-        return {
-          name,
-          enabled,
-          configured,
-          authLabel,
-          toolsCount,
-          resourcesCount,
-          templatesCount,
-        };
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    return rows;
-  }, [mcpConfigured, mcpStatus]);
-
-  useEffect(() => {
-    if (!mcpWorkspaceId && projects.length > 0) {
-      setMcpWorkspaceId(projects[0].id);
-    }
-  }, [mcpWorkspaceId, projects]);
-
-  useEffect(() => {
-    if (activeSection !== "mcp") {
-      return;
-    }
-    void refreshMcp();
-  }, [activeSection, refreshMcp]);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -800,10 +569,6 @@ export function SettingsView({
   }, [appSettings.openAppTargets, appSettings.selectedOpenAppId]);
 
   useEffect(() => {
-    setOtherAiDrafts(buildOtherAiDrafts(appSettings.otherAiProviders));
-  }, [appSettings.otherAiProviders]);
-
-  useEffect(() => {
     setShortcutDrafts({
       model: appSettings.composerModelShortcut ?? "",
       access: appSettings.composerAccessShortcut ?? "",
@@ -816,6 +581,7 @@ export function SettingsView({
       archiveThread: appSettings.archiveThreadShortcut ?? "",
       projectsSidebar: appSettings.toggleProjectsSidebarShortcut ?? "",
       gitSidebar: appSettings.toggleGitSidebarShortcut ?? "",
+      branchSwitcher: appSettings.branchSwitcherShortcut ?? "",
       debugPanel: appSettings.toggleDebugPanelShortcut ?? "",
       terminal: appSettings.toggleTerminalShortcut ?? "",
       cycleAgentNext: appSettings.cycleAgentNextShortcut ?? "",
@@ -835,6 +601,7 @@ export function SettingsView({
     appSettings.archiveThreadShortcut,
     appSettings.toggleProjectsSidebarShortcut,
     appSettings.toggleGitSidebarShortcut,
+    appSettings.branchSwitcherShortcut,
     appSettings.toggleDebugPanelShortcut,
     appSettings.toggleTerminalShortcut,
     appSettings.cycleAgentNextShortcut,
@@ -894,6 +661,48 @@ export function SettingsView({
       setActiveSection(initialSection);
     }
   }, [initialSection]);
+
+  useEffect(() => {
+    if (!environmentWorkspace) {
+      setEnvironmentWorkspaceId(null);
+      setEnvironmentLoadedWorkspaceId(null);
+      setEnvironmentSavedScript(null);
+      setEnvironmentDraftScript("");
+      setEnvironmentError(null);
+      setEnvironmentSaving(false);
+      return;
+    }
+
+    if (environmentWorkspaceId !== environmentWorkspace.id) {
+      setEnvironmentWorkspaceId(environmentWorkspace.id);
+    }
+  }, [environmentWorkspace, environmentWorkspaceId]);
+
+  useEffect(() => {
+    if (!environmentWorkspace) {
+      return;
+    }
+
+    if (environmentLoadedWorkspaceId !== environmentWorkspace.id) {
+      setEnvironmentLoadedWorkspaceId(environmentWorkspace.id);
+      setEnvironmentSavedScript(environmentSavedScriptFromWorkspace);
+      setEnvironmentDraftScript(environmentSavedScriptFromWorkspace ?? "");
+      setEnvironmentError(null);
+      return;
+    }
+
+    if (!environmentDirty && environmentSavedScript !== environmentSavedScriptFromWorkspace) {
+      setEnvironmentSavedScript(environmentSavedScriptFromWorkspace);
+      setEnvironmentDraftScript(environmentSavedScriptFromWorkspace ?? "");
+      setEnvironmentError(null);
+    }
+  }, [
+    environmentDirty,
+    environmentLoadedWorkspaceId,
+    environmentSavedScript,
+    environmentSavedScriptFromWorkspace,
+    environmentWorkspace,
+  ]);
 
   const nextCodexBin = codexPathDraft.trim() ? codexPathDraft.trim() : null;
   const nextCodexArgs = codexArgsDraft.trim() ? codexArgsDraft.trim() : null;
@@ -972,9 +781,9 @@ export function SettingsView({
     });
   };
 
-  const commitUiFont = async (nextValue: string) => {
+  const handleCommitUiFont = async () => {
     const nextFont = normalizeFontFamily(
-      nextValue,
+      uiFontDraft,
       DEFAULT_UI_FONT_FAMILY,
     );
     setUiFontDraft(nextFont);
@@ -987,13 +796,9 @@ export function SettingsView({
     });
   };
 
-  const handleCommitUiFont = async () => {
-    await commitUiFont(uiFontDraft);
-  };
-
-  const commitCodeFont = async (nextValue: string) => {
+  const handleCommitCodeFont = async () => {
     const nextFont = normalizeFontFamily(
-      nextValue,
+      codeFontDraft,
       DEFAULT_CODE_FONT_FAMILY,
     );
     setCodeFontDraft(nextFont);
@@ -1004,10 +809,6 @@ export function SettingsView({
       ...appSettings,
       codeFontFamily: nextFont,
     });
-  };
-
-  const handleCommitCodeFont = async () => {
-    await commitCodeFont(codeFontDraft);
   };
 
   const handleCommitCodeFontSize = async (nextSize: number) => {
@@ -1135,200 +936,6 @@ export function SettingsView({
     void handleCommitOpenApps(next, newTarget.id);
   };
 
-  const normalizeOtherAiProvider = useCallback(
-    (
-      provider: AppSettings["otherAiProviders"][number],
-      draft?: OtherAiDraft,
-    ) => {
-      const nextLabel = draft?.label ?? provider.label;
-      const nextProvider = draft?.provider ?? provider.provider;
-      const nextApiKey = draft?.apiKey ?? provider.apiKey ?? "";
-      const nextCommand = draft?.command ?? provider.command ?? "";
-      const nextArgs = draft?.args ?? provider.args ?? "";
-      const nextModelsText = draft?.modelsText ?? (provider.models ?? []).join("\n");
-      const nextProtocol = draft?.protocol ?? provider.protocol ?? "acp";
-      const nextEnvText = draft?.envText ?? formatEnvText(provider.env);
-      return {
-        id: provider.id,
-        label: (nextLabel ?? provider.id).trim() || provider.id,
-        provider: normalizeProviderType(
-          nextProvider ?? provider.provider,
-          provider.provider,
-        ),
-        enabled: draft?.enabled ?? provider.enabled,
-        apiKey: normalizeTextValue(nextApiKey) ?? null,
-        command: normalizeTextValue(nextCommand) ?? null,
-        args: normalizeTextValue(nextArgs) ?? null,
-        models: parseModelList(nextModelsText),
-        defaultModel: null,
-        protocol: normalizeProtocol(nextProtocol),
-        env: parseEnvText(nextEnvText),
-      };
-    },
-    [],
-  );
-
-  const normalizedOtherAiProviders = useMemo(
-    () =>
-      appSettings.otherAiProviders.map((provider) =>
-        normalizeOtherAiProvider(provider),
-      ),
-    [appSettings.otherAiProviders, normalizeOtherAiProvider],
-  );
-
-  const normalizedOtherAiDrafts = useMemo(
-    () =>
-      appSettings.otherAiProviders.map((provider) =>
-        normalizeOtherAiProvider(provider, otherAiDrafts[provider.id]),
-      ),
-    [appSettings.otherAiProviders, normalizeOtherAiProvider, otherAiDrafts],
-  );
-
-  const otherAiDirty = useMemo(
-    () => JSON.stringify(normalizedOtherAiDrafts) !== JSON.stringify(normalizedOtherAiProviders),
-    [normalizedOtherAiDrafts, normalizedOtherAiProviders],
-  );
-
-  const handleOtherAiDraftChange = (id: string, updates: Partial<OtherAiDraft>) => {
-    setOtherAiDrafts((prev) => ({
-      ...prev,
-      [id]: { ...(prev[id] ?? buildOtherAiDrafts(appSettings.otherAiProviders)[id]), ...updates },
-    }));
-  };
-
-  const handleOtherAiFetchModels = async (
-    provider: AppSettings["otherAiProviders"][number],
-    draft: OtherAiDraft,
-  ) => {
-    const providerType = normalizeProviderType(draft.provider, provider.provider);
-    if (providerType === "custom") {
-      return;
-    }
-    const normalizedProvider = normalizeOtherAiProvider(provider, draft);
-    const cliCommand = normalizedProvider.command?.trim() ?? "";
-    const apiKey = (draft.apiKey ?? provider.apiKey ?? "").trim();
-    const fallbackModels = getFallbackOtherAiModels(providerType);
-    const existingModels = normalizeModelList(normalizedProvider.models ?? []);
-    if (!cliCommand && !apiKey && fallbackModels.length > 0) {
-      handleOtherAiDraftChange(provider.id, {
-        provider: providerType,
-        modelsText: fallbackModels.join("\n"),
-      });
-      return;
-    }
-    setOtherAiFetchState((prev) => ({
-      ...prev,
-      [provider.id]: { loading: true },
-    }));
-    try {
-      const discovery = await discoverOtherAiModels({
-        providerType,
-        apiKey,
-        cliCommand,
-        prefersCli: normalizedProvider.protocol === "cli",
-        env: normalizedProvider.env ?? null,
-        existingModels,
-        fallbackModels,
-        listViaApi: listOtherAiModels,
-        listViaCli: listOtherAiModelsCli,
-      });
-      const normalizedModels = normalizeModelList(discovery.models);
-      handleOtherAiDraftChange(provider.id, {
-        provider: providerType,
-        modelsText: normalizedModels.join("\n"),
-      });
-    } catch (error) {
-      if (fallbackModels.length > 0 && existingModels.length === 0) {
-        handleOtherAiDraftChange(provider.id, {
-          provider: providerType,
-          modelsText: fallbackModels.join("\n"),
-        });
-      }
-      const baseMessage = error instanceof Error ? error.message : String(error);
-      const updateHint = cliCommand
-        ? providerType === "claude"
-          ? "Run `claude update` and retry."
-          : "Run `gemini update` (or your package manager update) and retry."
-        : "";
-      const preservedHint =
-        existingModels.length > 0
-          ? "Keeping your current saved model list."
-          : "Using fallback model list for now.";
-      pushErrorToast({
-        title: "Couldn’t fetch models",
-        message: [baseMessage, updateHint, preservedHint].filter(Boolean).join(" "),
-      });
-    } finally {
-      setOtherAiFetchState((prev) => ({
-        ...prev,
-        [provider.id]: { loading: false },
-      }));
-    }
-  };
-
-  const handleSaveOtherAiProviders = async () => {
-    if (!otherAiDirty) {
-      return;
-    }
-    const nextProviders = appSettings.otherAiProviders.map((provider) =>
-      normalizeOtherAiProvider(provider, otherAiDrafts[provider.id]),
-    );
-    await onUpdateAppSettings({
-      ...appSettings,
-      otherAiProviders: nextProviders,
-    });
-  };
-
-  const handleAddOtherAiProvider = async () => {
-    const id = `custom-${Date.now()}`;
-    const newProvider: AppSettings["otherAiProviders"][number] = {
-      id,
-      label: "Custom",
-      provider: "custom",
-      enabled: false,
-      apiKey: null,
-      command: null,
-      args: null,
-      models: [],
-      defaultModel: null,
-      protocol: "acp",
-      env: null,
-    };
-    const nextProviders = [
-      ...appSettings.otherAiProviders,
-      newProvider,
-    ];
-    setOtherAiDrafts(buildOtherAiDrafts(nextProviders));
-    await onUpdateAppSettings({
-      ...appSettings,
-      otherAiProviders: nextProviders,
-    });
-  };
-
-  const handleRemoveOtherAiProvider = async (providerId: string) => {
-    const target = appSettings.otherAiProviders.find(
-      (provider) => provider.id === providerId,
-    );
-    if (!target || target.provider !== "custom") {
-      return;
-    }
-    const confirmed = await ask(`Remove ${target.label}?`, {
-      title: "Remove provider",
-      kind: "warning",
-    });
-    if (!confirmed) {
-      return;
-    }
-    const nextProviders = appSettings.otherAiProviders.filter(
-      (provider) => provider.id !== providerId,
-    );
-    setOtherAiDrafts(buildOtherAiDrafts(nextProviders));
-    await onUpdateAppSettings({
-      ...appSettings,
-      otherAiProviders: nextProviders,
-    });
-  };
-
   const handleSelectOpenAppDefault = (id: string) => {
     const selectedTarget = openAppDrafts.find((target) => target.id === id);
     if (selectedTarget && !isOpenAppDraftComplete(selectedTarget)) {
@@ -1413,6 +1020,26 @@ export function SettingsView({
       return;
     }
     void updateShortcut(key, value);
+  };
+
+  const handleSaveEnvironmentSetup = async () => {
+    if (!environmentWorkspace || environmentSaving) {
+      return;
+    }
+    const nextScript = environmentDraftNormalized;
+    setEnvironmentSaving(true);
+    setEnvironmentError(null);
+    try {
+      await onUpdateWorkspaceSettings(environmentWorkspace.id, {
+        worktreeSetupScript: nextScript,
+      });
+      setEnvironmentSavedScript(nextScript);
+      setEnvironmentDraftScript(nextScript ?? "");
+    } catch (error) {
+      setEnvironmentError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setEnvironmentSaving(false);
+    }
   };
 
   const trimmedGroupName = newGroupName.trim();
@@ -1511,41 +1138,28 @@ export function SettingsView({
     }
   };
 
-  const uiFontDraftTrimmed = uiFontDraft.trim();
-  const codeFontDraftTrimmed = codeFontDraft.trim();
-  const uiFontIsCustom =
-    uiFontDraftTrimmed.length > 0 &&
-    !UI_FONT_FAMILY_OPTIONS.includes(uiFontDraftTrimmed);
-  const codeFontIsCustom =
-    codeFontDraftTrimmed.length > 0 &&
-    !CODE_FONT_FAMILY_OPTIONS.includes(codeFontDraftTrimmed);
-  const uiFontSelectValue = UI_FONT_FAMILY_OPTIONS.includes(uiFontDraftTrimmed)
-    ? uiFontDraftTrimmed
-    : "custom";
-  const codeFontSelectValue = CODE_FONT_FAMILY_OPTIONS.includes(codeFontDraftTrimmed)
-    ? codeFontDraftTrimmed
-    : "custom";
-  const isInterFontSelected = isInterFontFamily(
-    uiFontSelectValue === "custom" ? uiFontDraftTrimmed : uiFontSelectValue,
-  );
-
   return (
-    <div className="settings-overlay" role="dialog" aria-modal="true">
-      <div className="settings-backdrop" onClick={onClose} />
-      <div className="settings-window">
-        <div className="settings-titlebar">
-          <div className="settings-title">Settings</div>
-          <button
-            type="button"
-            className="ghost icon-button settings-close"
-            onClick={onClose}
-            aria-label="Close settings"
-          >
-            <X aria-hidden />
-          </button>
+    <ModalShell
+      className="settings-overlay"
+      cardClassName="settings-window"
+      onBackdropClick={onClose}
+      ariaLabelledBy="settings-modal-title"
+    >
+      <div className="settings-titlebar">
+        <div className="settings-title" id="settings-modal-title">
+          Settings
         </div>
-        <div className="settings-body">
-          <aside className="settings-sidebar">
+        <button
+          type="button"
+          className="ghost icon-button settings-close"
+          onClick={onClose}
+          aria-label="Close settings"
+        >
+          <X aria-hidden />
+        </button>
+      </div>
+      <div className="settings-body">
+        <aside className="settings-sidebar">
             <button
               type="button"
               className={`settings-nav ${activeSection === "projects" ? "active" : ""}`}
@@ -1553,6 +1167,14 @@ export function SettingsView({
             >
               <LayoutGrid aria-hidden />
               Projects
+            </button>
+            <button
+              type="button"
+              className={`settings-nav ${activeSection === "environments" ? "active" : ""}`}
+              onClick={() => setActiveSection("environments")}
+            >
+              <Layers aria-hidden />
+              Environments
             </button>
             <button
               type="button"
@@ -1609,22 +1231,6 @@ export function SettingsView({
             >
               <TerminalSquare aria-hidden />
               Codex
-            </button>
-            <button
-              type="button"
-              className={`settings-nav ${activeSection === "mcp" ? "active" : ""}`}
-              onClick={() => setActiveSection("mcp")}
-            >
-              <Plug aria-hidden />
-              MCP
-            </button>
-            <button
-              type="button"
-              className={`settings-nav ${activeSection === "other-ai" ? "active" : ""}`}
-              onClick={() => setActiveSection("other-ai")}
-            >
-              <LayoutGrid aria-hidden />
-              Other AI
             </button>
             <button
               type="button"
@@ -1850,6 +1456,109 @@ export function SettingsView({
                 </div>
               </section>
             )}
+            {activeSection === "environments" && (
+              <section className="settings-section">
+                <div className="settings-section-title">Environments</div>
+                <div className="settings-section-subtitle">
+                  Configure per-project setup scripts that run after worktree creation.
+                </div>
+                {mainWorkspaces.length === 0 ? (
+                  <div className="settings-empty">No projects yet.</div>
+                ) : (
+                  <>
+                    <div className="settings-field">
+                      <label
+                        className="settings-field-label"
+                        htmlFor="settings-environment-project"
+                      >
+                        Project
+                      </label>
+                      <select
+                        id="settings-environment-project"
+                        className="settings-select"
+                        value={environmentWorkspace?.id ?? ""}
+                        onChange={(event) => setEnvironmentWorkspaceId(event.target.value)}
+                        disabled={environmentSaving}
+                      >
+                        {mainWorkspaces.map((workspace) => (
+                          <option key={workspace.id} value={workspace.id}>
+                            {workspace.name}
+                          </option>
+                        ))}
+                      </select>
+                      {environmentWorkspace ? (
+                        <div className="settings-help">{environmentWorkspace.path}</div>
+                      ) : null}
+                    </div>
+
+                    <div className="settings-field">
+                      <div className="settings-field-label">Setup script</div>
+                      <div className="settings-help">
+                        Runs once in a dedicated terminal after each new worktree is created.
+                      </div>
+                      {environmentError ? (
+                        <div className="settings-agents-error">{environmentError}</div>
+                      ) : null}
+                      <textarea
+                        className="settings-agents-textarea"
+                        value={environmentDraftScript}
+                        onChange={(event) => setEnvironmentDraftScript(event.target.value)}
+                        placeholder="pnpm install"
+                        spellCheck={false}
+                        disabled={environmentSaving}
+                      />
+                      <div className="settings-field-actions">
+                        <button
+                          type="button"
+                          className="ghost settings-button-compact"
+                          onClick={() => {
+                            const clipboard =
+                              typeof navigator === "undefined" ? null : navigator.clipboard;
+                            if (!clipboard?.writeText) {
+                              pushErrorToast({
+                                title: "Copy failed",
+                                message:
+                                  "Clipboard access is unavailable in this environment. Copy the script manually instead.",
+                              });
+                              return;
+                            }
+
+                            void clipboard.writeText(environmentDraftScript).catch(() => {
+                              pushErrorToast({
+                                title: "Copy failed",
+                                message:
+                                  "Could not write to the clipboard. Copy the script manually instead.",
+                              });
+                            });
+                          }}
+                          disabled={environmentSaving || environmentDraftScript.length === 0}
+                        >
+                          Copy
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost settings-button-compact"
+                          onClick={() => setEnvironmentDraftScript(environmentSavedScript ?? "")}
+                          disabled={environmentSaving || !environmentDirty}
+                        >
+                          Reset
+                        </button>
+                        <button
+                          type="button"
+                          className="primary settings-button-compact"
+                          onClick={() => {
+                            void handleSaveEnvironmentSetup();
+                          }}
+                          disabled={environmentSaving || !environmentDirty}
+                        >
+                          {environmentSaving ? "Saving..." : "Save"}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </section>
+            )}
             {activeSection === "display" && (
               <section className="settings-section">
                 <div className="settings-section-title">Display &amp; Sound</div>
@@ -1967,28 +1676,22 @@ export function SettingsView({
                     UI font family
                   </label>
                   <div className="settings-field-row">
-                    <select
+                    <input
                       id="ui-font-family"
-                      className="settings-select"
-                      value={uiFontSelectValue}
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        if (nextValue === "custom") {
-                          if (!uiFontIsCustom) {
-                            setUiFontDraft("");
-                          }
-                          return;
-                        }
-                        void commitUiFont(nextValue);
+                      type="text"
+                      className="settings-input"
+                      value={uiFontDraft}
+                      onChange={(event) => setUiFontDraft(event.target.value)}
+                      onBlur={() => {
+                        void handleCommitUiFont();
                       }}
-                    >
-                      {UI_FONT_FAMILY_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                      <option value="custom">Custom…</option>
-                    </select>
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void handleCommitUiFont();
+                        }
+                      }}
+                    />
                     <button
                       type="button"
                       className="ghost settings-button-compact"
@@ -2003,25 +1706,6 @@ export function SettingsView({
                       Reset
                     </button>
                   </div>
-                  {uiFontSelectValue === "custom" ? (
-                    <input
-                      aria-label="Custom UI font family"
-                      type="text"
-                      className="settings-input"
-                      value={uiFontDraft}
-                      placeholder="Custom UI font family"
-                      onChange={(event) => setUiFontDraft(event.target.value)}
-                      onBlur={() => {
-                        void handleCommitUiFont();
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void handleCommitUiFont();
-                        }
-                      }}
-                    />
-                  ) : null}
                   <div className="settings-help">
                     Applies to all UI text. Leave empty to use the default system font stack.
                   </div>
@@ -2031,28 +1715,22 @@ export function SettingsView({
                     Code font family
                   </label>
                   <div className="settings-field-row">
-                    <select
+                    <input
                       id="code-font-family"
-                      className="settings-select"
-                      value={codeFontSelectValue}
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        if (nextValue === "custom") {
-                          if (!codeFontIsCustom) {
-                            setCodeFontDraft("");
-                          }
-                          return;
-                        }
-                        void commitCodeFont(nextValue);
+                      type="text"
+                      className="settings-input"
+                      value={codeFontDraft}
+                      onChange={(event) => setCodeFontDraft(event.target.value)}
+                      onBlur={() => {
+                        void handleCommitCodeFont();
                       }}
-                    >
-                      {CODE_FONT_FAMILY_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                      <option value="custom">Custom…</option>
-                    </select>
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void handleCommitCodeFont();
+                        }
+                      }}
+                    />
                     <button
                       type="button"
                       className="ghost settings-button-compact"
@@ -2067,85 +1745,10 @@ export function SettingsView({
                       Reset
                     </button>
                   </div>
-                  {codeFontSelectValue === "custom" ? (
-                    <input
-                      aria-label="Custom code font family"
-                      type="text"
-                      className="settings-input"
-                      value={codeFontDraft}
-                      placeholder="Custom code font family"
-                      onChange={(event) => setCodeFontDraft(event.target.value)}
-                      onBlur={() => {
-                        void handleCommitCodeFont();
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void handleCommitCodeFont();
-                        }
-                      }}
-                    />
-                  ) : null}
                   <div className="settings-help">
                     Applies to git diffs and other mono-spaced readouts.
                   </div>
                 </div>
-                {isInterFontSelected ? (
-                  <div className="settings-field">
-                    <div className="settings-field-label">Inter font features</div>
-                    <div className="settings-help">
-                      Applies only when Inter is selected for UI text.
-                    </div>
-                    {INTER_FONT_FEATURES.map((feature) => {
-                      const isEnabled =
-                        appSettings.interFontFeatures?.[feature.tag] ?? feature.enabledByDefault;
-                      return (
-                        <div key={feature.tag} className="settings-toggle-row">
-                          <div>
-                            <div className="settings-toggle-title">
-                              {feature.tag} {feature.label}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            className={`settings-toggle ${isEnabled ? "on" : ""}`}
-                            onClick={() => {
-                              void onUpdateAppSettings({
-                                ...appSettings,
-                                interFontFeatures: {
-                                  ...appSettings.interFontFeatures,
-                                  [feature.tag]: !isEnabled,
-                                },
-                              });
-                            }}
-                          >
-                            <span className="settings-toggle-knob" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                    <div className="settings-field-row">
-                      <button
-                        type="button"
-                        className="ghost settings-button-compact"
-                        onClick={() => {
-                          void onUpdateAppSettings({
-                            ...appSettings,
-                            interFontFeatures: INTER_FONT_FEATURES.reduce(
-                              (acc, feature) => {
-                                acc[feature.tag] = feature.enabledByDefault;
-                                return acc;
-                              },
-                              {} as Record<string, boolean>,
-                            ),
-                          });
-                        }}
-                      >
-                        Reset features
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
                 <div className="settings-field">
                   <label className="settings-field-label" htmlFor="code-font-size">
                     Code font size
@@ -2210,7 +1813,7 @@ export function SettingsView({
                   <div>
                     <div className="settings-toggle-title">System notifications</div>
                     <div className="settings-toggle-subtitle">
-                      Show a macOS notification when a long-running agent finishes while the window is unfocused.
+                      Show a system notification when a long-running agent finishes while the window is unfocused.
                     </div>
                   </div>
                   <button
@@ -2369,7 +1972,7 @@ export function SettingsView({
                   <div>
                     <div className="settings-toggle-title">Copy blocks without fences</div>
                     <div className="settings-toggle-subtitle">
-                      When enabled, Copy is plain text. Hold Option to include ``` fences.
+                      When enabled, Copy is plain text. Hold {optionKeyLabel} to include ``` fences.
                     </div>
                   </div>
                   <button
@@ -2580,10 +2183,10 @@ export function SettingsView({
                     }
                   >
                     <option value="">Off</option>
-                    <option value="alt">Option / Alt</option>
+                    <option value="alt">{optionKeyLabel}</option>
                     <option value="shift">Shift</option>
                     <option value="control">Control</option>
-                    <option value="meta">Command / Meta</option>
+                    <option value="meta">{metaKeyLabel}</option>
                   </select>
                   <div className="settings-help">
                     Hold the key to start dictation, release to stop and process.
@@ -2666,492 +2269,472 @@ export function SettingsView({
                 <div className="settings-section-subtitle">
                   Customize keyboard shortcuts for file actions, composer, panels, and navigation.
                 </div>
-                <div className="settings-shortcuts-tabs" role="tablist" aria-label="Shortcut tabs">
-                  <button
-                    type="button"
-                    className={`settings-shortcuts-tab${
-                      activeShortcutsTab === "chat" ? " active" : ""
-                    }`}
-                    role="tab"
-                    aria-selected={activeShortcutsTab === "chat"}
-                    onClick={() => setActiveShortcutsTab("chat")}
-                  >
-                    Chat
-                  </button>
-                  <button
-                    type="button"
-                    className={`settings-shortcuts-tab${
-                      activeShortcutsTab === "editor" ? " active" : ""
-                    }`}
-                    role="tab"
-                    aria-selected={activeShortcutsTab === "editor"}
-                    onClick={() => setActiveShortcutsTab("editor")}
-                  >
-                    Editor
-                  </button>
+                <div className="settings-subsection-title">File</div>
+                <div className="settings-subsection-subtitle">
+                  Create agents and worktrees from the keyboard.
                 </div>
-                {activeShortcutsTab === "chat" ? (
-                  <>
-                    <div className="settings-subsection-title">File</div>
-                    <div className="settings-subsection-subtitle">
-                      Create agents and worktrees from the keyboard.
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">New Agent</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.newAgent)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "newAgentShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("newAgentShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Default: {formatShortcut("cmd+n")}
-                      </div>
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">New Worktree Agent</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.newWorktreeAgent)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "newWorktreeAgentShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("newWorktreeAgentShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Default: {formatShortcut("cmd+shift+n")}
-                      </div>
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">New Clone Agent</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.newCloneAgent)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "newCloneAgentShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("newCloneAgentShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Default: {formatShortcut("cmd+alt+n")}
-                      </div>
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">Archive active thread</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.archiveThread)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "archiveThreadShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("archiveThreadShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Default: {formatShortcut("cmd+ctrl+a")}
-                      </div>
-                    </div>
-                    <div className="settings-divider" />
-                    <div className="settings-subsection-title">Composer</div>
-                    <div className="settings-subsection-subtitle">
-                      Cycle between model, access, reasoning, and collaboration modes.
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">Cycle model</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.model)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "composerModelShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("composerModelShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Press a new shortcut while focused. Default:{" "}
-                        {formatShortcut("cmd+shift+m")}
-                      </div>
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">Cycle access mode</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.access)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "composerAccessShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("composerAccessShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Default: {formatShortcut("cmd+shift+a")}
-                      </div>
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">Cycle reasoning mode</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.reasoning)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "composerReasoningShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("composerReasoningShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Default: {formatShortcut("cmd+shift+r")}
-                      </div>
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">Cycle collaboration mode</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.collaboration)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "composerCollaborationShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("composerCollaborationShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Default: {formatShortcut("shift+tab")}
-                      </div>
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">Stop active run</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.interrupt)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "interruptShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("interruptShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Default: {formatShortcut(getDefaultInterruptShortcut())}
-                      </div>
-                    </div>
-                    <div className="settings-divider" />
-                    <div className="settings-subsection-title">Panels</div>
-                    <div className="settings-subsection-subtitle">
-                      Toggle sidebars and panels.
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">Toggle projects sidebar</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.projectsSidebar)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "toggleProjectsSidebarShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("toggleProjectsSidebarShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Default: {formatShortcut("cmd+shift+p")}
-                      </div>
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">Toggle git sidebar</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.gitSidebar)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "toggleGitSidebarShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("toggleGitSidebarShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Default: {formatShortcut("cmd+shift+g")}
-                      </div>
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">Toggle debug panel</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.debugPanel)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "toggleDebugPanelShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("toggleDebugPanelShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Default: {formatShortcut("cmd+shift+d")}
-                      </div>
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">Toggle terminal panel</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.terminal)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "toggleTerminalShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("toggleTerminalShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Default: {formatShortcut("cmd+shift+t")}
-                      </div>
-                    </div>
-                    <div className="settings-divider" />
-                    <div className="settings-subsection-title">Navigation</div>
-                    <div className="settings-subsection-subtitle">
-                      Cycle between agents and workspaces.
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">Next agent</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.cycleAgentNext)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "cycleAgentNextShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("cycleAgentNextShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Default: {formatShortcut("cmd+ctrl+down")}
-                      </div>
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">Previous agent</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.cycleAgentPrev)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "cycleAgentPrevShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("cycleAgentPrevShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Default: {formatShortcut("cmd+ctrl+up")}
-                      </div>
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">Next workspace</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.cycleWorkspaceNext)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "cycleWorkspaceNextShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("cycleWorkspaceNextShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Default: {formatShortcut("cmd+shift+down")}
-                      </div>
-                    </div>
-                    <div className="settings-field">
-                      <div className="settings-field-label">Previous workspace</div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input settings-input--shortcut"
-                          value={formatShortcut(shortcutDrafts.cycleWorkspacePrev)}
-                          onKeyDown={(event) =>
-                            handleShortcutKeyDown(event, "cycleWorkspacePrevShortcut")
-                          }
-                          placeholder="Type shortcut"
-                          readOnly
-                        />
-                        <button
-                          type="button"
-                          className="ghost settings-button-compact"
-                          onClick={() => void updateShortcut("cycleWorkspacePrevShortcut", null)}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="settings-help">
-                        Default: {formatShortcut("cmd+shift+up")}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="settings-subsection-title">Editor</div>
-                    <div className="settings-subsection-subtitle">
-                      Choose the keymap used inside the code editor.
-                    </div>
-                    <div className="settings-field">
-                      <label className="settings-field-label" htmlFor="editor-keymap">
-                        Keymap
-                      </label>
-                      <select
-                        id="editor-keymap"
-                        className="settings-select"
-                        value={appSettings.editorKeymap}
-                        onChange={(event) =>
-                          void onUpdateAppSettings({
-                            ...appSettings,
-                            editorKeymap: event.target.value as AppSettings["editorKeymap"],
-                          })
-                        }
-                      >
-                        {EDITOR_KEYMAP_OPTIONS.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="settings-help">Default: JetBrains</div>
-                    </div>
-                  </>
-                )}
+                <div className="settings-field">
+                  <div className="settings-field-label">New Agent</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.newAgent)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "newAgentShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("newAgentShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+n")}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">New Worktree Agent</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.newWorktreeAgent)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "newWorktreeAgentShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("newWorktreeAgentShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+shift+n")}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">New Clone Agent</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.newCloneAgent)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "newCloneAgentShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("newCloneAgentShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+alt+n")}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Archive active thread</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.archiveThread)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "archiveThreadShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("archiveThreadShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default:{" "}
+                    {formatShortcut(isMacPlatform() ? "cmd+ctrl+a" : "ctrl+alt+a")}
+                  </div>
+                </div>
+                <div className="settings-divider" />
+                <div className="settings-subsection-title">Composer</div>
+                <div className="settings-subsection-subtitle">
+                  Cycle between model, access, reasoning, and collaboration modes.
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Cycle model</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.model)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "composerModelShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("composerModelShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Press a new shortcut while focused. Default: {formatShortcut("cmd+shift+m")}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Cycle access mode</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.access)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "composerAccessShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("composerAccessShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+shift+a")}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Cycle reasoning mode</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.reasoning)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "composerReasoningShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("composerReasoningShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+shift+r")}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Cycle collaboration mode</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.collaboration)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "composerCollaborationShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("composerCollaborationShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("shift+tab")}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Stop active run</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.interrupt)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "interruptShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("interruptShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut(getDefaultInterruptShortcut())}
+                  </div>
+                </div>
+                <div className="settings-divider" />
+                <div className="settings-subsection-title">Panels</div>
+                <div className="settings-subsection-subtitle">
+                  Toggle sidebars and panels.
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Toggle projects sidebar</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.projectsSidebar)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "toggleProjectsSidebarShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("toggleProjectsSidebarShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+shift+p")}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Toggle git sidebar</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.gitSidebar)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "toggleGitSidebarShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("toggleGitSidebarShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+shift+g")}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Branch switcher</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.branchSwitcher)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "branchSwitcherShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("branchSwitcherShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+b")}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Toggle debug panel</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.debugPanel)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "toggleDebugPanelShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("toggleDebugPanelShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+shift+d")}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Toggle terminal panel</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.terminal)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "toggleTerminalShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("toggleTerminalShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+shift+t")}
+                  </div>
+                </div>
+                <div className="settings-divider" />
+                <div className="settings-subsection-title">Navigation</div>
+                <div className="settings-subsection-subtitle">
+                  Cycle between agents and workspaces.
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Next agent</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.cycleAgentNext)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "cycleAgentNextShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("cycleAgentNextShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default:{" "}
+                    {formatShortcut(
+                      isMacPlatform() ? "cmd+ctrl+down" : "ctrl+alt+down",
+                    )}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Previous agent</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.cycleAgentPrev)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "cycleAgentPrevShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("cycleAgentPrevShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default:{" "}
+                    {formatShortcut(
+                      isMacPlatform() ? "cmd+ctrl+up" : "ctrl+alt+up",
+                    )}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Next workspace</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.cycleWorkspaceNext)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "cycleWorkspaceNextShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("cycleWorkspaceNextShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default:{" "}
+                    {formatShortcut(
+                      isMacPlatform()
+                        ? "cmd+shift+down"
+                        : "ctrl+alt+shift+down",
+                    )}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Previous workspace</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.cycleWorkspacePrev)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "cycleWorkspacePrevShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("cycleWorkspacePrevShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default:{" "}
+                    {formatShortcut(
+                      isMacPlatform() ? "cmd+shift+up" : "ctrl+alt+shift+up",
+                    )}
+                  </div>
+                </div>
               </section>
             )}
             {activeSection === "open-apps" && (
@@ -3229,7 +2812,7 @@ export function SettingsView({
                             >
                               <option value="app">App</option>
                               <option value="command">Command</option>
-                              <option value="finder">Finder</option>
+                              <option value="finder">{fileManagerName()}</option>
                             </select>
                           </label>
                           {target.kind === "app" && (
@@ -3356,8 +2939,10 @@ export function SettingsView({
                     Add app
                   </button>
                   <div className="settings-help">
-                    Commands receive the selected path as the final argument. Apps use macOS open
-                    with optional args.
+                    Commands receive the selected path as the final argument.{" "}
+                    {isMacPlatform()
+                      ? "Apps open via `open -a` with optional args."
+                      : "Apps run as an executable with optional args."}
                   </div>
                 </div>
               </section>
@@ -3389,13 +2974,34 @@ export function SettingsView({
                     <span className="settings-toggle-knob" />
                   </button>
                 </div>
+                <div className="settings-toggle-row">
+                  <div>
+                    <div className="settings-toggle-title">Ignore whitespace changes</div>
+                    <div className="settings-toggle-subtitle">
+                      Hides whitespace-only changes in local and commit diffs.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`settings-toggle ${appSettings.gitDiffIgnoreWhitespaceChanges ? "on" : ""}`}
+                    onClick={() =>
+                      void onUpdateAppSettings({
+                        ...appSettings,
+                        gitDiffIgnoreWhitespaceChanges: !appSettings.gitDiffIgnoreWhitespaceChanges,
+                      })
+                    }
+                    aria-pressed={appSettings.gitDiffIgnoreWhitespaceChanges}
+                  >
+                    <span className="settings-toggle-knob" />
+                  </button>
+                </div>
               </section>
             )}
             {activeSection === "codex" && (
               <section className="settings-section">
                 <div className="settings-section-title">Codex</div>
                 <div className="settings-section-subtitle">
-                  Configure the Codex CLI used by Fridex and validate the install.
+                  Configure the Codex CLI used by CodexMonitor and validate the install.
                 </div>
                 <div className="settings-field">
                   <label className="settings-field-label" htmlFor="codex-path">
@@ -3611,7 +3217,7 @@ export function SettingsView({
                       />
                     </div>
                     <div className="settings-help">
-                      Start the daemon separately and point Fridex to it (host:port + token).
+                      Start the daemon separately and point CodexMonitor to it (host:port + token).
                     </div>
                   </div>
                 )}
@@ -3837,11 +3443,11 @@ export function SettingsView({
                   <div>
                     <div className="settings-toggle-title">Config file</div>
                     <div className="settings-toggle-subtitle">
-                      Open the Codex config in Finder.
+                      Open the Codex config in {fileManagerName()}.
                     </div>
                   </div>
                   <button type="button" className="ghost" onClick={handleOpenConfig}>
-                    Open in Finder
+                    {openInFileManagerLabel()}
                   </button>
                 </div>
                 {openConfigError && (
@@ -3899,6 +3505,48 @@ export function SettingsView({
                     <option value="pragmatic">Pragmatic</option>
                   </select>
                 </div>
+                <div className="settings-toggle-row">
+                  <div>
+                    <div className="settings-toggle-title">Steer mode</div>
+                    <div className="settings-toggle-subtitle">
+                      Send messages immediately. Use Tab to queue while a run is active.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`settings-toggle ${appSettings.steerEnabled ? "on" : ""}`}
+                    onClick={() =>
+                      void onUpdateAppSettings({
+                        ...appSettings,
+                        steerEnabled: !appSettings.steerEnabled,
+                      })
+                    }
+                    aria-pressed={appSettings.steerEnabled}
+                  >
+                    <span className="settings-toggle-knob" />
+                  </button>
+                </div>
+                <div className="settings-toggle-row">
+                  <div>
+                    <div className="settings-toggle-title">Background terminal</div>
+                    <div className="settings-toggle-subtitle">
+                      Run long-running terminal commands in the background.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`settings-toggle ${appSettings.unifiedExecEnabled ? "on" : ""}`}
+                    onClick={() =>
+                      void onUpdateAppSettings({
+                        ...appSettings,
+                        unifiedExecEnabled: !appSettings.unifiedExecEnabled,
+                      })
+                    }
+                    aria-pressed={appSettings.unifiedExecEnabled}
+                  >
+                    <span className="settings-toggle-knob" />
+                  </button>
+                </div>
                 <div className="settings-subsection-title">Experimental Features</div>
                 <div className="settings-subsection-subtitle">
                   Preview features that may change or be removed.
@@ -3945,388 +3593,10 @@ export function SettingsView({
                     <span className="settings-toggle-knob" />
                   </button>
                 </div>
-                <div className="settings-toggle-row">
-                  <div>
-                    <div className="settings-toggle-title">Background terminal</div>
-                    <div className="settings-toggle-subtitle">
-                      Run long-running terminal commands in the background.
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`settings-toggle ${appSettings.experimentalUnifiedExecEnabled ? "on" : ""}`}
-                    onClick={() =>
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        experimentalUnifiedExecEnabled: !appSettings.experimentalUnifiedExecEnabled,
-                      })
-                    }
-                    aria-pressed={appSettings.experimentalUnifiedExecEnabled}
-                  >
-                    <span className="settings-toggle-knob" />
-                  </button>
-                </div>
-                <div className="settings-toggle-row">
-                  <div>
-                    <div className="settings-toggle-title">Steer mode</div>
-                    <div className="settings-toggle-subtitle">
-                      Send messages immediately. Use Tab to queue while a run is active.
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`settings-toggle ${appSettings.experimentalSteerEnabled ? "on" : ""}`}
-                    onClick={() =>
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        experimentalSteerEnabled: !appSettings.experimentalSteerEnabled,
-                      })
-                    }
-                    aria-pressed={appSettings.experimentalSteerEnabled}
-                  >
-                    <span className="settings-toggle-knob" />
-                  </button>
-                </div>
-              </section>
-            )}
-            {activeSection === "mcp" && (
-              <section className="settings-section">
-                <div className="settings-section-title">MCP</div>
-                <div className="settings-section-subtitle">
-                  MCP servers are shared across all AI systems. Manage them per workspace.
-                </div>
-                <div className="settings-field">
-                  <div className="settings-field-label">MCP servers</div>
-                  <div className="settings-field-row">
-                    <select
-                      className="settings-select"
-                      value={mcpWorkspaceId}
-                      onChange={(event) => setMcpWorkspaceId(event.target.value)}
-                      aria-label="MCP workspace"
-                    >
-                      <option value="">Select a workspace…</option>
-                      {projects.map((workspace) => (
-                        <option key={workspace.id} value={workspace.id}>
-                          {workspace.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() => {
-                        void refreshMcp();
-                      }}
-                      disabled={mcpLoading || !mcpWorkspaceId}
-                    >
-                      Refresh
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() => {
-                        void handleMcpReload();
-                      }}
-                      disabled={mcpLoading || !mcpWorkspaceId}
-                    >
-                      Reload
-                    </button>
-                  </div>
-                  <div className="settings-help">
-                    Per-workspace view based on that workspace&apos;s resolved{" "}
-                    <code>CODEX_HOME/config.toml</code>. Reload applies changes to the running
-                    app-server session.
-                  </div>
-                  {mcpError && <div className="settings-help">{mcpError}</div>}
-
-                  <div className="settings-overrides">
-                    {mcpRows.map((row) => (
-                      <div key={row.name} className="settings-override-row">
-                        <div className="settings-override-info">
-                          <div className="settings-project-name">{row.name}</div>
-                          <div className="settings-project-path">
-                            {(row.configured ? "Configured" : "Not in config.toml") +
-                              (row.authLabel ? ` · auth: ${row.authLabel}` : "") +
-                              (row.toolsCount > 0 ? ` · tools: ${row.toolsCount}` : "") +
-                              (row.resourcesCount > 0 || row.templatesCount > 0
-                                ? ` · resources: ${row.resourcesCount}, templates: ${row.templatesCount}`
-                                : "")}
-                          </div>
-                        </div>
-                        <div className="settings-override-actions">
-                          <div className="settings-override-field">
-                            <button
-                              type="button"
-                              className={`settings-toggle ${row.enabled ? "on" : ""}`}
-                              onClick={() => {
-                                void handleMcpSetEnabled(row.name, !row.enabled);
-                              }}
-                              aria-pressed={row.enabled}
-                              disabled={mcpLoading || !mcpWorkspaceId}
-                              aria-label={`Toggle MCP server ${row.name}`}
-                            >
-                              <span className="settings-toggle-knob" />
-                            </button>
-                            <button
-                              type="button"
-                              className="ghost"
-                              onClick={() => {
-                                void handleMcpOauthLogin(row.name);
-                              }}
-                              disabled={mcpLoading || !mcpWorkspaceId}
-                            >
-                              Login
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {!mcpLoading && mcpRows.length === 0 && (
-                      <div className="settings-empty">No MCP servers found.</div>
-                    )}
-                  </div>
-                </div>
-              </section>
-            )}
-            {activeSection === "other-ai" && (
-              <section className="settings-section">
-                <div className="settings-section-title">Other AI</div>
-                <div className="settings-section-subtitle">
-                  Configure external providers and expose their models in the composer.
-                </div>
-                <div className="settings-toggle-row">
-                  <div>
-                    <div className="settings-toggle-title">Auto-refresh models on launch</div>
-                    <div className="settings-toggle-subtitle">
-                      Fetches the latest provider model list when the app starts.
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`settings-toggle ${
-                      appSettings.otherAiAutoRefreshEnabled ? "on" : ""
-                    }`}
-                    onClick={() =>
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        otherAiAutoRefreshEnabled:
-                          !appSettings.otherAiAutoRefreshEnabled,
-                      })
-                    }
-                    aria-pressed={appSettings.otherAiAutoRefreshEnabled}
-                  >
-                    <span className="settings-toggle-knob" />
-                  </button>
-                </div>
-                {appSettings.otherAiProviders.map((provider) => {
-                  const draft = otherAiDrafts[provider.id] ?? {
-                    id: provider.id,
-                    label: provider.label ?? provider.id,
-                    provider: provider.provider,
-                    enabled: provider.enabled,
-                    apiKey: provider.apiKey ?? "",
-                    command: provider.command ?? "",
-                    args: provider.args ?? "",
-                    modelsText: (provider.models ?? []).join("\n"),
-                    protocol: provider.protocol ?? "acp",
-                    envText: formatEnvText(provider.env),
-                  };
-                  const fetchState = otherAiFetchState[provider.id];
-                  const registryRows = otherAiModelRegistryByProvider[provider.id] ?? [];
-                  const discoverySource = registryRows[0]?.source ?? null;
-                  const discoveryLabel = discoverySource
-                    ? discoverySource === "cli"
-                      ? "CLI"
-                      : discoverySource === "api"
-                        ? "API"
-                        : discoverySource === "fallback"
-                          ? "Fallback"
-                          : "Existing"
-                    : null;
-                  return (
-                    <div key={provider.id} className="settings-field">
-                      <div className="settings-toggle-row">
-                        <div>
-                          <div className="settings-toggle-title">
-                            {draft.label || provider.id}
-                          </div>
-                          <div className="settings-toggle-subtitle">
-                            Provider ID: {provider.id}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          className={`settings-toggle ${draft.enabled ? "on" : ""}`}
-                          onClick={() => {
-                            const nextEnabled = !draft.enabled;
-                            setOtherAiDrafts((prev) => ({
-                              ...prev,
-                              [provider.id]: { ...draft, enabled: nextEnabled },
-                            }));
-                          }}
-                        >
-                          <span className="settings-toggle-knob" />
-                        </button>
-                      </div>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input"
-                          value={draft.label}
-                          placeholder="Provider label"
-                          onChange={(event) =>
-                            handleOtherAiDraftChange(provider.id, {
-                              label: event.target.value,
-                            })
-                          }
-                        />
-                        <select
-                          className="settings-select settings-input--compact"
-                          value={draft.provider}
-                          onChange={(event) =>
-                            handleOtherAiDraftChange(provider.id, {
-                              provider: event.target.value,
-                            })
-                          }
-                        >
-                          <option value="claude">Claude</option>
-                          <option value="gemini">Gemini</option>
-                          <option value="custom">Custom</option>
-                        </select>
-                        {provider.provider === "custom" && (
-                          <button
-                            type="button"
-                            className="ghost"
-                            onClick={() => void handleRemoveOtherAiProvider(provider.id)}
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                      {draft.provider !== "custom" && (
-                        <>
-                          <label className="settings-field-label">API Key</label>
-                          <input
-                            type="password"
-                            className="settings-input"
-                            value={draft.apiKey}
-                            placeholder={draft.provider === "claude" ? "sk-ant-..." : "AI..."}
-                            onChange={(event) =>
-                              handleOtherAiDraftChange(provider.id, {
-                                apiKey: event.target.value,
-                              })
-                            }
-                          />
-                          <div className="settings-help">
-                            Required for fetching models. Stored locally.
-                          </div>
-                        </>
-                      )}
-                      <label className="settings-field-label">CLI command</label>
-                      <div className="settings-field-row">
-                        <input
-                          className="settings-input"
-                          value={draft.command}
-                          placeholder="claude"
-                          onChange={(event) =>
-                            handleOtherAiDraftChange(provider.id, {
-                              command: event.target.value,
-                            })
-                          }
-                        />
-                        <input
-                          className="settings-input"
-                          value={draft.args}
-                          placeholder="--output-format stream-json"
-                          onChange={(event) =>
-                            handleOtherAiDraftChange(provider.id, {
-                              args: event.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="settings-help">
-                        Use {"{prompt}"} to inject the prompt into args; otherwise the prompt is sent
-                        via stdin. Keep Claude CLI output set to stream JSON.
-                      </div>
-                      <label className="settings-field-label">Protocol</label>
-                      <select
-                        className="settings-select"
-                        value={draft.protocol}
-                        onChange={(event) =>
-                          handleOtherAiDraftChange(provider.id, {
-                            protocol: event.target.value,
-                          })
-                        }
-                      >
-                        <option value="acp">ACP (recommended)</option>
-                        <option value="api">API</option>
-                        <option value="cli">CLI</option>
-                      </select>
-                      <label className="settings-field-label">Env (KEY=VALUE)</label>
-                      <textarea
-                        className="settings-input"
-                        rows={3}
-                        value={draft.envText}
-                        placeholder="API_KEY=...\nREGION=us"
-                        onChange={(event) =>
-                          handleOtherAiDraftChange(provider.id, {
-                            envText: event.target.value,
-                          })
-                        }
-                      />
-                      <div className="settings-field-row">
-                        <label className="settings-field-label">Models</label>
-                        <button
-                          type="button"
-                          className="ghost"
-                          disabled={draft.provider === "custom" || fetchState?.loading}
-                          onClick={() => void handleOtherAiFetchModels(provider, draft)}
-                        >
-                          {fetchState?.loading ? "Fetching..." : "Fetch models"}
-                        </button>
-                      </div>
-                      <textarea
-                        className="settings-input"
-                        rows={4}
-                        value={draft.modelsText}
-                        placeholder="model-1&#10;model-2"
-                        onChange={(event) =>
-                          handleOtherAiDraftChange(provider.id, {
-                            modelsText: event.target.value,
-                          })
-                        }
-                      />
-                      <div className="settings-help">
-                        One model per line or comma-separated. These appear in the model picker.
-                        Uses API discovery for Claude/Gemini when you fetch.
-                        {discoveryLabel ? ` Last discovery source: ${discoveryLabel}.` : ""}
-                      </div>
-                    </div>
-                  );
-                })}
-                <div className="settings-field-actions">
-                  {otherAiDirty && (
-                    <button
-                      type="button"
-                      className="primary"
-                      onClick={() => void handleSaveOtherAiProviders()}
-                    >
-                      Save
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() => void handleAddOtherAiProvider()}
-                  >
-                    Add provider
-                  </button>
-                </div>
               </section>
             )}
           </div>
-        </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

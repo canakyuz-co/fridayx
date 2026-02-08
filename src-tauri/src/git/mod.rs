@@ -8,20 +8,20 @@ use tauri::State;
 
 use crate::shared::process_core::tokio_command;
 use crate::git_utils::{
-    checkout_branch, commit_to_entry, diff_patch_to_string, diff_stats_for_path,
-    image_mime_type, list_git_roots as scan_git_roots, parse_github_repo, resolve_git_root,
+    checkout_branch, commit_to_entry, diff_patch_to_string, diff_stats_for_path, image_mime_type,
+    list_git_roots as scan_git_roots, parse_github_repo, resolve_git_root,
 };
 use crate::state::AppState;
 use crate::types::{
-    BranchInfo, GitCommandReport, GitCommitDiff, GitFileDiff, GitFileStatus, GitHubIssue,
-    GitHubIssuesResponse, GitHubPullRequest, GitHubPullRequestComment, GitHubPullRequestDiff,
+    BranchInfo, GitCommitDiff, GitFileDiff, GitFileStatus, GitHubIssue, GitHubIssuesResponse,
+    GitHubPullRequest, GitHubPullRequestComment, GitHubPullRequestDiff,
     GitHubPullRequestsResponse, GitLogResponse,
 };
 use crate::utils::{git_env_path, normalize_git_path, resolve_git_binary};
 
 const INDEX_SKIP_WORKTREE_FLAG: u16 = 0x4000;
 const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
-const MAX_GIT_OUTPUT_BYTES: usize = 80 * 1024;
+const MAX_TEXT_DIFF_BYTES: usize = 2 * 1024 * 1024;
 
 fn encode_image_base64(data: &[u8]) -> Option<String> {
     if data.len() > MAX_IMAGE_BYTES {
@@ -44,6 +44,41 @@ fn read_image_base64(path: &Path) -> Option<String> {
     }
     let data = fs::read(path).ok()?;
     encode_image_base64(&data)
+}
+
+fn bytes_look_binary(bytes: &[u8]) -> bool {
+    bytes.iter().take(8192).any(|byte| *byte == 0)
+}
+
+fn split_lines_preserving_newlines(content: &str) -> Vec<String> {
+    if content.is_empty() {
+        return Vec::new();
+    }
+    content
+        .split_inclusive('\n')
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn blob_to_lines(blob: git2::Blob<'_>) -> Option<Vec<String>> {
+    if blob.size() > MAX_TEXT_DIFF_BYTES || blob.is_binary() {
+        return None;
+    }
+    let content = String::from_utf8_lossy(blob.content());
+    Some(split_lines_preserving_newlines(content.as_ref()))
+}
+
+fn read_text_lines(path: &Path) -> Option<Vec<String>> {
+    let metadata = fs::metadata(path).ok()?;
+    if metadata.len() > MAX_TEXT_DIFF_BYTES as u64 {
+        return None;
+    }
+    let data = fs::read(path).ok()?;
+    if bytes_look_binary(&data) {
+        return None;
+    }
+    let content = String::from_utf8_lossy(&data);
+    Some(split_lines_preserving_newlines(content.as_ref()))
 }
 
 async fn run_git_command(repo_root: &Path, args: &[&str]) -> Result<(), String> {
@@ -71,119 +106,6 @@ async fn run_git_command(repo_root: &Path, args: &[&str]) -> Result<(), String> 
         return Err("Git command failed.".to_string());
     }
     Err(detail.to_string())
-}
-
-fn truncate_utf8(value: &str, max_bytes: usize) -> String {
-    if value.len() <= max_bytes {
-        return value.to_string();
-    }
-    let mut end = max_bytes;
-    while end > 0 && !value.is_char_boundary(end) {
-        end -= 1;
-    }
-    let mut out = value[..end].to_string();
-    out.push_str("\n…(truncated)");
-    out
-}
-
-fn mask_secrets(value: &str) -> String {
-    // Best-effort masking to avoid leaking tokens into UI/chat logs.
-    // Time: O(L), Space: O(L) where L is the string length.
-    fn is_token_char(ch: char) -> bool {
-        ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '=')
-    }
-
-    fn mask_prefix(mut input: String, prefix: &str) -> String {
-        let mut idx = 0;
-        while let Some(pos) = input[idx..].find(prefix) {
-            let start = idx + pos;
-            if !input.is_char_boundary(start) {
-                idx = start + 1;
-                continue;
-            }
-            let after_prefix = start + prefix.len();
-            if !input.is_char_boundary(after_prefix) {
-                idx = after_prefix;
-                continue;
-            }
-            let mut end = after_prefix;
-            for (offset, ch) in input[after_prefix..].char_indices() {
-                if !is_token_char(ch) {
-                    break;
-                }
-                end = after_prefix + offset + ch.len_utf8();
-            }
-            if end > after_prefix {
-                input.replace_range(start..end, "<redacted>");
-                idx = start + "<redacted>".len();
-            } else {
-                idx = after_prefix;
-            }
-            if idx >= input.len() {
-                break;
-            }
-        }
-        input
-    }
-
-    let mut out = value.to_string();
-    for prefix in ["ghp_", "github_pat_", "sk-", "rk-", "pk_live_", "pk_test_"] {
-        out = mask_prefix(out, prefix);
-    }
-    out
-}
-
-fn format_git_command(args: &[&str]) -> String {
-    // Redact user-provided message bodies and other common sensitive args.
-    // Time: O(n), Space: O(n) where n is args length.
-    let mut rendered: Vec<String> = Vec::with_capacity(args.len());
-    let mut redact_next = false;
-    for arg in args {
-        if redact_next {
-            rendered.push("<redacted>".to_string());
-            redact_next = false;
-            continue;
-        }
-        if *arg == "-m" || *arg == "--message" {
-            rendered.push(arg.to_string());
-            redact_next = true;
-            continue;
-        }
-        rendered.push(arg.to_string());
-    }
-    if redact_next {
-        rendered.push("<redacted>".to_string());
-    }
-    format!("git {}", rendered.join(" "))
-}
-
-async fn run_git_command_report(repo_root: &Path, args: &[&str]) -> Result<GitCommandReport, String> {
-    // Time: dominated by git subprocess runtime; output processing is O(L).
-    // Space: O(L) bounded by MAX_GIT_OUTPUT_BYTES.
-    let started = std::time::Instant::now();
-    let git_bin = resolve_git_binary().map_err(|e| format!("Failed to run git: {e}"))?;
-    let output = tokio_command(git_bin)
-        .args(args)
-        .current_dir(repo_root)
-        .env("PATH", git_env_path())
-        .output()
-        .await
-        .map_err(|e| format!("Failed to run git: {e}"))?;
-
-    let duration_ms = started.elapsed().as_millis() as u64;
-    let stdout_raw = String::from_utf8_lossy(&output.stdout);
-    let stderr_raw = String::from_utf8_lossy(&output.stderr);
-    let stdout = truncate_utf8(&mask_secrets(stdout_raw.trim_end()), MAX_GIT_OUTPUT_BYTES);
-    let stderr = truncate_utf8(&mask_secrets(stderr_raw.trim_end()), MAX_GIT_OUTPUT_BYTES);
-
-    Ok(GitCommandReport {
-        ok: output.status.success(),
-        command: format_git_command(args),
-        exit_code: output.status.code(),
-        duration_ms,
-        stdout,
-        stderr,
-    })
 }
 
 fn action_paths_for_file(repo_root: &Path, path: &str) -> Vec<String> {
@@ -308,14 +230,6 @@ async fn fetch_with_default_remote(repo_root: &Path) -> Result<(), String> {
     run_git_command(repo_root, &["fetch", "--prune"]).await
 }
 
-async fn fetch_with_default_remote_report(repo_root: &Path) -> Result<GitCommandReport, String> {
-    let upstream = upstream_remote_and_branch(repo_root)?;
-    if let Some((remote, _)) = upstream {
-        return run_git_command_report(repo_root, &["fetch", "--prune", remote.as_str()]).await;
-    }
-    run_git_command_report(repo_root, &["fetch", "--prune"]).await
-}
-
 async fn pull_with_default_strategy(repo_root: &Path) -> Result<(), String> {
     fn autostash_unsupported(lower: &str) -> bool {
         lower.contains("unknown option") && lower.contains("autostash")
@@ -358,46 +272,6 @@ async fn pull_with_default_strategy(repo_root: &Path) -> Result<(), String> {
             }
         }
     }
-}
-
-async fn pull_with_default_strategy_report(repo_root: &Path) -> Result<GitCommandReport, String> {
-    fn autostash_unsupported(lower: &str) -> bool {
-        lower.contains("unknown option") && lower.contains("autostash")
-    }
-
-    fn needs_reconcile_strategy(lower: &str) -> bool {
-        lower.contains("need to specify how to reconcile divergent branches")
-            || lower.contains("you have divergent branches")
-    }
-
-    let mut report = run_git_command_report(repo_root, &["pull", "--autostash"]).await?;
-    if report.ok {
-        return Ok(report);
-    }
-    let combined_lower = format!("{}\n{}", report.stderr, report.stdout).to_lowercase();
-    if autostash_unsupported(&combined_lower) {
-        report = run_git_command_report(repo_root, &["pull"]).await?;
-        if report.ok {
-            return Ok(report);
-        }
-        let lower = format!("{}\n{}", report.stderr, report.stdout).to_lowercase();
-        if needs_reconcile_strategy(&lower) {
-            report = run_git_command_report(repo_root, &["pull", "--no-rebase"]).await?;
-        }
-        return Ok(report);
-    }
-    if needs_reconcile_strategy(&combined_lower) {
-        report = run_git_command_report(repo_root, &["pull", "--no-rebase", "--autostash"]).await?;
-        if report.ok {
-            return Ok(report);
-        }
-        let lower = format!("{}\n{}", report.stderr, report.stdout).to_lowercase();
-        if autostash_unsupported(&lower) {
-            report = run_git_command_report(repo_root, &["pull", "--no-rebase"]).await?;
-        }
-        return Ok(report);
-    }
-    Ok(report)
 }
 
 fn status_for_index(status: Status) -> Option<&'static str> {
@@ -881,22 +755,6 @@ pub(crate) async fn commit_git(
 }
 
 #[tauri::command]
-pub(crate) async fn commit_git_detailed(
-    workspace_id: String,
-    message: String,
-    state: State<'_, AppState>,
-) -> Result<GitCommandReport, String> {
-    let workspaces = state.workspaces.lock().await;
-    let entry = workspaces
-        .get(&workspace_id)
-        .ok_or("workspace not found")?
-        .clone();
-
-    let repo_root = resolve_git_root(&entry)?;
-    run_git_command_report(&repo_root, &["commit", "-m", &message]).await
-}
-
-#[tauri::command]
 pub(crate) async fn push_git(
     workspace_id: String,
     state: State<'_, AppState>,
@@ -909,58 +767,6 @@ pub(crate) async fn push_git(
 
     let repo_root = resolve_git_root(&entry)?;
     push_with_upstream(&repo_root).await
-}
-
-#[tauri::command]
-pub(crate) async fn push_git_detailed(
-    workspace_id: String,
-    state: State<'_, AppState>,
-) -> Result<GitCommandReport, String> {
-    let workspaces = state.workspaces.lock().await;
-    let entry = workspaces
-        .get(&workspace_id)
-        .ok_or("workspace not found")?
-        .clone();
-
-    let repo_root = resolve_git_root(&entry)?;
-    let upstream = upstream_remote_and_branch(&repo_root)?;
-    if let Some((remote, branch)) = upstream {
-        let _ = run_git_command(&repo_root, &["fetch", "--prune", remote.as_str()]).await;
-        let refspec = format!("HEAD:{branch}");
-        return run_git_command_report(&repo_root, &["push", remote.as_str(), refspec.as_str()])
-            .await;
-    }
-    run_git_command_report(&repo_root, &["push"]).await
-}
-
-#[tauri::command]
-pub(crate) async fn pull_git_detailed(
-    workspace_id: String,
-    state: State<'_, AppState>,
-) -> Result<GitCommandReport, String> {
-    let workspaces = state.workspaces.lock().await;
-    let entry = workspaces
-        .get(&workspace_id)
-        .ok_or("workspace not found")?
-        .clone();
-
-    let repo_root = resolve_git_root(&entry)?;
-    pull_with_default_strategy_report(&repo_root).await
-}
-
-#[tauri::command]
-pub(crate) async fn fetch_git_detailed(
-    workspace_id: String,
-    state: State<'_, AppState>,
-) -> Result<GitCommandReport, String> {
-    let workspaces = state.workspaces.lock().await;
-    let entry = workspaces
-        .get(&workspace_id)
-        .ok_or("workspace not found")?
-        .clone();
-
-    let repo_root = resolve_git_root(&entry)?;
-    fetch_with_default_remote_report(&repo_root).await
 }
 
 #[tauri::command]
@@ -1053,8 +859,13 @@ pub(crate) async fn get_git_diffs(
         .get(&workspace_id)
         .ok_or("workspace not found")?
         .clone();
+    drop(workspaces);
 
     let repo_root = resolve_git_root(&entry)?;
+    let ignore_whitespace_changes = {
+        let settings = state.app_settings.lock().await;
+        settings.git_diff_ignore_whitespace_changes
+    };
     tokio::task::spawn_blocking(move || {
         let repo = Repository::open(&repo_root).map_err(|e| e.to_string())?;
         let head_tree = repo
@@ -1067,6 +878,7 @@ pub(crate) async fn get_git_diffs(
             .include_untracked(true)
             .recurse_untracked_dirs(true)
             .show_untracked_content(true);
+        options.ignore_whitespace_change(ignore_whitespace_changes);
 
         let diff = match head_tree.as_ref() {
             Some(tree) => repo
@@ -1092,11 +904,32 @@ pub(crate) async fn get_git_diffs(
             let old_image_mime = old_path_str.as_deref().and_then(image_mime_type);
             let new_image_mime = new_path_str.as_deref().and_then(image_mime_type);
             let is_image = old_image_mime.is_some() || new_image_mime.is_some();
+            let is_deleted = delta.status() == git2::Delta::Deleted;
+            let is_added = delta.status() == git2::Delta::Added;
+
+            let old_lines = if !is_added {
+                head_tree
+                    .as_ref()
+                    .and_then(|tree| old_path.and_then(|path| tree.get_path(path).ok()))
+                    .and_then(|entry| repo.find_blob(entry.id()).ok())
+                    .and_then(blob_to_lines)
+            } else {
+                None
+            };
+
+            let new_lines = if !is_deleted {
+                match new_path {
+                    Some(path) => {
+                        let full_path = repo_root.join(path);
+                        read_text_lines(&full_path)
+                    }
+                    None => None,
+                }
+            } else {
+                None
+            };
 
             if is_image {
-                let is_deleted = delta.status() == git2::Delta::Deleted;
-                let is_added = delta.status() == git2::Delta::Added;
-
                 let old_image_data = if !is_added && old_image_mime.is_some() {
                     head_tree
                         .as_ref()
@@ -1122,6 +955,8 @@ pub(crate) async fn get_git_diffs(
                 results.push(GitFileDiff {
                     path: normalized_path,
                     diff: String::new(),
+                    old_lines: None,
+                    new_lines: None,
                     is_binary: true,
                     is_image: true,
                     old_image_data,
@@ -1149,6 +984,8 @@ pub(crate) async fn get_git_diffs(
             results.push(GitFileDiff {
                 path: normalized_path,
                 diff: content,
+                old_lines,
+                new_lines,
                 is_binary: false,
                 is_image: false,
                 old_image_data: None,
@@ -1284,6 +1121,12 @@ pub(crate) async fn get_git_commit_diff(
         .get(&workspace_id)
         .ok_or("workspace not found")?
         .clone();
+    drop(workspaces);
+
+    let ignore_whitespace_changes = {
+        let settings = state.app_settings.lock().await;
+        settings.git_diff_ignore_whitespace_changes
+    };
 
     let repo_root = resolve_git_root(&entry)?;
     let repo = Repository::open(&repo_root).map_err(|e| e.to_string())?;
@@ -1296,6 +1139,7 @@ pub(crate) async fn get_git_commit_diff(
         .and_then(|parent| parent.tree().ok());
 
     let mut options = DiffOptions::new();
+    options.ignore_whitespace_change(ignore_whitespace_changes);
     let diff = repo
         .diff_tree_to_tree(parent_tree.as_ref(), Some(&commit_tree), Some(&mut options))
         .map_err(|e| e.to_string())?;
@@ -1315,11 +1159,29 @@ pub(crate) async fn get_git_commit_diff(
         let old_image_mime = old_path_str.as_deref().and_then(image_mime_type);
         let new_image_mime = new_path_str.as_deref().and_then(image_mime_type);
         let is_image = old_image_mime.is_some() || new_image_mime.is_some();
+        let is_deleted = delta.status() == git2::Delta::Deleted;
+        let is_added = delta.status() == git2::Delta::Added;
+
+        let old_lines = if !is_added {
+            parent_tree
+                .as_ref()
+                .and_then(|tree| old_path.and_then(|path| tree.get_path(path).ok()))
+                .and_then(|entry| repo.find_blob(entry.id()).ok())
+                .and_then(blob_to_lines)
+        } else {
+            None
+        };
+
+        let new_lines = if !is_deleted {
+            new_path
+                .and_then(|path| commit_tree.get_path(path).ok())
+                .and_then(|entry| repo.find_blob(entry.id()).ok())
+                .and_then(blob_to_lines)
+        } else {
+            None
+        };
 
         if is_image {
-            let is_deleted = delta.status() == git2::Delta::Deleted;
-            let is_added = delta.status() == git2::Delta::Added;
-
             let old_image_data = if !is_added && old_image_mime.is_some() {
                 parent_tree
                     .as_ref()
@@ -1343,6 +1205,8 @@ pub(crate) async fn get_git_commit_diff(
                 path: normalized_path,
                 status: status_for_delta(delta.status()).to_string(),
                 diff: String::new(),
+                old_lines: None,
+                new_lines: None,
                 is_binary: true,
                 is_image: true,
                 old_image_data,
@@ -1371,6 +1235,8 @@ pub(crate) async fn get_git_commit_diff(
             path: normalized_path,
             status: status_for_delta(delta.status()).to_string(),
             diff: content,
+            old_lines,
+            new_lines,
             is_binary: false,
             is_image: false,
             old_image_data: None,
@@ -1727,10 +1593,11 @@ pub(crate) async fn create_git_branch(
 mod tests {
     use super::*;
     use std::fs;
+    use std::path::Path;
 
     fn create_temp_repo() -> (PathBuf, Repository) {
         let root = std::env::temp_dir().join(format!(
-            "fridex-test-{}",
+            "codex-monitor-test-{}",
             uuid::Uuid::new_v4()
         ));
         fs::create_dir_all(&root).expect("create temp repo root");

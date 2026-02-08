@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Fridex",
-  "version": "0.7.37",
-  "identifier": "com.canakyuz.fridex",
+  "productName": "Codex Monitor",
+  "version": "0.7.44",
+  "identifier": "com.dimillian.codexmonitor",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "Fridex",
+        "title": "Codex Monitor",
         "width": 1200,
         "height": 700,
         "minWidth": 360,
@@ -55,7 +55,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY0QTgzQUU0QTc2MEVBNDMKUldSRDZtQ241RHFvOURJbm1KeC81aEZaOXlhZHlHd2NEZVpPVWs5NjdjOFNhUFEyZGJpTkV0S2YK",
       "endpoints": [
-        "https://github.com/canakyuz/Fridex/releases/latest/download/latest.json"
+        "https://github.com/Dimillian/CodexMonitor/releases/latest/download/latest.json"
       ]
     }
   }

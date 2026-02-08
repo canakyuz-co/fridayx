@@ -1,8 +1,8 @@
-# Fridex
+# CodexMonitor
 
-![Fridex](screenshot.png)
+![CodexMonitor](screenshot.png)
 
-Fridex is a macOS Tauri app for orchestrating multiple Codex agents across local workspaces. It provides a sidebar to manage projects, a home screen for quick actions, and a conversation view backed by the Codex app-server protocol.
+CodexMonitor is a Tauri app for orchestrating multiple Codex agents across local workspaces. It provides a sidebar to manage projects, a home screen for quick actions, and a conversation view backed by the Codex app-server protocol.
 
 ## Features
 
@@ -31,7 +31,7 @@ Fridex is a macOS Tauri app for orchestrating multiple Codex agents across local
 
 ### Files & Prompts
 
-- File tree with search, file-type icons, and Reveal in Finder.
+- File tree with search, file-type icons, and Reveal in Finder/Explorer.
 - Prompt library for global/workspace prompts: create/edit/delete/move and run in current or new threads.
 
 ### UI & Experience
@@ -40,13 +40,14 @@ Fridex is a macOS Tauri app for orchestrating multiple Codex agents across local
 - Responsive layouts (desktop/tablet/phone) with tabbed navigation.
 - Sidebar usage and credits meter for account rate limits plus a home usage snapshot.
 - Terminal dock with multiple tabs for background commands (experimental).
-- In-app updates with toast-driven download/install, debug panel copy/clear, sound notifications, and macOS overlay title bar with vibrancy + reduced transparency toggle.
+- In-app updates with toast-driven download/install, debug panel copy/clear, sound notifications, plus platform-specific window effects (macOS overlay title bar + vibrancy) and a reduced transparency toggle.
 
 ## Requirements
 
 - Node.js + npm
 - Rust toolchain (stable)
-- CMake (required for native dependencies; Whisper/dictation uses it on non-Windows)
+- CMake (required for native dependencies; dictation/Whisper uses it)
+- LLVM/Clang (required on Windows to build dictation dependencies via bindgen)
 - Codex installed on your system and available as `codex` in `PATH`
 - Git CLI (used for worktree operations)
 - GitHub CLI (`gh`) for the Issues panel (optional)
@@ -74,13 +75,13 @@ npm run tauri dev
 
 ## Release Build
 
-Build the production Tauri bundle (app + dmg):
+Build the production Tauri bundle:
 
 ```bash
 npm run tauri build
 ```
 
-The macOS app bundle will be in `src-tauri/target/release/bundle/macos/`.
+Artifacts will be in `src-tauri/target/release/bundle/` (platform-specific subfolders).
 
 ### Windows (opt-in)
 
@@ -94,8 +95,8 @@ Artifacts will be in:
 
 - `src-tauri/target/release/bundle/nsis/` (installer exe)
 - `src-tauri/target/release/bundle/msi/` (msi)
-
-Note: dictation is currently disabled on Windows builds (to avoid requiring LLVM/libclang for `whisper-rs`/bindgen).
+ 
+Note: building from source on Windows requires LLVM/Clang (for `bindgen` / `libclang`) in addition to CMake.
 
 ## Type Checking
 
@@ -124,7 +125,7 @@ src-tauri/
 
 - Workspaces persist to `workspaces.json` under the app data directory.
 - App settings persist to `settings.json` under the app data directory (Codex path, default access mode, UI scale).
-- Feature settings are supported in the UI and synced to `$CODEX_HOME/config.toml` (or `~/.codex/config.toml`) on load/save. Stable: Collaboration modes (`features.collaboration_modes`) and personality (`personality`). Experimental: Collab mode (`features.collab`), Apps (`features.apps`), Background terminal (`features.unified_exec`), and Steer mode (`features.steer`).
+- Feature settings are supported in the UI and synced to `$CODEX_HOME/config.toml` (or `~/.codex/config.toml`) on load/save. Stable: Collaboration modes (`features.collaboration_modes`), personality (`personality`), Steer mode (`features.steer`), and Background terminal (`features.unified_exec`). Experimental: Collab mode (`features.collab`) and Apps (`features.apps`).
 - On launch and on window focus, the app reconnects and refreshes thread lists for each workspace.
 - Threads are restored by filtering `thread/list` results using the workspace `cwd`.
 - Selecting a thread always calls `thread/resume` to refresh messages from disk.
