@@ -893,7 +893,62 @@
 }
 
 .app.editor-active .editor-assistant-composer .composer-bar {
-  padding-top: 4px;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding-top: 5px;
+  gap: 6px;
   border-top-color: var(--border-muted);
+}
+
+.app.editor-active .editor-assistant-composer .composer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.app.editor-active .editor-assistant-composer .composer-select-wrap {
+  min-height: 34px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-card) 80%, transparent);
+  gap: 5px;
+}
+
+.app.editor-active .editor-assistant-composer .composer-icon,
+.app.editor-active .editor-assistant-composer .composer-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.app.editor-active .editor-assistant-composer .composer-select {
+  font-size: 11px;
+  padding: 2px 14px 2px 0;
+}
+
+.app.editor-active .editor-assistant-composer .composer-select--collab {
+  width: 132px;
+  max-width: 132px;
+}
+
+.app.editor-active .editor-assistant-composer .composer-select--model {
+  width: 122px;
+  max-width: 122px;
+}
+
+.app.editor-active .editor-assistant-composer .composer-select--approval {
+  width: 118px;
+  max-width: 118px;
+}
+
+.app.editor-active .editor-assistant-composer .composer-context {
+  margin-left: 0;
+  align-self: center;
+}
+
+.app.editor-active .editor-assistant-composer .composer-context-ring {
+  width: 18px;
+  height: 18px;
 }
