@@ -836,7 +836,7 @@
 
 .app.editor-active .editor-assistant-messages .messages-full {
   margin-top: 0;
-  padding: 10px 12px 8px;
+  padding: 8px 10px 6px;
   background: transparent;
 }
 
@@ -851,33 +851,48 @@
 .app.editor-active .editor-assistant-composer .composer {
   grid-column: auto;
   grid-row: auto;
-  padding: 10px 12px 12px;
+  padding: 8px 10px 9px;
   border-top: 1px solid var(--border-subtle);
   background: transparent;
 }
 
 .app.editor-active .editor-assistant-composer .composer-input {
   grid-template-columns: 1fr auto;
-  gap: 8px;
+  gap: 6px;
+  align-items: center;
 }
 
 .app.editor-active .editor-assistant-composer .composer-input-row {
   background: color-mix(in srgb, var(--surface-card) 82%, transparent);
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  padding: 6px 8px;
+  border-radius: 9px;
+  padding: 4px 7px;
+  align-items: center;
 }
 
 .app.editor-active .editor-assistant-composer .composer textarea {
-  min-height: 34px;
-  height: 34px;
-  max-height: 120px;
-  padding: 5px 4px;
-  font-size: 13px;
+  min-height: 40px !important;
+  height: 40px !important;
+  max-height: 96px !important;
+  padding: 4px 4px;
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .app.editor-active .editor-assistant-composer .composer-action,
 .app.editor-active .editor-assistant-composer .composer-send {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
+}
+
+.app.editor-active .editor-assistant-composer .composer-attach {
+  width: 20px;
+  height: 20px;
+  margin-top: 0;
+}
+
+.app.editor-active .editor-assistant-composer .composer-bar {
+  padding-top: 4px;
+  gap: 8px;
+  border-top-color: var(--border-muted);
 }
