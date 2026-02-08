@@ -1074,16 +1074,65 @@ KATMAN 6 -- Companion App:
 
 \subsection{Maliyet Analizi}
 
-\textbf{Faz 0--3 (ilk 6 ay): TOPLAM \$0.}
-Claude CLI + Gemini CLI ücretsiz. Ollama ücretsiz. macOS TTS ücretsiz. SQLite embedded.
+\textbf{Faz 0--3 (ilk 6 ay): TOPLAM \$0}
 
-\textbf{Faz 4--7 (6--18 ay): TOPLAM $\sim$\$50--200/yıl.}
-ElevenLabs opsiyonel (\$60/yıl), Firebase/Supabase/EAS ücretsiz tier.
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Kalem} & \textbf{Maliyet} & \textbf{Not} \\
+\midrule
+Donanım & \$0 & Mevcut Mac yeterli \\
+Yazılım & \$0 & Hepsi açık kaynak \\
+Cloud LLM & \$0 & Claude CLI + Gemini CLI ücretsiz \\
+Local LLM & \$0 & Ollama ücretsiz \\
+TTS & \$0 & macOS system voice \\
+Veritabanı & \$0 & SQLite (embedded) \\
+\textbf{Toplam} & \textbf{\$0} & \\
+\bottomrule
+\end{tabularx}
 
-\textbf{Faz 8--10 (18--24 ay): TOPLAM $\sim$\$0--360/yıl.}
-Cloud API fallback <\$30/ay. LoRA eğitim local.
+\textbf{Faz 4--7 (6--18 ay): TOPLAM $\sim$\$50--200/yıl}
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Kalem} & \textbf{Maliyet} & \textbf{Not} \\
+\midrule
+ElevenLabs (opsiyonel) & \$60/yıl & Premium TTS, sadece gerekirse \\
+Firebase (push) & \$0 & Ücretsiz tier yeterli \\
+Supabase (realtime) & \$0 & Ücretsiz tier yeterli \\
+Expo EAS (build) & \$0 & Ücretsiz tier (30 build/ay) \\
+Mikrofon (opsiyonel) & \$50--100 & Tek seferlik \\
+VPS (opsiyonel) & \$60/yıl & Sadece kendi WS sunucusu istersen \\
+\textbf{Toplam} & \textbf{$\sim$\$50--200} & Çoğu opsiyonel \\
+\bottomrule
+\end{tabularx}
+
+\textbf{Faz 8--10 (18--24 ay): TOPLAM $\sim$\$0--360/yıl}
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Kalem} & \textbf{Maliyet} & \textbf{Not} \\
+\midrule
+Cloud API (fallback) & $<$\$30/ay & Çoğunluk local, API nadir \\
+LoRA eğitim & \$0 & Local, elektrik maliyeti ihmal edilir \\
+Depolama & \$0 & Local SSD \\
+\textbf{Toplam} & \textbf{$\sim$\$0--360/yıl} & Bandit optimizasyonu ile düşer \\
+\bottomrule
+\end{tabularx}
 
 \textbf{Kritik nokta:} Sistemin çekirdeği \textbf{sıfır bulut maliyetiyle} çalışabilir.
+Claude CLI ve Gemini CLI ücretsiz. Ollama tamamen ücretsiz. Companion app EAS staging build
+ile store'a çıkmadan kullanılır.
+
+\subsection{Ölçeklenebilirlik Notu}
+
+Bu sistem \textbf{tek kullanıcı} için tasarlanmıştır. Ölçekleme hedefi yok.
+Bu, mimariyi basitleştiren kritik bir karardır:
+\begin{itemize}[nosep]
+  \item Multi-tenant izolasyonu gerekmez
+  \item Rate limiting sadece API maliyeti için
+  \item Veritabanı ölçeklemesi gerekmez (SQLite yeterli)
+  \item Companion app tek cihazda çalışır
+\end{itemize}
 
 % ──────────────────────────────────────────────────────────────
 \section{Açık Kararlar ve Tartışma Konuları}
@@ -1178,7 +1227,18 @@ Forward-backward algoritması ile $O(T \cdot |\mathbf{y}|)$.
 
 \subsection{Ekran Farkındalığı}
 
-macOS Accessibility API üzerinden aktif uygulama, pencere başlığı, kullanıcı idle süresi.
+macOS Accessibility API üzerinden:
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Bilgi} & \textbf{API} & \textbf{Güncelleme Sıklığı} \\
+\midrule
+Aktif uygulama & \texttt{NSWorkspace.shared.frontmostApplication} & Değişimde \\
+Pencere başlığı & \texttt{AXUIElement} API & 1s polling \\
+Kullanıcı idle süresi & \texttt{CGEventSourceSecondsSinceLastEventType} & 5s polling \\
+Ekran içeriği & \texttt{CGWindowListCreateImage} (screenshot) & Gerektiğinde \\
+\bottomrule
+\end{tabularx}
 
 \textbf{Idle durum tahmini:}
 \[
@@ -1186,11 +1246,44 @@ macOS Accessibility API üzerinden aktif uygulama, pencere başlığı, kullanı
     = \frac{1}{1 + e^{-(t_{\text{idle}} - \mu_{\text{idle}})/\tau}}
 \]
 
+\begin{itemize}[nosep]
+  \item $\mu_{\text{idle}}$: kullanıcının ortalama idle süresi (öğrenilebilir)
+  \item $\tau$: sıcaklık parametresi
+\end{itemize}
+
+\subsection{Sistem Telemetrisi}
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Sinyal} & \textbf{Kaynak} & \textbf{Bilgi Değeri} \\
+\midrule
+CPU/RAM & \texttt{sysinfo} crate & Ağır işlem çalışıyor mu? \\
+Disk I/O & filesystem watcher & Build/compile çalışıyor mu? \\
+Network & netstat & Download/upload aktif mi? \\
+Pil & \texttt{battery} crate & Güç tasarrufu modu gerekli mi? \\
+Git & filesystem watcher & Branch değişti mi? Commit yapıldı mı? \\
+\bottomrule
+\end{tabularx}
+
 \subsection{Algı Füzyonu (Sensor Fusion)}
 
 Birden fazla algı kanalını birleştirmek için \textbf{Bayesian Sensor Fusion}:
 \[
   P(s \mid o_1, o_2, \ldots, o_K) \propto P(s) \prod_{k=1}^{K} P(o_k \mid s)
+\]
+
+\textbf{Örnek:}
+\begin{itemize}[nosep]
+  \item $o_1$: Kullanıcı hızlı yazıyor (keyboard telemetri)
+  \item $o_2$: Terminal'de hata mesajı var (ekran farkındalığı)
+  \item $o_3$: ``neden'' kelimesini içeren sorgu (metin analizi)
+\end{itemize}
+
+\[
+  P(\text{debugging} \mid o_1, o_2, o_3) \propto P(\text{debugging}) \cdot
+    P(\text{hızlı\_yazım} \mid \text{debugging}) \cdot
+    P(\text{hata\_mesajı} \mid \text{debugging}) \cdot
+    P(\text{``neden''} \mid \text{debugging})
 \]
 
 Her kanal bağımsız ama birleşimleri güçlü bir durum tahmini verir.
@@ -1248,6 +1341,28 @@ Input Tokens -> DistilBERT Encoder -> [CLS] Token
   \mathcal{L}_{\text{CE}} = -\sum_{k=1}^{K} y_k \cdot \ln P(y = k \mid \mathbf{x})
 \]
 
+\subsubsection{Intent Sınıf Listesi}
+
+\begin{tabularx}{\textwidth}{clX}
+\toprule
+\textbf{ID} & \textbf{Sınıf} & \textbf{Örnek} \\
+\midrule
+0 & \texttt{code\_write} & ``bu fonksiyonu yaz'' \\
+1 & \texttt{code\_fix} & ``bu bug'ı düzelt'' \\
+2 & \texttt{code\_explain} & ``bu kod ne yapıyor?'' \\
+3 & \texttt{test\_run} & ``testleri çalıştır'' \\
+4 & \texttt{test\_write} & ``bu için test yaz'' \\
+5 & \texttt{search} & ``şu konuyu araştır'' \\
+6 & \texttt{git\_op} & ``commit yap'' \\
+7 & \texttt{design} & ``bu ekranı tasarla'' \\
+8 & \texttt{question} & ``TypeScript'te X nasıl yapılır?'' \\
+9 & \texttt{conversation} & ``merhaba, nasılsın'' \\
+10 & \texttt{command} & ``terminali aç'' \\
+11 & \texttt{form\_fill} & ``vize formunu doldur'' \\
+12 & \texttt{notify} & ``bana haber ver'' \\
+\bottomrule
+\end{tabularx}
+
 \subsubsection{Confidence Threshold ve Escalation}
 
 \[
@@ -1299,6 +1414,19 @@ Sınıflar: \texttt{neutral}, \texttt{frustrated}, \texttt{urgent}, \texttt{casu
 
 \subsubsection{Ses Bazlı (Paralinguistic Features)}
 
+Ses tonundan duygu çıkarımı için ek özellikler:
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Özellik} & \textbf{Formül} & \textbf{Anlam} \\
+\midrule
+Pitch (F0) & Autocorrelation yöntemi & Stres/heyecan göstergesi \\
+Konuşma hızı & $\text{syllables} / \text{duration}$ & Aciliyet göstergesi \\
+Enerji varyans & $\text{Var}(E_{\text{frame}})$ & Duygusal yoğunluk \\
+Spectral centroid & $\frac{\sum f \cdot P(f)}{\sum P(f)}$ & Ses ``parlaklık'' tonu \\
+\bottomrule
+\end{tabularx}
+
 \textbf{Fusion (metin + ses):}
 \[
   P(\text{emotion} \mid \text{text}, \text{audio})
@@ -1341,6 +1469,13 @@ Kullanıcı iki yanıt arasında tercih yaptığında:
 \]
 
 \subsubsection{Implicit Feedback}
+
+Kullanıcı açıkça tercih belirtmese bile:
+\begin{itemize}
+  \item AI'nın kodunu düzenlediyse $\to$ düzenleme farkı = negatif sinyal
+  \item Öneriyi kabul ettiyse $\to$ pozitif sinyal
+  \item Öneriyi görmezden geldiyse $\to$ hafif negatif sinyal
+\end{itemize}
 
 \[
   r_{\text{implicit}} = \begin{cases}
@@ -1386,6 +1521,17 @@ $2 \times 4096 \times 16 = 131\text{K}$ parametre. \textbf{\%99.2 tasarruf.}
   p_i^{(T)} = \frac{e^{z_i / T}}{\sum_j e^{z_j / T}}
 \]
 
+Yüksek $T$ değeri, öğretmenin ``belirsizlik bilgisini'' de aktarır.
+
+\textbf{Pratik akış:}
+\begin{enumerate}
+  \item Cloud LLM (Claude Opus) bir görevi çözüyor $\to$ çıktı + reasoning
+  \item Bu çıktı (input, output) çifti olarak kaydedilir
+  \item N adet birikmiş örnek ile local model LoRA ile fine-tune edilir
+  \item Sonraki benzer görev local model'e yönlendirilir
+  \item Başarı ölçümleri ile distillation kalitesi doğrulanır
+\end{enumerate}
+
 \subsection{Online Öğrenme --- EMA}
 
 \[
@@ -1396,6 +1542,17 @@ $2 \times 4096 \times 16 = 131\text{K}$ parametre. \textbf{\%99.2 tasarruf.}
 Tipik: $\beta = 0.999$.
 
 \subsection{Beceri Kazanımı --- Progressive Skill Transfer}
+
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Aşama} & \textbf{Kaynak} & \textbf{Maliyet} \\
+\midrule
+Görev ilk kez & Cloud LLM (tam reasoning) & \$\$\$ \\
+Görev 2.\ kez & Cached strateji + Local LM & \$\$ \\
+Görev 3--5.\ kez & Local model (LoRA adapted) & \$ \\
+Görev 5+ kez & Local small model (distilled) & \textcent \\
+\bottomrule
+\end{tabularx}
 
 Her görev türü için bir ``skill level'' takip edilir:
 \[
@@ -1415,15 +1572,41 @@ $\text{skill\_level} > 0.8$ olduğunda görev tamamen local model'e devredilir.
 
 \textbf{Katman 2: Temporal Model} --- Kullanıcı davranışlarının zamansal kalıpları.
 
-\textbf{Periodic Pattern Detection (Fourier):}
+\textbf{Periodic Pattern Detection (Fourier analizi):}
 \[
   X(f) = \sum_{n=0}^{N-1} x[n] \cdot e^{-j2\pi fn/N}
 \]
 
-\textbf{HMM ile Aktivite Dizisi:}
+Güçlü frekans bileşenleri $\to$ periyodik davranışlar:
+\begin{itemize}
+  \item $f = 1/\text{gün}$: günlük kalıplar (sabah kodlama, öğle araştırma, akşam planlama)
+  \item $f = 1/\text{hafta}$: haftalık kalıplar (Pazartesi sprint, Cuma refactor)
+\end{itemize}
+
+\textbf{Hidden Markov Model (HMM) ile Aktivite Dizisi:}
+
+Kullanıcının gizli durumlarını ($S$: coding, debugging, researching, idle, meeting) gözlemlerden çıkar:
 \[
   P(S_{1:T}, O_{1:T}) = P(S_1) \prod_{t=2}^{T} P(S_t | S_{t-1}) \prod_{t=1}^{T} P(O_t | S_t)
 \]
+
+\begin{itemize}
+  \item $P(S_t | S_{t-1})$: geçiş olasılıkları (Transition matrix $\mathbf{A}$)
+  \item $P(O_t | S_t)$: emisyon olasılıkları (hangi durumda ne gözlemlenir)
+\end{itemize}
+
+\textbf{Örnek geçiş matrisi:}
+
+\begin{tabular}{lcccc}
+\toprule
+& \textbf{Coding} & \textbf{Debugging} & \textbf{Researching} & \textbf{Idle} \\
+\midrule
+\textbf{Coding}      & 0.7  & 0.15 & 0.1  & 0.05 \\
+\textbf{Debugging}   & 0.2  & 0.5  & 0.2  & 0.1  \\
+\textbf{Researching} & 0.3  & 0.1  & 0.5  & 0.1  \\
+\textbf{Idle}        & 0.4  & 0.1  & 0.2  & 0.3  \\
+\bottomrule
+\end{tabular}
 
 Baum-Welch algoritması ile kullanıcı verisinden öğrenilir.
 
@@ -1432,7 +1615,15 @@ Baum-Welch algoritması ile kullanıcı verisinden öğrenilir.
   P(a_{t+1} | \text{file}_t, \text{hour}_t, a_{t-2:t}, \text{project\_state}_t)
 \]
 
-Lightweight LSTM ile:
+\textbf{Örnek:}
+\begin{quote}
+\texttt{auth.ts} açık + dün login bug issue açıldı + saat 09:30 \\
+$\to$ $P(\text{bug\_fix}) = 0.85$ \\
+$\to$ Proaktif: ``Dünkü login bug'ı için auth.ts'i açtığın görüyorum.
+İlgili test dosyasını da açayım mı?''
+\end{quote}
+
+Tahmin modeli \textbf{lightweight LSTM} veya \textbf{attention-based sequence model} ile:
 \[
   \mathbf{h}_t = \text{LSTM}\!\bigl([\mathbf{e}_{\text{file}}, \mathbf{e}_{\text{hour}},
     \mathbf{e}_{a_{t-1}}],\; \mathbf{h}_{t-1}\bigr)
@@ -1452,7 +1643,23 @@ Lightweight LSTM ile:
   \text{suggest\_if} \quad \text{Proactive\_Score} > \theta_{\text{proactive}}
 \]
 
-$\theta_{\text{proactive}}$ kullanıcı geri bildirimine göre adapte edilir.
+\begin{itemize}
+  \item $\text{confidence}$: tahmin güvenilirliği (0--1)
+  \item $\text{utility}$: önerinin kullanıcıya faydası (0--1)
+  \item $\text{interruption\_cost}$: kullanıcıyı rahatsız etme maliyeti (0--1)
+  \begin{itemize}
+    \item Deep focus modunda yüksek
+    \item Idle'da düşük
+    \item Toplantı sırasında maksimum
+  \end{itemize}
+\end{itemize}
+
+$\theta_{\text{proactive}}$ kullanıcı geri bildirimine göre adapte edilir:
+\begin{itemize}
+  \item Öneri kabul edildi $\to$ $\theta$ biraz düşür (daha fazla öner)
+  \item Öneri reddedildi $\to$ $\theta$ biraz artır (daha az öner)
+  \item Öneri ``rahatsız etti'' $\to$ $\theta$ belirgin artır
+\end{itemize}
 
 % ──────────────────────────────────────────────────────────────
 \section{Hiperboyutlu Hesaplama (VSA/HDC)}
@@ -1482,6 +1689,22 @@ Permutation (Shift) & $\Pi(\mathbf{u}) \Rightarrow \text{rotate}(\mathbf{u})$ & 
   \qquad
   \text{nearest}(\hat{V}_{\text{project}}, \text{vocabulary}) = V_{\text{fridex}}
 \]
+
+\textbf{Avantaj:} $O(D)$ işlemle herhangi bir alan sorgulanabilir. Geleneksel veritabanına göre çok hızlı, hafıza-verimli.
+
+\subsection{Neden VSA?}
+
+\begin{itemize}
+  \item \textbf{Hız:} $O(D)$ operasyonlar, $D = 10K$ ile ${\sim}\mu$s
+  \item \textbf{Hafıza:} Tek vektör = 10K bit = 1.25\,KB (vs.\ 768-float embedding = 3\,KB)
+  \item \textbf{Birleşim:} Farklı tipteki bilgiler tek bir vektörde birleştirilebilir
+  \item \textbf{Gürültüye dayanıklılık:} Kısmen bozuk vektörler hâlâ sorgulanabilir
+\end{itemize}
+
+\begin{quote}
+\textbf{Üretim notu:} VSA, knowledge graph'in hızlı ön-belleği olarak kullanılabilir.
+Detaylı sorgular için graph DB'ye düşülür.
+\end{quote}
 
 % ──────────────────────────────────────────────────────────────
 \section{Embedding ve Benzerlik Matematiği}
