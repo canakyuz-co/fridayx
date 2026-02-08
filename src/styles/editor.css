@@ -857,9 +857,9 @@
 }
 
 .app.editor-active .editor-assistant-composer .composer-input {
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 6px;
-  align-items: center;
+  align-items: end;
 }
 
 .app.editor-active .editor-assistant-composer .composer-input-row {
@@ -883,6 +883,7 @@
 .app.editor-active .editor-assistant-composer .composer-send {
   width: 24px;
   height: 24px;
+  align-self: center;
 }
 
 .app.editor-active .editor-assistant-composer .composer-attach {
