@@ -71,7 +71,6 @@ const SUPPORTED_LANGUAGES = new Set([
   "less",
   "html",
   "markdown",
-  "rust",
   "python",
   "go",
   "terraform",
@@ -215,6 +214,7 @@ export function useEditorLsp({
   const startedLanguagesRef = useRef(new Set<string>());
   const disabledLanguagesRef = useRef(new Set<string>());
   const startPromisesRef = useRef(new Map<string, Promise<boolean>>());
+  const reportedErrorsRef = useRef(new Set<string>());
   const openDocsRef = useRef(new Map<string, LspDocumentState>());
   const lastContentRef = useRef(new Map<string, string>());
 
@@ -230,12 +230,17 @@ export function useEditorLsp({
   );
 
   const showLspError = useCallback((languageId: string, error: unknown) => {
+    const errorKey = `${workspaceId ?? "none"}:${languageId}`;
+    if (reportedErrorsRef.current.has(errorKey)) {
+      return;
+    }
+    reportedErrorsRef.current.add(errorKey);
     const message = error instanceof Error ? error.message : String(error);
     pushErrorToast({
       title: "LSP baslatilamadi",
       message: `${languageId} icin sunucu baslatilamadi: ${message}`,
     });
-  }, []);
+  }, [workspaceId]);
 
   const startServerProcess = useCallback(
     async (languageId: string) => {
@@ -270,6 +275,7 @@ export function useEditorLsp({
         startedLanguagesRef.current.add(languageId);
         return true;
       } catch (error) {
+        disabledLanguagesRef.current.add(languageId);
         showLspError(languageId, error);
         return false;
       }
@@ -423,6 +429,7 @@ export function useEditorLsp({
       startedLanguagesRef.current.clear();
       disabledLanguagesRef.current.clear();
       startPromisesRef.current.clear();
+      reportedErrorsRef.current.clear();
       openDocsRef.current.clear();
       lastContentRef.current.clear();
       stopAllServers(workspace, languages);
