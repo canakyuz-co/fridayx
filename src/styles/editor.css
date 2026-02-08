@@ -22,10 +22,6 @@
   height: 100%;
 }
 
-.app.editor-active .main {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .editor-sidebar {
   height: 100%;
   padding-top: var(--main-topbar-height);
@@ -518,7 +514,6 @@
   line-height: 1.45;
   font-family: var(--code-font-family);
 }
-}
 
 .editor-state {
   padding: 16px;
@@ -561,4 +556,157 @@
   background: var(--surface-active);
   color: var(--text-strong);
   border-color: var(--border-accent-soft);
+}
+
+.app.editor-active {
+  --main-topbar-height: 40px;
+}
+
+.app.editor-active .main {
+  grid-template-columns: minmax(0, 1fr) var(--right-panel-width, 300px);
+}
+
+.app.editor-active .main-topbar {
+  padding: 7px 12px 6px;
+  border-bottom: 1px solid rgba(80, 103, 144, 0.28);
+  background: #060d19;
+  backdrop-filter: none;
+}
+
+.app.editor-active .main-header {
+  gap: 10px;
+}
+
+.app.editor-active .workspace-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(223, 235, 255, 0.94);
+}
+
+.app.editor-active .workspace-separator {
+  color: rgba(156, 175, 210, 0.55);
+}
+
+.app.editor-active .editor-sidebar {
+  padding-top: var(--main-topbar-height);
+  background: #050c18;
+  border-right: 1px solid rgba(80, 103, 144, 0.28);
+}
+
+.app.editor-active .editor-sidebar .diff-panel,
+.app.editor-active .editor-sidebar .file-tree-panel {
+  padding: 8px 8px 0;
+  gap: 8px;
+}
+
+.app.editor-active .editor-sidebar .git-panel-header {
+  min-height: 24px;
+}
+
+.app.editor-active .editor-sidebar .git-panel-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgba(145, 163, 194, 0.86);
+  text-transform: uppercase;
+}
+
+.app.editor-active .editor-sidebar .file-tree-search {
+  border-radius: 8px;
+  background: rgba(11, 18, 31, 0.96);
+  border-color: rgba(80, 103, 144, 0.28);
+}
+
+.app.editor-active .editor-sidebar .file-tree-row {
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+
+.app.editor-active .editor-shell,
+.app.editor-active .editor-canvas,
+.app.editor-active .monaco-editor,
+.app.editor-active .monaco-editor .margin,
+.app.editor-active .monaco-editor-background {
+  background: #060d1a !important;
+}
+
+.app.editor-active .editor-tabs {
+  min-height: 34px;
+  padding: 0;
+  border-bottom: 1px solid rgba(80, 103, 144, 0.28);
+  background: #070f1e;
+}
+
+.app.editor-active .editor-tab {
+  min-height: 34px;
+  padding: 0 10px;
+  border-right: 1px solid rgba(80, 103, 144, 0.22);
+  background: rgba(18, 26, 42, 0.92);
+}
+
+.app.editor-active .editor-tab.is-active {
+  background: #0b1424;
+  color: rgba(231, 240, 255, 0.94);
+  border-right-color: rgba(101, 127, 177, 0.45);
+}
+
+.app.editor-active .editor-statusbar {
+  background: #060d19;
+  border-top: 1px solid rgba(80, 103, 144, 0.28);
+}
+
+.app.editor-active .editor-assistant-panel {
+  border-left: 1px solid rgba(80, 103, 144, 0.28);
+  background: #060d19;
+}
+
+.app.editor-active .editor-right-panel-resizer::after {
+  background: rgba(114, 140, 190, 0.4);
+}
+
+.app.editor-active .editor-assistant-messages .messages-full {
+  margin-top: 0;
+  padding: 10px 12px 8px;
+  background: transparent;
+}
+
+.app.editor-active .editor-assistant-messages .messages-empty {
+  padding: 18px 12px;
+}
+
+.app.editor-active .editor-assistant-messages .bubble {
+  max-width: 100%;
+}
+
+.app.editor-active .editor-assistant-composer .composer {
+  grid-column: auto;
+  grid-row: auto;
+  padding: 10px 12px 12px;
+  border-top: 1px solid rgba(80, 103, 144, 0.24);
+  background: transparent;
+}
+
+.app.editor-active .editor-assistant-composer .composer-input {
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.app.editor-active .editor-assistant-composer .composer-input-row {
+  background: rgba(15, 24, 39, 0.94);
+  border: 1px solid rgba(80, 103, 144, 0.26);
+  border-radius: 10px;
+  padding: 6px 8px;
+}
+
+.app.editor-active .editor-assistant-composer .composer textarea {
+  min-height: 34px;
+  height: 34px;
+  max-height: 120px;
+  padding: 5px 4px;
+  font-size: 13px;
+}
+
+.app.editor-active .editor-assistant-composer .composer-action,
+.app.editor-active .editor-assistant-composer .composer-send {
+  width: 28px;
+  height: 28px;
 }

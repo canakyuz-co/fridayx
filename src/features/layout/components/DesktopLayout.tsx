@@ -109,11 +109,26 @@ export function DesktopLayout({
             <MainTopbar leftNode={topbarLeftNode} />
             {approvalToastsNode}
             {showEditor ? (
-              <div className="content">
-                <div className="content-layer is-active editor-layer" aria-hidden={false}>
-                  {editorNode}
+              <>
+                <div className="content editor-content">
+                  <div className="content-layer is-active editor-layer" aria-hidden={false}>
+                    {editorNode}
+                  </div>
                 </div>
-              </div>
+                <div
+                  className="right-panel-resizer editor-right-panel-resizer"
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize assistant panel"
+                  onMouseDown={onRightPanelResizeStart}
+                />
+                <div className="right-panel editor-assistant-panel plan-collapsed">
+                  <div className="right-panel-top editor-assistant-messages">
+                    {messagesNode}
+                  </div>
+                  <div className="editor-assistant-composer">{composerNode}</div>
+                </div>
+              </>
             ) : (
               <>
                 <div className="content">

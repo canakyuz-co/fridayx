@@ -2450,18 +2450,28 @@ function MainApp() {
   ) : (
     desktopTopbarLeftNode
   );
+  const layoutSidebarWidth = isCompact
+    ? sidebarWidth
+    : sidebarCollapsed
+      ? 0
+      : activeTab === "editor"
+        ? Math.max(sidebarWidth, 220)
+        : sidebarWidth;
+  const layoutRightPanelWidth = isCompact
+    ? rightPanelWidth
+    : rightPanelCollapsed
+      ? 0
+      : activeTab === "editor"
+        ? Math.max(rightPanelWidth, 300)
+        : rightPanelWidth;
 
   return (
     <div
       className={appClassName}
       style={
         {
-          "--sidebar-width": `${
-            isCompact ? sidebarWidth : sidebarCollapsed ? 0 : sidebarWidth
-          }px`,
-          "--right-panel-width": `${
-            isCompact ? rightPanelWidth : rightPanelCollapsed ? 0 : rightPanelWidth
-          }px`,
+          "--sidebar-width": `${layoutSidebarWidth}px`,
+          "--right-panel-width": `${layoutRightPanelWidth}px`,
           "--plan-panel-height": `${planPanelHeight}px`,
           "--terminal-panel-height": `${terminalPanelHeight}px`,
           "--debug-panel-height": `${debugPanelHeight}px`,
