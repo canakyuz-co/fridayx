@@ -23,9 +23,9 @@ export function useGitPanelController({
   gitDiffIgnoreWhitespaceChanges: boolean;
   isCompact: boolean;
   isTablet: boolean;
-  activeTab: "projects" | "codex" | "git" | "log" | "editor";
-  tabletTab: "codex" | "git" | "log" | "editor";
-  setActiveTab: (tab: "projects" | "codex" | "git" | "log" | "editor") => void;
+  activeTab: "projects" | "codex" | "git" | "log";
+  tabletTab: "codex" | "git" | "log";
+  setActiveTab: (tab: "projects" | "codex" | "git" | "log") => void;
   prDiffs: GitHubPullRequestDiff[];
   prDiffsLoading: boolean;
   prDiffsError: string | null;
@@ -66,12 +66,6 @@ export function useGitPanelController({
   useEffect(() => {
     activeWorkspaceRef.current = activeWorkspace;
   }, [activeWorkspace]);
-
-  useEffect(() => {
-    if (activeTab === "editor") {
-      setFilePanelMode("files");
-    }
-  }, [activeTab]);
 
   useEffect(() => {
     return () => {
@@ -117,9 +111,7 @@ export function useGitPanelController({
   const shouldLoadDiffs =
     Boolean(activeWorkspace) &&
     (diffSource === "local" ? shouldLoadLocalDiffs : diffUiVisible);
-  const gitPanelVisible = Boolean(
-    activeWorkspace && (!isCompact ? activeTab !== "editor" : compactTab === "git"),
-  );
+  const gitPanelVisible = Boolean(activeWorkspace && (isCompact ? compactTab === "git" : true));
   const shouldLoadGitLog =
     gitPanelVisible && (gitPanelMode === "log" || diffUiVisible);
 

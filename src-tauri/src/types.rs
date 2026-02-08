@@ -1,5 +1,26 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum TaskStatus {
+    Todo,
+    InProgress,
+    Done,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TaskEntry {
+    pub(crate) id: String,
+    pub(crate) title: String,
+    pub(crate) content: String,
+    pub(crate) status: TaskStatus,
+    #[serde(default)]
+    pub(crate) workspace_id: Option<String>,
+    pub(crate) created_at: i64,
+    pub(crate) updated_at: i64,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct GitFileStatus {
     pub(crate) path: String,

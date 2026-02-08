@@ -47,7 +47,6 @@ describe("useThreadRateLimits", () => {
         type: "setRateLimits",
         workspaceId: "ws-1",
         rateLimits: normalizeRateLimits(rawRateLimits),
-        modelId: null,
       });
     });
 
@@ -94,7 +93,6 @@ describe("useThreadRateLimits", () => {
       type: "setRateLimits",
       workspaceId: "ws-2",
       rateLimits: normalizeRateLimits(rawRateLimits),
-      modelId: null,
     });
   });
 

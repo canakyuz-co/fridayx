@@ -24,6 +24,8 @@ const baseSettings: AppSettings = {
   backendMode: "local",
   remoteBackendHost: "127.0.0.1:4732",
   remoteBackendToken: null,
+  otherAiProviders: [],
+  otherAiAutoRefreshEnabled: true,
   defaultAccessMode: "current",
   reviewDeliveryMode: "inline",
   composerModelShortcut: null,
@@ -44,6 +46,7 @@ const baseSettings: AppSettings = {
   cycleAgentPrevShortcut: null,
   cycleWorkspaceNextShortcut: null,
   cycleWorkspacePrevShortcut: null,
+  editorKeymap: "default",
   lastComposerModelId: null,
   lastComposerReasoningEffort: null,
   uiScale: 1,
@@ -51,6 +54,7 @@ const baseSettings: AppSettings = {
   usageShowRemaining: false,
   uiFontFamily:
     'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  interFontFeatures: {},
   codeFontFamily:
     'ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
   codeFontSize: 11,

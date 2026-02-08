@@ -100,6 +100,8 @@ describe("useThreadMessaging telemetry", () => {
         reviewDeliveryMode: "inline",
         steerEnabled: false,
         customPrompts: [],
+        otherAiProviders: [],
+        itemsByThread: {},
         threadStatusById: {},
         activeTurnIdByThread: {},
         rateLimitsByWorkspace: {},

@@ -356,6 +356,8 @@ export function useThreads({
     reviewDeliveryMode,
     steerEnabled,
     customPrompts,
+    otherAiProviders: [],
+    itemsByThread: state.itemsByThread,
     threadStatusById: state.threadStatusById,
     activeTurnIdByThread: state.activeTurnIdByThread,
     rateLimitsByWorkspace: state.rateLimitsByWorkspace,

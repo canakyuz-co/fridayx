@@ -149,6 +149,22 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         return;
       }
 
+      if (method === "item/mcpToolCall/progress") {
+        const threadId = String(params.threadId ?? params.thread_id ?? "");
+        const itemId = String(params.itemId ?? params.item_id ?? "");
+        const deltaRaw = params.delta ?? "";
+        const delta =
+          typeof deltaRaw === "string"
+            ? deltaRaw
+            : deltaRaw && typeof deltaRaw === "object"
+              ? JSON.stringify(deltaRaw)
+              : String(deltaRaw);
+        if (threadId && itemId && delta) {
+          handlers.onMcpToolCallProgress?.(workspace_id, threadId, itemId, delta);
+        }
+        return;
+      }
+
       if (!isSupportedAppServerMethod(method)) {
         return;
       }
@@ -452,22 +468,6 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         return;
       }
 
-      if (method === "item/mcpToolCall/progress") {
-        const params = message.params as Record<string, unknown>;
-        const threadId = String(params.threadId ?? params.thread_id ?? "");
-        const itemId = String(params.itemId ?? params.item_id ?? "");
-        const deltaRaw = params.delta ?? "";
-        const delta =
-          typeof deltaRaw === "string"
-            ? deltaRaw
-            : deltaRaw && typeof deltaRaw === "object"
-              ? JSON.stringify(deltaRaw)
-              : String(deltaRaw);
-        if (threadId && itemId && delta) {
-          handlers.onMcpToolCallProgress?.(workspace_id, threadId, itemId, delta);
-        }
-        return;
-      }
     });
 
     return () => {

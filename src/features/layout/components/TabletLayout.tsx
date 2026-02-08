@@ -10,11 +10,10 @@ type TabletLayoutProps = {
   showHome: boolean;
   showWorkspace: boolean;
   sidebarNode: ReactNode;
-  tabletTab: "projects" | "codex" | "git" | "log" | "editor";
+  tabletTab: "projects" | "codex" | "git" | "log";
   onSidebarResizeStart: (event: MouseEvent<HTMLDivElement>) => void;
   topbarLeftNode: ReactNode;
   messagesNode: ReactNode;
-  editorNode: ReactNode;
   composerNode: ReactNode;
   gitDiffPanelNode: ReactNode;
   gitDiffViewerNode: ReactNode;
@@ -34,7 +33,6 @@ export function TabletLayout({
   onSidebarResizeStart,
   topbarLeftNode,
   messagesNode,
-  editorNode,
   composerNode,
   gitDiffPanelNode,
   gitDiffViewerNode,
@@ -70,9 +68,6 @@ export function TabletLayout({
                 {gitDiffPanelNode}
                 <div className="tablet-git-viewer">{gitDiffViewerNode}</div>
               </div>
-            )}
-            {tabletTab === "editor" && (
-              <div className="content tablet-content">{editorNode}</div>
             )}
             {tabletTab === "log" && debugPanelNode}
           </>
