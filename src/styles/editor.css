@@ -687,7 +687,7 @@
 
 .app.editor-active .editor-sidebar .git-panel-header {
   min-height: 26px;
-  padding: 0 4px;
+  padding: 0 8px;
   border-bottom: 1px solid var(--border-muted);
   margin-bottom: 4px;
 }
@@ -752,6 +752,7 @@
 .app.editor-active .editor-sidebar .file-tree-list {
   gap: 1px;
   padding-right: 0;
+  padding-left: 6px;
 }
 
 .app.editor-active .editor-shell,
