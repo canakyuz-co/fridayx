@@ -4,6 +4,17 @@ export const DEFAULT_UI_FONT_FAMILY =
 export const DEFAULT_CODE_FONT_FAMILY =
   'ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
 
+export const UI_FONT_FAMILY_OPTIONS = [
+  "Inter, sans-serif",
+  DEFAULT_UI_FONT_FAMILY,
+];
+
+export const CODE_FONT_FAMILY_OPTIONS = [
+  '"Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+  DEFAULT_CODE_FONT_FAMILY,
+  '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+];
+
 export const CODE_FONT_SIZE_DEFAULT = 11;
 export const CODE_FONT_SIZE_MIN = 9;
 export const CODE_FONT_SIZE_MAX = 16;
@@ -21,4 +32,15 @@ export function clampCodeFontSize(value: number) {
     return CODE_FONT_SIZE_DEFAULT;
   }
   return Math.min(CODE_FONT_SIZE_MAX, Math.max(CODE_FONT_SIZE_MIN, value));
+}
+
+export function isInterFontFamily(value: string | null | undefined) {
+  return typeof value === "string" && /\binter\b/i.test(value);
+}
+
+export function buildInterFontFeatureSettings(features: Record<string, boolean>) {
+  const enabled = Object.entries(features)
+    .filter(([, isEnabled]) => Boolean(isEnabled))
+    .map(([feature]) => `"${feature}" 1`);
+  return enabled.length > 0 ? enabled.join(", ") : "normal";
 }
