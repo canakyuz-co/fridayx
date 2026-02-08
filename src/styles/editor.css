@@ -752,7 +752,7 @@
 .app.editor-active .editor-sidebar .file-tree-list {
   gap: 1px;
   padding-right: 0;
-  padding-left: 6px;
+  padding-left: 8px;
 }
 
 .app.editor-active .editor-shell,
